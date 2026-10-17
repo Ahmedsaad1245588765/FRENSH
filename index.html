@@ -217,17 +217,28 @@ $("#n9").onclick = () => notificationsPage();
 $("#themeToggle").onclick = () => { document.body.classList.toggle("night"); localStorage.setItem("fr-theme", document.body.classList.contains("night") ? "night" : "light"); $("#themeToggle").textContent = document.body.classList.contains("night") ? "☀" : "☾"; };
 if (localStorage.getItem("fr-theme") === "night") { document.body.classList.add("night"); $("#themeToggle").textContent="☀"; }
 onAuthStateChanged(auth, async u => {
-  user = u; admin = !!u && u.email === ADMIN_EMAIL;
-  $("#who").textContent = u ? u.displayName : "";
-  $("#n6").style.display = admin ? "" : "none";
-  $("#auth").textContent = u ? "خروج" : "دخول بجوجل";
-  if (u) { const existing = await getDoc(doc(db,"users",u.uid)); if (existing.data()?.disabled) { alert("هذا الحساب متوقف من الإدارة"); await signOut(auth); return; } if (!existing.data()?.name || existing.data()?.name.trim().split(/\s+/).length < 2) await ensureFullName(u); await setDoc(doc(db, "users", u.uid), { name: u.displayName, email: u.email, photo: u.photoURL, last: serverTimestamp() }, { merge: true }); }
-  editor = admin; $("#n5").style.display = admin ? "" : "none";
-  if (u) {
-    editor = admin || (await getDoc(doc(db, "users", u.uid))).data()?.role === "assistant";
-    if (admin) await setDoc(doc(db, "groups", "general"), { name: "الجروب العام", public: true, members: [] }, { merge: true });
+  try {
+    user = u; admin = !!u && u.email === ADMIN_EMAIL;
+    $("#who").textContent = u ? (u.displayName || u.email) : "";
+    $("#n6").style.display = admin ? "" : "none";
+    $("#auth").textContent = u ? "خروج" : "دخول بجوجل";
+    if (u) {
+      const existing = await getDoc(doc(db,"users",u.uid));
+      if (existing.data()?.disabled) { alert("هذا الحساب متوقف من الإدارة"); await signOut(auth); return; }
+      if (!existing.data()?.name || existing.data()?.name.trim().split(/\s+/).length < 2) await ensureFullName(u);
+      await setDoc(doc(db, "users", u.uid), { name: u.displayName || u.email.split("@")[0], email: u.email, photo: u.photoURL || "", last: serverTimestamp() }, { merge: true });
+    }
+    editor = admin; $("#n5").style.display = admin ? "" : "none";
+    if (u) {
+      editor = admin || (await getDoc(doc(db, "users", u.uid))).data()?.role === "assistant";
+      if (admin) await setDoc(doc(db, "groups", "general"), { name: "الجروب العام", public: true, members: [] }, { merge: true });
+    }
+    subjects();
+  } catch (e) {
+    console.error("AUTH_INIT_ERROR", e);
+    app.innerHTML = `<section class="hero"><h2>حدث خطأ في تسجيل الدخول</h2><p>تأكد أن Google مفعّل وأن دومين الموقع موجود في Authorized domains داخل Firebase.</p><p class="danger">${esc(e.code || e.message || "خطأ غير معروف")}</p><button id="retryAuth">إعادة المحاولة</button></section>`;
+    $("#retryAuth").onclick = googleLogin;
   }
-  subjects();
 });
 
 /* ---------- أدوات ---------- */
