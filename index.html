@@ -71,7 +71,7 @@ footer{background:var(--navy2);color:#aab4cc;text-align:center;padding:22px 16px
 <body>
 <div class="top">Faculté · Département de français — قسم اللغة الفرنسية</div>
 <header><div class="brand" id="home"><svg viewBox="0 0 44 52"><path d="M22 2 L42 9 V26 C42 38 33 46 22 50 C11 46 2 38 2 26 V9Z" fill="#14264f" stroke="#c19a4b" stroke-width="2.5"/><text x="22" y="34" text-anchor="middle" font-family="Fraunces,serif" font-size="26" font-style="italic" fill="#c19a4b">F</text></svg><div><b>Département de français</b><small>قسم اللغة الفرنسية</small></div></div>
-<nav><a id="n1">المواد</a><a id="n2">كاردز الكلمات</a><span id="who"></span><button id="auth">تسجيل الدخول</button></nav></header>
+<nav><a id="n1">المواد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n4">مركز الأسئلة</a><a id="n5" style="display:none">المستخدمين</a><span id="who"></span><button id="auth">تسجيل الدخول</button></nav></header>
 <main id="app"></main>
 <footer>© قسم اللغة الفرنسية — Département de français</footer>
 <div id="sheet"><div class="f fr"></div><div class="a"></div>
@@ -98,17 +98,25 @@ const MM_EMAIL = "ahmedsaad13k@gmail.com";      // لرفع حد الترجمة 
 const fb = initializeApp(firebaseConfig), auth = getAuth(fb), db = getFirestore(fb);
 const $ = s => document.querySelector(s), app = $("#app");
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let user = null, admin = false;
+let user = null, admin = false, editor = false;
 
 /* ---------- Auth ---------- */
 $("#auth").onclick = () => user ? signOut(auth) : signInWithPopup(auth, new GoogleAuthProvider());
 $("#home").onclick = $("#n1").onclick = () => subjects();
 $("#n2").onclick = () => user ? review() : needLogin();
+$("#n3").onclick = () => groupsPage();
+$("#n4").onclick = () => askPage();
+$("#n5").onclick = () => usersPage();
 onAuthStateChanged(auth, async u => {
   user = u; admin = !!u && u.email === ADMIN_EMAIL;
   $("#who").textContent = u ? u.displayName : "";
   $("#auth").textContent = u ? "خروج" : "تسجيل الدخول بجوجل";
   if (u) await setDoc(doc(db, "users", u.uid), { name: u.displayName, email: u.email, photo: u.photoURL, last: serverTimestamp() }, { merge: true });
+  editor = admin; $("#n5").style.display = admin ? "" : "none";
+  if (u) {
+    editor = admin || (await getDoc(doc(db, "users", u.uid))).data()?.role === "assistant";
+    if (admin) await setDoc(doc(db, "groups", "general"), { name: "الجروب العام", public: true, members: [] }, { merge: true });
+  }
   subjects();
 });
 
@@ -121,13 +129,13 @@ function form(title, fields, cb) {
   const d = document.createElement("dialog");
   d.innerHTML = `<form><h3>${title}</h3>${fields.map(f => `<label>${f.l}${
     f.t === "area" ? `<textarea name="${f.n}" rows="6"></textarea>` :
-    f.t === "sel" ? `<select name="${f.n}">${f.o.map(o => `<option value="${o[0]}">${o[1]}</option>`).join("")}</select>` :
+    f.t === "chk" ? `<div style="max-height:200px;overflow:auto">${f.o.map(o => `<div><input type="checkbox" name="${f.n}" value="${o[0]}" style="width:auto"> ${esc(o[1])}</div>`).join("")}</div>` : f.t === "sel" ? `<select name="${f.n}">${f.o.map(o => `<option value="${o[0]}">${o[1]}</option>`).join("")}</select>` :
     `<input name="${f.n}">`}</label>`).join("")}
     <div class="row"><button>حفظ</button><button type="button" class="sec">إلغاء</button></div></form>`;
   document.body.appendChild(d); d.showModal();
   d.querySelector(".sec").onclick = () => { d.close(); d.remove(); };
   d.querySelector("form").onsubmit = async e => {
-    e.preventDefault(); const v = Object.fromEntries(new FormData(e.target));
+    e.preventDefault(); const fd = new FormData(e.target), v = Object.fromEntries(fd); fields.filter(f => f.t === "chk").forEach(f => v[f.n] = fd.getAll(f.n));
     d.close(); d.remove(); await cb(v);
   };
 }
@@ -157,10 +165,10 @@ async function delSubject(id) {
 /* ---------- الدروس ---------- */
 async function lessons(sub) {
   const ls = await list("lessons", "subjectId", sub.id);
-  app.innerHTML = `<div class="row"><button class="sec" id="back">← المواد</button><h2 style="flex:1;margin:0">${esc(sub.name)}</h2>${admin ? `<button id="add">+ درس</button>` : ""}</div>
-    ${ls.map((l, i) => `<div class="item fr" data-id="${l.id}"><b class="n">${i + 1}</b><span>${esc(l.title)}</span>${admin ? `<button class="del" data-del="${l.id}">حذف</button>` : ""}</div>`).join("") || `<p class="mut">مفيش دروس لسه.</p>`}`;
+  app.innerHTML = `<div class="row"><button class="sec" id="back">← المواد</button><h2 style="flex:1;margin:0">${esc(sub.name)}</h2>${editor ? `<button id="add">+ درس</button>` : ""}</div>
+    ${ls.map((l, i) => `<div class="item fr" data-id="${l.id}"><b class="n">${i + 1}</b><span>${esc(l.title)}</span>${editor ? `<button class="del" data-del="${l.id}">حذف</button>` : ""}</div>`).join("") || `<p class="mut">مفيش دروس لسه.</p>`}`;
   $("#back").onclick = subjects;
-  if (admin) $("#add").onclick = () => form("درس جديد", [
+  if (editor) $("#add").onclick = () => form("درس جديد", [
     { n: "title", l: "عنوان الدرس (فرنسي)" }, { n: "text", l: "نص الدرس (فرنسي)", t: "area" }, { n: "yt", l: "لينك يوتيوب (اختياري)" }],
     async v => { await addDoc(collection(db, "lessons"), { subjectId: sub.id, title: v.title, text: v.text, youtube: v.yt, created: serverTimestamp() }); lessons(sub); });
   app.querySelectorAll(".item").forEach(el => el.onclick = async e => {
@@ -176,7 +184,7 @@ async function delLesson(id, quiet) {
 /* ---------- الدرس ---------- */
 async function lesson(l, sub) {
   const qs = await list("questions", "lessonId", l.id), yt = ytId(l.youtube);
-  app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2>${admin ? `<button id="addq">+ سؤال</button>` : ""}</div>
+  app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2>${editor ? `<button id="addq">+ سؤال</button>` : ""}</div>
     ${yt ? `<iframe src="https://www.youtube.com/embed/${yt}" allowfullscreen loading="lazy"></iframe>` : ""}
     <p class="mut">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</p>
     <div class="text fr" id="txt"></div><h3>الأسئلة</h3><div id="qs"></div>`;
@@ -185,7 +193,7 @@ async function lesson(l, sub) {
   const box = $("#qs");
   box.innerHTML = qs.map((q, i) => `<div class="q"><div class="fr"><b>${i + 1}.</b> ${esc(q.q)}</div>
     ${q.options.map((o, j) => `<button class="opt ${q.type === "mcq" ? "fr" : ""}" data-q="${i}" data-o="${j}">${esc(o)}</button>`).join("")}
-    ${admin ? `<button class="del" data-dq="${q.id}">حذف السؤال</button>` : ""}</div>`).join("") || `<p class="mut">مفيش أسئلة لسه.</p>`;
+    ${editor ? `<button class="del" data-dq="${q.id}">حذف السؤال</button>` : ""}</div>`).join("") || `<p class="mut">مفيش أسئلة لسه.</p>`;
   box.onclick = async e => {
     const t = e.target;
     if (t.dataset.dq) { await deleteDoc(doc(db, "questions", t.dataset.dq)); return lesson(l, sub); }
@@ -194,7 +202,7 @@ async function lesson(l, sub) {
     if (t.parentElement.dataset.done) return; t.parentElement.dataset.done = 1;
     sib[q.answer].classList.add("right"); if (+t.dataset.o !== q.answer) t.classList.add("wrong");
   };
-  if (admin) $("#addq").onclick = () => form("سؤال جديد", [
+  if (editor) $("#addq").onclick = () => form("سؤال جديد", [
     { n: "type", l: "النوع", t: "sel", o: [["mcq", "اختيار من متعدد"], ["tf", "صح / غلط"]] },
     { n: "q", l: "السؤال (فرنسي)" },
     { n: "opts", l: "الاختيارات، كل اختيار في سطر (سيبها فاضية لو صح/غلط)", t: "area" },
@@ -206,6 +214,63 @@ async function lesson(l, sub) {
       await addDoc(collection(db, "questions"), { lessonId: l.id, type: v.type, q: v.q, options, answer, created: serverTimestamp() });
       lesson(l, sub);
     });
+}
+
+/* ---------- المستخدمين والجروبات ومركز الأسئلة ---------- */
+async function myGroups() {
+  const m = new Map(), add = x => x.docs.forEach(d => m.set(d.id, { id: d.id, ...d.data() }));
+  if (admin) add(await getDocs(collection(db, "groups")));
+  else for (const c of [where("members", "array-contains", user.uid), where("public", "==", true)]) add(await getDocs(query(collection(db, "groups"), c)));
+  return [...m.values()].sort((a, b) => (b.id === "general") - (a.id === "general"));
+}
+async function usersPage() {
+  if (!admin) return;
+  const us = await list("users");
+  app.innerHTML = `<h3 class="sh">المستخدمين</h3>` + us.map(u => `<div class="item"><span>${esc(u.name)} <small class="mut">${esc(u.email)}</small></span>${u.email === ADMIN_EMAIL ? "<b>أدمن</b>" : `<button data-u="${u.id}" class="${u.role === "assistant" ? "del" : ""}">${u.role === "assistant" ? "إلغاء المساعد" : "اجعله مساعد"}</button>`}</div>`).join("");
+  app.querySelectorAll("[data-u]").forEach(b => b.onclick = async () => {
+    const u = us.find(x => x.id === b.dataset.u);
+    await updateDoc(doc(db, "users", u.id), { role: u.role === "assistant" ? "" : "assistant" }); usersPage();
+  });
+}
+async function groupsPage() {
+  if (!user) return needLogin();
+  const gs = await myGroups();
+  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">الجروبات</h3>${admin ? `<button id="addg">+ جروب</button>` : ""}</div>` +
+    gs.map(g => `<div class="item" data-id="${g.id}"><span>${esc(g.name)}</span><small class="mut">${g.public ? "للجميع" : (g.members || []).length + " عضو"}</small>${admin && !g.public ? `<button class="del" data-del="${g.id}">حذف</button>` : ""}</div>`).join("");
+  if (admin) $("#addg").onclick = async () => {
+    const us = (await list("users")).filter(u => u.email !== ADMIN_EMAIL);
+    form("جروب جديد", [{ n: "name", l: "اسم الجروب" }, { n: "m", l: "الأعضاء", t: "chk", o: us.map(u => [u.id, `${u.name} — ${u.email}`]) }],
+      async v => { await addDoc(collection(db, "groups"), { name: v.name, public: false, members: v.m, created: serverTimestamp() }); groupsPage(); });
+  };
+  app.querySelectorAll(".item").forEach(el => el.onclick = async e => {
+    if (e.target.dataset.del) { if (confirm("حذف الجروب؟")) { await deleteDoc(doc(db, "groups", e.target.dataset.del)); groupsPage(); } return; }
+    groupView(gs.find(g => g.id === el.dataset.id));
+  });
+}
+const post = (g, text, parent) => addDoc(collection(db, "groups", g.id, "posts"), { text, uid: user.uid, by: user.displayName, parent: parent || null, created: serverTimestamp() });
+async function groupView(g) {
+  const ps = await list(`groups/${g.id}/posts`), qs = ps.filter(p => !p.parent), can = p => admin || p.uid === user.uid;
+  app.innerHTML = `<div class="row"><button class="sec" id="back">← الجروبات</button><h2 style="flex:1;margin:0">${esc(g.name)}</h2><button id="np">+ سؤال</button></div>` +
+    (qs.map(q => `<div class="q"><small class="mut">${esc(q.by)}</small><div>${esc(q.text)}</div>` +
+      ps.filter(r => r.parent === q.id).map(r => `<div class="opt"><small class="mut">${esc(r.by)}</small><br>${esc(r.text)} ${can(r) ? `<button class="del" data-dp="${r.id}">حذف</button>` : ""}</div>`).join("") +
+      `<div class="row"><button class="sec" data-r="${q.id}">رد</button>${can(q) ? `<button class="del" data-dp="${q.id}">حذف</button>` : ""}</div></div>`).join("") || `<p class="mut">مفيش أسئلة لسه.</p>`);
+  $("#back").onclick = groupsPage;
+  $("#np").onclick = () => form("سؤال جديد", [{ n: "t", l: "السؤال", t: "area" }], async v => { if (v.t.trim()) await post(g, v.t.trim()); groupView(g); });
+  app.querySelectorAll("[data-r]").forEach(b => b.onclick = () => form("رد", [{ n: "t", l: "ردك", t: "area" }], async v => { if (v.t.trim()) await post(g, v.t.trim(), b.dataset.r); groupView(g); }));
+  app.querySelectorAll("[data-dp]").forEach(b => b.onclick = async () => {
+    if (!confirm("حذف؟")) return;
+    for (const p of ps.filter(p => p.id === b.dataset.dp || p.parent === b.dataset.dp)) if (can(p)) await deleteDoc(doc(db, "groups", g.id, "posts", p.id));
+    groupView(g);
+  });
+}
+async function askPage() {
+  if (!user) return needLogin();
+  const gs = await myGroups();
+  app.innerHTML = `<h3 class="sh">مركز الأسئلة</h3><div class="q"><label>اكتب سؤالك<textarea id="aq" rows="4"></textarea></label><label>حوّله لجروب<select id="ag">${gs.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join("")}</select></label><div class="row"><button id="ago">حوّل للجروب</button></div></div>`;
+  $("#ago").onclick = async () => {
+    const t = $("#aq").value.trim(); if (!t) return;
+    const g = gs.find(g => g.id === $("#ag").value); await post(g, t); groupView(g);
+  };
 }
 
 /* ---------- النطق والترجمة والكاردز ---------- */
