@@ -83,9 +83,16 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChang
 import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 /* ===== غيّر دول بعد ما نعمل مشروع Firebase ===== */
-const firebaseConfig = { apiKey:"", authDomain:"", projectId:"", appId:"" };
-const ADMIN_EMAIL = "your@gmail.com";   // إيميلك (صلاحيات كاملة)
-const MM_EMAIL = "your@gmail.com";      // لرفع حد الترجمة المجاني
+const firebaseConfig = {
+  apiKey: "AIzaSyDkwzuS1QLbNiGR037Lc9RQOQ6nb45jr-I",
+  authDomain: "frensh-db2c7.firebaseapp.com",
+  projectId: "frensh-db2c7",
+  storageBucket: "frensh-db2c7.firebasestorage.app",
+  messagingSenderId: "705960490968",
+  appId: "1:705960490968:web:2749f7193d8d82035924ad"
+};
+const ADMIN_EMAIL = "ahmedsaad13k@gmail.com";   // إيميلك (صلاحيات كاملة)
+const MM_EMAIL = "ahmedsaad13k@gmail.com";      // لرفع حد الترجمة المجاني
 /* ============================================== */
 
 const fb = initializeApp(firebaseConfig), auth = getAuth(fb), db = getFirestore(fb);
