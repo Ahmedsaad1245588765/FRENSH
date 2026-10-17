@@ -204,6 +204,11 @@ body.night #aiPanel,body.night #aiBar{background:#121d3b;color:#edf2ff}
 body.night #aiMsgs{background:#0d1833}
 body.night .aim.bot{background:#18264b;color:#edf2ff;border-color:#304570}
 body.night #aiBar textarea{background:#0d1833;color:#fff;border-color:#304570}
+
+/* sentence translate icon */
+.sti{display:inline-block;margin:0 6px;padding:0 5px;font-size:.6em;line-height:1.6;border-radius:6px;background:#eaf1ff;color:#1f4da8;cursor:pointer;vertical-align:middle;user-select:none;opacity:.7;transition:opacity .15s}
+.sti:hover{opacity:1;background:#d6e4ff}
+body.night .sti{background:#24365f;color:#bcd0ff}
 </style>
 </head>
 <body>
@@ -586,15 +591,46 @@ async function translate(w, sent) {
 let cur;
 function clickable(el, text) {
   const sents = text.split(/(?<=[.!?\n])/), frag = document.createDocumentFragment();
-  sents.forEach((sent, si) => sent.split(/(\p{L}+)/gu).forEach(p => {
-    if (/^\p{L}+$/u.test(p)) { const s = document.createElement("span"); s.className = "w"; s.textContent = p; s.dataset.si = si; frag.appendChild(s); }
-    else if (p) frag.appendChild(document.createTextNode(p));
-  }));
+  sents.forEach((sent, si) => {
+    const tail = sent.match(/\n*$/)[0], body = sent.slice(0, sent.length - tail.length);
+    body.split(/(\p{L}+)/gu).forEach(p => {
+      if (/^\p{L}+$/u.test(p)) { const s = document.createElement("span"); s.className = "w"; s.textContent = p; s.dataset.si = si; frag.appendChild(s); }
+      else if (p) frag.appendChild(document.createTextNode(p));
+    });
+    if (/\p{L}/u.test(body)) { const i = document.createElement("span"); i.className = "sti"; i.textContent = "🌐"; i.title = "ترجمة الجملة"; i.dataset.si = si; frag.appendChild(i); }
+    if (tail) frag.appendChild(document.createTextNode(tail));
+  });
   el.replaceChildren(frag);
-  el.onclick = e => { const s = e.target.closest(".w"); if (s) openWord(s.textContent, sents[s.dataset.si]); };
+  el.onclick = e => {
+    const i = e.target.closest(".sti"); if (i) return openSentence(sents[i.dataset.si].trim());
+    const s = e.target.closest(".w"); if (s) openWord(s.textContent, sents[s.dataset.si]);
+  };
+}
+async function translateSentence(sent) {
+  const key = "S|" + hash(sent);
+  if (memCache.has(key)) return memCache.get(key);
+  const lk = `fr_tr_${key}`;
+  try { const l = localStorage.getItem(lk); if (l) { memCache.set(key, l); return l; } } catch {}
+  const ref = doc(db, "translations", "s_" + hash(sent));
+  try { const snap = await withTimeout(getDoc(ref), 2500); if (snap.exists() && snap.data().ar) { const t = snap.data().ar; memCache.set(key, t); try { localStorage.setItem(lk, t); } catch {} return t; } } catch {}
+  const prompt = `ترجم الجملة الفرنسية التالية إلى العربية ترجمة طبيعية وواضحة تحافظ على المعنى.\nالجملة: "${sent}"\nأعد JSON فقط: {"ar":"الترجمة"}`;
+  const j = JSON.parse((await gem.generateContent(prompt)).response.text());
+  if (!j.ar) throw new Error("empty");
+  memCache.set(key, j.ar); try { localStorage.setItem(lk, j.ar); } catch {}
+  setDoc(ref, { ar: j.ar }).catch(() => {});
+  return j.ar;
+}
+async function openSentence(sent) {
+  const mine = cur = { fr: sent, word: sent, ar: "", ex: sent };
+  $("#sheet .f").textContent = sent; $("#sheet .f").style.fontSize = "1.05rem";
+  $("#sheet .a").textContent = "..."; $("#sheet .a").style.fontSize = "1.2rem"; $("#sheet .b").textContent = "";
+  $("#sv").style.display = "none"; $("#sheet").style.display = "block";
+  try { const t = await translateSentence(sent); if (cur !== mine) return; $("#sheet .a").textContent = t; $("#sheet .a").dir = "auto"; }
+  catch (e) { console.error(e); if (cur !== mine) return; $("#sheet .a").textContent = "الترجمة مش متاحة دلوقتي"; $("#sheet .b").textContent = (e.message || e.code || "").slice(0, 160); }
 }
 async function openWord(w, sent) {
   cur = { fr: w.toLowerCase(), word: w, ar: "", ex: sent.trim() };
+  $("#sheet .f").style.fontSize = ""; $("#sheet .a").style.fontSize = ""; $("#sv").style.display = "";
   $("#sheet .f").textContent = w; $("#sheet .a").textContent = "..."; $("#sheet .b").textContent = ""; $("#sv").textContent = "➕ أضف للكاردز"; $("#sheet").style.display = "block";
   speak(w);
   try { const t = await translate(cur.fr, cur.ex); cur.ar = t.ar; cur.fr = t.base || cur.fr; $("#sheet .a").textContent = t.ar; $("#sheet .b").textContent = [t.base.toLowerCase() !== w.toLowerCase() ? t.base : "", t.note, t.pos, t.level, t.synonyms?.length ? "مرادفات: " + t.synonyms.join(", ") : ""].filter(Boolean).join(" — "); } catch (e) { console.error(e); $("#sheet .a").textContent = "الترجمة مش متاحة دلوقتي"; $("#sheet .b").textContent = (e.message || e.code || "").slice(0, 160); }
