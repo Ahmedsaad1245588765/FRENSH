@@ -156,7 +156,7 @@ body.login-screen{background:#f9fbff;overflow-x:hidden}body.login-screen #app{ma
 <body>
 <div class="top">Faculté · Département de français — قسم اللغة الفرنسية</div>
 <header><div class="brand" id="home"><svg viewBox="0 0 44 52"><path d="M22 2 L42 9 V26 C42 38 33 46 22 50 C11 46 2 38 2 26 V9Z" fill="#14264f" stroke="#c19a4b" stroke-width="2.5"/><text x="22" y="34" text-anchor="middle" font-family="Fraunces,serif" font-size="26" font-style="italic" fill="#c19a4b">F</text></svg><div><b>Département de français</b><small>قسم اللغة الفرنسية</small></div></div>
-<nav><button id="menuToggle" aria-label="فتح القائمة" aria-expanded="false">☰</button><a id="n1">المواد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n4">مركز الأسئلة</a><a id="n5" style="display:none">المستخدمين</a><a id="n6" style="display:none">الدرجات</a><a id="n7">لوحتي</a><a id="n8">الإعلانات</a><a id="n9">الإشعارات</a><span id="who"></span><button id="themeToggle" title="الوضع الليلي">☾</button><button id="adminEntry" title="دخول الإدارة بجوجل" aria-label="دخول الإدارة بجوجل">⚜</button><button id="auth">تسجيل الدخول</button></nav></header>
+<nav><button id="menuToggle" aria-label="فتح القائمة" aria-expanded="false">☰</button><a id="n1">المواد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n4">مركز الأسئلة</a><a id="n5" style="display:none">المستخدمين</a><a id="n6" style="display:none">الدرجات</a><a id="n7">لوحتي</a><a id="n8">الإعلانات</a><a id="n9">الإشعارات</a><span id="who"></span><button id="themeToggle" title="الوضع الليلي">☾</button><button id="auth">تسجيل الدخول</button></nav></header>
 <main id="app"></main>
 <footer>© قسم اللغة الفرنسية — Département de français</footer>
 <div id="sheet"><div class="f fr"></div><div class="a"></div><div class="b"></div>
@@ -164,7 +164,7 @@ body.login-screen{background:#f9fbff;overflow-x:hidden}body.login-screen #app{ma
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, EmailAuthProvider, linkWithCredential, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, EmailAuthProvider, linkWithCredential, signInWithPopup, signInWithRedirect, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app-check.js";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-ai.js";
@@ -201,8 +201,8 @@ function authDialog() {
   d.querySelector("form").onsubmit=async e=>{e.preventDefault(); error.textContent=""; const fd=new FormData(e.target), email=String(fd.get("email")).trim(), password=String(fd.get("password")), fullName=String(fd.get("fullName")||"").trim(); if(signup&&!fullName)return error.textContent="اكتب اسمك الكامل أولًا"; submit.disabled=true; submit.textContent="جاري التحميل..."; try{let cred;if(signup){cred=await createUserWithEmailAndPassword(auth,email,password); await updateProfile(cred.user,{displayName:fullName}); await setDoc(doc(db,"users",cred.user.uid),{name:fullName,email,photo:"",created:serverTimestamp(),last:serverTimestamp()},{merge:true});}else{cred=await signInWithEmailAndPassword(auth,email,password); await ensureFullName(cred.user);} d.close();d.remove();}catch(err){error.textContent=err.code==="auth/email-already-in-use"?"البريد مستخدم بالفعل":err.code==="auth/invalid-credential"?"البريد أو كلمة المرور غير صحيحة":err.code==="auth/weak-password"?"كلمة المرور يجب أن تكون 6 أحرف على الأقل":"تعذر تسجيل الدخول، راجع البيانات";submit.disabled=false;submit.textContent=signup?"إنشاء الحساب":"تسجيل الدخول";}};
 }
 async function ensureFullName(u){ const snap=await getDoc(doc(db,"users",u.uid)); const old=snap.data()?.name||u.displayName||""; if(old.trim().split(/\s+/).length>=2)return; await new Promise(resolve=>form("أكمل بياناتك",[{n:"name",l:"الاسم الكامل",v:old}],async v=>{const name=v.name.trim(); if(name.split(/\s+/).length<2)return alert("اكتب الاسم الأول واسم العائلة"); await updateProfile(u,{displayName:name}); await setDoc(doc(db,"users",u.uid),{name,email:u.email,last:serverTimestamp()},{merge:true}); resolve();})); }
-$("#auth").onclick = () => user ? signOut(auth) : authDialog();
-$("#adminEntry").onclick = async () => { try { const cred=await signInWithPopup(auth,new GoogleAuthProvider()); if(cred.user.email!==ADMIN_EMAIL){ await signOut(auth); alert("هذه الأيقونة مخصصة لحساب الإدارة فقط"); } } catch(e) { if(e.code!=="auth/popup-closed-by-user") alert("تعذر فتح دخول الإدارة"); } };
+async function googleLogin(){ const provider=new GoogleAuthProvider(); try{ await signInWithPopup(auth,provider); }catch(e){ if(["auth/popup-blocked","auth/cancelled-popup-request","auth/operation-not-supported-in-this-environment"].includes(e.code)) await signInWithRedirect(auth,provider); else if(e.code!=="auth/popup-closed-by-user") alert(`تعذر تسجيل الدخول بجوجل: ${e.code||"تأكد من تفعيل Google في Firebase"}`); } }
+$("#auth").onclick = () => user ? signOut(auth) : googleLogin();
 $("#menuToggle").onclick = () => { const n=$("#menuToggle").parentElement; n.classList.toggle("open"); const open=n.classList.contains("open"); $("#menuToggle").textContent=open?"✕":"☰"; $("#menuToggle").setAttribute("aria-expanded",String(open)); };
 document.querySelectorAll("nav a").forEach(a=>a.addEventListener("click",()=>{const n=a.parentElement;n.classList.remove("open");if($("#menuToggle")){ $("#menuToggle").textContent="☰"; $("#menuToggle").setAttribute("aria-expanded","false"); }}));
 $("#home").onclick = $("#n1").onclick = () => subjects();
@@ -220,7 +220,7 @@ onAuthStateChanged(auth, async u => {
   user = u; admin = !!u && u.email === ADMIN_EMAIL;
   $("#who").textContent = u ? u.displayName : "";
   $("#n6").style.display = admin ? "" : "none";
-  $("#auth").textContent = u ? "خروج" : "تسجيل الدخول";
+  $("#auth").textContent = u ? "خروج" : "دخول بجوجل";
   if (u) { const existing = await getDoc(doc(db,"users",u.uid)); if (existing.data()?.disabled) { alert("هذا الحساب متوقف من الإدارة"); await signOut(auth); return; } if (!existing.data()?.name || existing.data()?.name.trim().split(/\s+/).length < 2) await ensureFullName(u); await setDoc(doc(db, "users", u.uid), { name: u.displayName, email: u.email, photo: u.photoURL, last: serverTimestamp() }, { merge: true }); }
   editor = admin; $("#n5").style.display = admin ? "" : "none";
   if (u) {
