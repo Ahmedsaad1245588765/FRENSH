@@ -155,6 +155,10 @@ body.login-screen{background:#f9fbff;overflow-x:hidden}body.login-screen #app{ma
 .hero.welcome-hide{opacity:0;max-height:0;margin:0;padding-top:0;padding-bottom:0;transform:translateY(-18px) scale(.98);pointer-events:none;overflow:hidden;transition:opacity .7s ease,max-height .8s ease,margin .8s ease,padding .8s ease,transform .8s ease}
 .hero.welcome-intro{animation:welcomeIn .65s ease both}@keyframes welcomeIn{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
 
+
+.welcome-bar{display:flex;align-items:center;justify-content:space-between;gap:18px;min-height:76px;padding:18px 28px;margin-bottom:18px;border-radius:16px}.welcome-bar #hero{font-size:clamp(1.35rem,3vw,2.25rem);margin:0;max-width:none}.welcome-bar #hero:after{display:none}.home-actions{justify-content:flex-start;margin:0 0 28px}.home-actions button{min-width:130px}
+@media(max-width:600px){.welcome-bar{min-height:64px;padding:14px 17px}.home-actions{gap:7px}.home-actions button{min-width:0;padding:8px 11px;font-size:.82rem}}
+
 </style>
 </head>
 <body>
@@ -274,12 +278,11 @@ async function subjects() {
   document.body.classList.remove("login-screen");
   if (!user) return needLogin();
   const subs = await list("subjects");
-  app.innerHTML = `<section class="hero"><p>أهلاً ${esc((user.displayName || "").split(" ")[0])}</p><h2 class="fr" id="hero"></h2><p>اضغط على أي كلمة فرنسية تسمع نطقها وتشوف معناها.</p><div class="row"><button id="cards" class="sec">كاردز الكلمات</button><button id="myBoard" class="sec">لوحتي التعليمية</button><button id="notices" class="sec">إعلانات القسم</button>${admin ? `<button id="add" class="sec">+ مادة</button>` : ""}</div></section><h3 class="sh">المواد</h3><input id="subjectSearch" placeholder="ابحث عن مادة..." style="margin-bottom:16px"><div class="grid">
+  app.innerHTML = `<section class="hero welcome-bar"><span>أهلاً ${esc((user.displayName || "").split(" ")[0])}</span><h2 class="fr" id="hero">Bonjour, bienvenue !</h2></section><div class="row home-actions"><button id="cards" class="sec">كاردز الكلمات</button><button id="myBoard" class="sec">لوحتي التعليمية</button><button id="notices" class="sec">إعلانات القسم</button>${admin ? `<button id="add" class="sec">+ إضافة مادة</button>` : ""}</div><h3 class="sh">المواد</h3><div class="grid">
     ${subs.map((s, i) => `<div class="item tile" data-id="${s.id}"><div class="cv" style="${s.cover ? `background-image:url('${esc(s.cover).replace(/'/g, "%27")}')` : ""}"><em class="fr">${esc(s.name.trim()[0])}</em></div><div class="tb"><span>${esc(s.name)}</span>${admin ? `<button class="sec" data-edit-sub="${s.id}">تعديل</button><button class="del" data-del="${s.id}">حذف</button>` : ""}</div></div>`).join("") || `<p class="mut">مفيش مواد لسه.</p>`}</div>`;
   clickable($("#hero"), "Bonjour, on apprend ?");
   const welcome = app.querySelector(".hero");
   if (welcome) { welcome.classList.add("welcome-intro"); setTimeout(() => welcome.classList.add("welcome-hide"), 3000); }
-  $("#subjectSearch").oninput = e => app.querySelectorAll(".tile").forEach(x => x.style.display = x.innerText.toLowerCase().includes(e.target.value.toLowerCase()) ? "" : "none");
   $("#cards").onclick = review; $("#myBoard").onclick=studentDashboard; $("#notices").onclick=announcementsPage;
   if (admin) $("#add").onclick = () => form("مادة جديدة", [{ n: "name", l: "اسم المادة" }, { n: "cover", l: "لينك صورة المادة (اختياري)" }], async v => { await addDoc(collection(db, "subjects"), { name: v.name, cover: v.cover || "", created: serverTimestamp() }); subjects(); });
   app.querySelectorAll(".item").forEach(el => el.onclick = e => {
@@ -297,9 +300,10 @@ async function delSubject(id) {
 /* ---------- الدروس ---------- */
 async function lessons(sub) {
   const ls = await list("lessons", "subjectId", sub.id);
-  app.innerHTML = `<div class="row"><button class="sec" id="back">← المواد</button><h2 style="flex:1;margin:0">${esc(sub.name)}</h2>${editor ? `<button id="add">+ درس</button>` : ""}</div>
-    ${ls.map((l, i) => `<div class="item fr" data-id="${l.id}"><b class="n">${i + 1}</b><span>${esc(l.title)}</span>${editor ? `<button class="sec" data-edit-lesson="${l.id}">تعديل</button><button class="del" data-del="${l.id}">حذف</button>` : ""}</div>`).join("") || `<p class="mut">مفيش دروس لسه.</p>`}`;
+  app.innerHTML = `<div class="row"><button class="sec" id="back">← المواد</button><h2 style="flex:1;margin:0">${esc(sub.name)}</h2>${editor ? `<button id="add">+ درس</button>` : ""}</div><input id="lessonSearch" placeholder="ابحث داخل دروس ${esc(sub.name)}..." style="margin:10px 0 18px">
+    <div id="lessonList">${ls.map((l, i) => `<div class="item fr" data-id="${l.id}"><b class="n">${i + 1}</b><span>${esc(l.title)}</span>${editor ? `<button class="sec" data-edit-lesson="${l.id}">تعديل</button><button class="del" data-del="${l.id}">حذف</button>` : ""}</div>`).join("") || `<p class="mut">مفيش دروس لسه.</p>`}</div>`;
   $("#back").onclick = subjects;
+  $("#lessonSearch").oninput = e => app.querySelectorAll("#lessonList .item").forEach(x => x.style.display = x.innerText.toLowerCase().includes(e.target.value.toLowerCase()) ? "" : "none");
   if (editor) $("#add").onclick = () => form("درس جديد", [
     { n: "title", l: "عنوان الدرس (فرنسي)" }, { n: "text", l: "نص الدرس (فرنسي)", t: "area" }, { n: "yt", l: "لينك يوتيوب (اختياري)" }],
     async v => { await addDoc(collection(db, "lessons"), { subjectId: sub.id, title: v.title, text: v.text, youtube: v.yt, created: serverTimestamp() }); lessons(sub); });
