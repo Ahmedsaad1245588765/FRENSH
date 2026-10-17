@@ -147,12 +147,16 @@ body.login-screen{background:#f9fbff;overflow-x:hidden}body.login-screen #app{ma
 @media(max-width:760px){header{padding:10px 12px;gap:8px}.brand{min-width:0;flex:1}.brand b{font-size:.98rem}.brand small{font-size:.7rem}header nav{position:relative;width:auto;max-width:none;margin:0;gap:6px;overflow:visible;flex-wrap:nowrap}#menuToggle{display:inline-block}header nav a{display:none;position:relative;white-space:normal}header nav.open{position:relative}header nav.open a{display:block}header nav.open{flex-wrap:wrap;justify-content:flex-end}header nav.open a{width:100%;text-align:center;background:#fff;border:1px solid #e0e7f3;box-shadow:0 4px 14px rgba(33,61,117,.08);padding:9px 12px}header nav.open a:first-of-type{margin-top:8px}header nav.open #who{display:block;width:100%;text-align:center;padding:5px;color:#2452a4}header nav.open #auth,header nav.open #themeToggle{display:inline-block}#auth{font-size:.78rem;padding:8px 10px}#themeToggle{font-size:.95rem;padding:7px 9px}.top{font-size:.7rem;padding:5px 8px}main{padding:20px 12px 120px}.hero{padding:38px 18px 28px}.login-shell{margin-top:0}}
 @media(min-width:761px){header{min-height:76px}header nav{gap:5px}header nav a{font-size:.88rem}main{padding-top:34px}}
 
+
+#adminEntry{display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border-radius:50%;font-size:.9rem;background:linear-gradient(135deg,#1f4da8,#e0444d);color:#fff;box-shadow:0 4px 12px rgba(35,76,166,.2);opacity:.78}#adminEntry:hover{opacity:1;transform:rotate(-10deg) scale(1.08)}
+@media(max-width:760px){#adminEntry{width:28px;height:28px;font-size:.8rem}}
+
 </style>
 </head>
 <body>
 <div class="top">Faculté · Département de français — قسم اللغة الفرنسية</div>
 <header><div class="brand" id="home"><svg viewBox="0 0 44 52"><path d="M22 2 L42 9 V26 C42 38 33 46 22 50 C11 46 2 38 2 26 V9Z" fill="#14264f" stroke="#c19a4b" stroke-width="2.5"/><text x="22" y="34" text-anchor="middle" font-family="Fraunces,serif" font-size="26" font-style="italic" fill="#c19a4b">F</text></svg><div><b>Département de français</b><small>قسم اللغة الفرنسية</small></div></div>
-<nav><button id="menuToggle" aria-label="فتح القائمة" aria-expanded="false">☰</button><a id="n1">المواد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n4">مركز الأسئلة</a><a id="n5" style="display:none">المستخدمين</a><a id="n6" style="display:none">الدرجات</a><a id="n7">لوحتي</a><a id="n8">الإعلانات</a><a id="n9">الإشعارات</a><span id="who"></span><button id="themeToggle" title="الوضع الليلي">☾</button><button id="auth">تسجيل الدخول</button></nav></header>
+<nav><button id="menuToggle" aria-label="فتح القائمة" aria-expanded="false">☰</button><a id="n1">المواد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n4">مركز الأسئلة</a><a id="n5" style="display:none">المستخدمين</a><a id="n6" style="display:none">الدرجات</a><a id="n7">لوحتي</a><a id="n8">الإعلانات</a><a id="n9">الإشعارات</a><span id="who"></span><button id="themeToggle" title="الوضع الليلي">☾</button><button id="adminEntry" title="دخول الإدارة بجوجل" aria-label="دخول الإدارة بجوجل">⚜</button><button id="auth">تسجيل الدخول</button></nav></header>
 <main id="app"></main>
 <footer>© قسم اللغة الفرنسية — Département de français</footer>
 <div id="sheet"><div class="f fr"></div><div class="a"></div><div class="b"></div>
@@ -198,6 +202,7 @@ function authDialog() {
 }
 async function ensureFullName(u){ const snap=await getDoc(doc(db,"users",u.uid)); const old=snap.data()?.name||u.displayName||""; if(old.trim().split(/\s+/).length>=2)return; await new Promise(resolve=>form("أكمل بياناتك",[{n:"name",l:"الاسم الكامل",v:old}],async v=>{const name=v.name.trim(); if(name.split(/\s+/).length<2)return alert("اكتب الاسم الأول واسم العائلة"); await updateProfile(u,{displayName:name}); await setDoc(doc(db,"users",u.uid),{name,email:u.email,last:serverTimestamp()},{merge:true}); resolve();})); }
 $("#auth").onclick = () => user ? signOut(auth) : authDialog();
+$("#adminEntry").onclick = async () => { try { const cred=await signInWithPopup(auth,new GoogleAuthProvider()); if(cred.user.email!==ADMIN_EMAIL){ await signOut(auth); alert("هذه الأيقونة مخصصة لحساب الإدارة فقط"); } } catch(e) { if(e.code!=="auth/popup-closed-by-user") alert("تعذر فتح دخول الإدارة"); } };
 $("#menuToggle").onclick = () => { const n=$("#menuToggle").parentElement; n.classList.toggle("open"); const open=n.classList.contains("open"); $("#menuToggle").textContent=open?"✕":"☰"; $("#menuToggle").setAttribute("aria-expanded",String(open)); };
 document.querySelectorAll("nav a").forEach(a=>a.addEventListener("click",()=>{const n=a.parentElement;n.classList.remove("open");if($("#menuToggle")){ $("#menuToggle").textContent="☰"; $("#menuToggle").setAttribute("aria-expanded","false"); }}));
 $("#home").onclick = $("#n1").onclick = () => subjects();
