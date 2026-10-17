@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>قسم الفرنسي</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&family=Fraunces:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#14264f;--navy2:#0d1a38;--gold:#c19a4b;--bg:#f1f3f6;--line:#dde2ea;--red:#b3261e;--ok:#177a45;--mut:#5d6882}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#1b2438;font-family:Cairo,system-ui,sans-serif;line-height:1.7}
+.top{background:var(--navy2);color:#cfd6e6;font-size:.85rem;padding:5px 16px;text-align:center}
+header{position:sticky;top:0;z-index:20;background:#fff;border-bottom:3px solid var(--gold);padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand{display:flex;gap:12px;align-items:center;cursor:pointer;flex:1;min-width:230px}
+.brand svg{width:40px;height:48px}
+.brand b{display:block;font:600 1.25rem/1.2 Fraunces,Georgia,serif;color:var(--navy);direction:ltr}
+.brand small{color:var(--mut)}
+nav{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+nav a{cursor:pointer;padding:6px 12px;border-radius:6px;color:var(--navy);font-weight:600}
+nav a:hover{background:var(--bg)}
+main{max-width:1000px;margin:0 auto;padding:20px 16px 140px}
+button{font:inherit;border:0;border-radius:8px;padding:7px 18px;background:var(--navy);color:#fff;cursor:pointer;font-weight:600}
+button:active{transform:scale(.97)}
+button.sec{background:#fff;color:var(--navy);box-shadow:inset 0 0 0 2px var(--navy)}
+button.del{background:var(--red)}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
+h2,h3{margin:0}
+.fr{font-family:Fraunces,Georgia,serif;direction:ltr;text-align:left}
+.mut{color:var(--mut)}
+.hero{border-radius:14px;color:#fff;padding:70px 28px 44px;margin-bottom:34px;background:linear-gradient(90deg,rgba(13,26,56,.93),rgba(13,26,56,.55)),url(images/campus.jpg) center/cover,var(--navy2)}
+.hero p{margin:0;color:#e8d9b5}
+.hero h2{font-size:clamp(2.2rem,7vw,3.8rem);font-weight:600;line-height:1.1;margin:10px 0 20px;max-width:14ch}
+.hero h2::after{content:"";display:block;width:80px;height:4px;background:var(--gold);margin-top:14px}
+.hero .w:hover{background:var(--gold);color:var(--navy2)}
+.hero button{background:var(--gold);color:var(--navy2)}
+.hero .sec{background:transparent;color:#fff;box-shadow:inset 0 0 0 2px #fff}
+.sh{font-size:1.4rem;font-weight:800;color:var(--navy);margin:6px 0 16px;border-inline-start:5px solid var(--gold);padding-inline-start:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px}
+.item{cursor:pointer}
+.tile{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(20,38,79,.15);transition:box-shadow .2s}
+.tile:hover{box-shadow:0 10px 26px rgba(20,38,79,.22)}
+.cv{height:140px;display:grid;place-items:center;background:linear-gradient(135deg,var(--navy),#2f5096) center/cover}
+.cv em{font:italic 600 4.5rem Fraunces,serif;color:rgba(193,154,75,.85)}
+.cv[style*="url"] em{display:none}
+.tb{padding:12px 16px;border-top:3px solid var(--gold);font-weight:800;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.item:not(.tile){display:flex;align-items:center;gap:14px;background:#fff;border-radius:10px;border-inline-start:5px solid var(--gold);padding:14px 18px;margin:10px 0;font-size:1.1rem;font-weight:600;box-shadow:0 1px 3px rgba(20,38,79,.1)}
+.item:not(.tile):hover{box-shadow:0 6px 18px rgba(20,38,79,.2)}
+.item span{flex:1}
+.n{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--navy);color:var(--gold);font-family:Fraunces,serif}
+.text{background:#fff;border-radius:12px;padding:28px;font-size:1.4rem;line-height:2;white-space:pre-wrap;box-shadow:0 1px 3px rgba(20,38,79,.12)}
+.w{cursor:pointer;border-radius:4px}.w:hover{background:#f3e3b8}
+iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:12px;margin:12px 0}
+.q{background:#fff;border-radius:12px;padding:20px;margin:14px 0;font-size:1.1rem;box-shadow:0 1px 3px rgba(20,38,79,.12)}
+.q>.fr b{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--navy);color:var(--gold);font-size:.9rem;margin-inline-end:8px}
+.opt{display:block;width:100%;text-align:start;background:var(--bg);color:#1b2438;border-radius:8px;margin:8px 0;padding:10px 16px}
+.opt.right{background:var(--ok);color:#fff}.opt.wrong{background:var(--red);color:#fff}
+dialog{border:0;border-radius:14px;width:min(92vw,480px);padding:22px}
+dialog::backdrop{background:rgba(13,26,56,.6)}
+label{display:block;margin:10px 0;font-weight:600}
+input,textarea,select{width:100%;font:inherit;padding:10px 12px;border:2px solid var(--line);border-radius:8px;margin-top:3px;background:#fff}
+footer{background:var(--navy2);color:#aab4cc;text-align:center;padding:22px 16px;border-top:3px solid var(--gold)}
+#sheet{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);width:min(92vw,460px);background:var(--navy);color:#fff;border-radius:14px;border-top:4px solid var(--gold);padding:18px;text-align:center;box-shadow:0 12px 40px rgba(13,26,56,.5);display:none;z-index:50}
+#sheet .f{font-size:1.8rem}
+#sheet .a{font-size:1.5rem;color:var(--gold);margin:2px 0 10px;min-height:2.4rem}
+#sheet button{background:var(--gold);color:var(--navy2)}
+#sheet .sec{background:transparent;color:#fff;box-shadow:inset 0 0 0 2px #fff}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="top">Faculté · Département de français — قسم اللغة الفرنسية</div>
+<header><div class="brand" id="home"><svg viewBox="0 0 44 52"><path d="M22 2 L42 9 V26 C42 38 33 46 22 50 C11 46 2 38 2 26 V9Z" fill="#14264f" stroke="#c19a4b" stroke-width="2.5"/><text x="22" y="34" text-anchor="middle" font-family="Fraunces,serif" font-size="26" font-style="italic" fill="#c19a4b">F</text></svg><div><b>Département de français</b><small>قسم اللغة الفرنسية</small></div></div>
+<nav><a id="n1">المواد</a><a id="n2">كاردز الكلمات</a><span id="who"></span><button id="auth">تسجيل الدخول</button></nav></header>
+<main id="app"></main>
+<footer>© قسم اللغة الفرنسية — Département de français</footer>
+<div id="sheet"><div class="f fr"></div><div class="a"></div>
+<button id="sp">🔊 نطق</button> <button id="sv">➕ أضف للكاردز</button> <button id="cl" class="sec">إغلاق</button></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+/* ===== غيّر دول بعد ما نعمل مشروع Firebase ===== */
+const firebaseConfig = { apiKey:"", authDomain:"", projectId:"", appId:"" };
+const ADMIN_EMAIL = "your@gmail.com";   // إيميلك (صلاحيات كاملة)
+const MM_EMAIL = "your@gmail.com";      // لرفع حد الترجمة المجاني
+/* ============================================== */
+
+const fb = initializeApp(firebaseConfig), auth = getAuth(fb), db = getFirestore(fb);
+const $ = s => document.querySelector(s), app = $("#app");
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let user = null, admin = false;
+
+/* ---------- Auth ---------- */
+$("#auth").onclick = () => user ? signOut(auth) : signInWithPopup(auth, new GoogleAuthProvider());
+$("#home").onclick = $("#n1").onclick = () => subjects();
+$("#n2").onclick = () => user ? review() : needLogin();
+onAuthStateChanged(auth, async u => {
+  user = u; admin = !!u && u.email === ADMIN_EMAIL;
+  $("#who").textContent = u ? u.displayName : "";
+  $("#auth").textContent = u ? "خروج" : "تسجيل الدخول بجوجل";
+  if (u) await setDoc(doc(db, "users", u.uid), { name: u.displayName, email: u.email, photo: u.photoURL, last: serverTimestamp() }, { merge: true });
+  subjects();
+});
+
+/* ---------- أدوات ---------- */
+const list = async (col, field, val) => {
+  const q = field ? query(collection(db, col), where(field, "==", val)) : collection(db, col);
+  return (await getDocs(q)).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.created?.seconds || 0) - (b.created?.seconds || 0));
+};
+function form(title, fields, cb) {
+  const d = document.createElement("dialog");
+  d.innerHTML = `<form><h3>${title}</h3>${fields.map(f => `<label>${f.l}${
+    f.t === "area" ? `<textarea name="${f.n}" rows="6"></textarea>` :
+    f.t === "sel" ? `<select name="${f.n}">${f.o.map(o => `<option value="${o[0]}">${o[1]}</option>`).join("")}</select>` :
+    `<input name="${f.n}">`}</label>`).join("")}
+    <div class="row"><button>حفظ</button><button type="button" class="sec">إلغاء</button></div></form>`;
+  document.body.appendChild(d); d.showModal();
+  d.querySelector(".sec").onclick = () => { d.close(); d.remove(); };
+  d.querySelector("form").onsubmit = async e => {
+    e.preventDefault(); const v = Object.fromEntries(new FormData(e.target));
+    d.close(); d.remove(); await cb(v);
+  };
+}
+const ytId = u => (u || "").match(/(?:v=|youtu\.be\/|embed\/)([\w-]{11})/)?.[1];
+const needLogin = () => { app.innerHTML = `<section class="hero"><h2 class="fr" id="hero"></h2><p>سجّل دخولك بحساب جوجل علشان تشوف المواد والدروس.</p><div class="row"><button id="go" class="sec">ادخل بحساب جوجل</button></div></section>`; clickable($("#hero"), "Bonjour, bienvenue !"); $("#go").onclick = $("#auth").onclick; };
+
+/* ---------- المواد ---------- */
+async function subjects() {
+  if (!user) return needLogin();
+  const subs = await list("subjects");
+  app.innerHTML = `<section class="hero"><p>أهلاً ${esc((user.displayName || "").split(" ")[0])}</p><h2 class="fr" id="hero"></h2><p>اضغط على أي كلمة فرنسية تسمع نطقها وتشوف معناها.</p><div class="row"><button id="cards" class="sec">كاردز الكلمات</button>${admin ? `<button id="add" class="sec">+ مادة</button>` : ""}</div></section><h3 class="sh">المواد</h3><div class="grid">
+    ${subs.map((s, i) => `<div class="item tile" data-id="${s.id}"><div class="cv" style="${s.cover ? `background-image:url('${esc(s.cover).replace(/'/g, "%27")}')` : ""}"><em class="fr">${esc(s.name.trim()[0])}</em></div><div class="tb"><span>${esc(s.name)}</span>${admin ? `<button class="del" data-del="${s.id}">حذف</button>` : ""}</div></div>`).join("") || `<p class="mut">مفيش مواد لسه.</p>`}</div>`;
+  clickable($("#hero"), "Bonjour, on apprend ?");
+  $("#cards").onclick = review;
+  if (admin) $("#add").onclick = () => form("مادة جديدة", [{ n: "name", l: "اسم المادة" }, { n: "cover", l: "لينك صورة المادة (اختياري)" }], async v => { await addDoc(collection(db, "subjects"), { name: v.name, cover: v.cover || "", created: serverTimestamp() }); subjects(); });
+  app.querySelectorAll(".item").forEach(el => el.onclick = e => {
+    if (e.target.dataset.del) return delSubject(e.target.dataset.del);
+    lessons(subs.find(s => s.id === el.dataset.id));
+  });
+}
+async function delSubject(id) {
+  if (!confirm("حذف المادة وكل دروسها وأسئلتها؟")) return;
+  for (const l of await list("lessons", "subjectId", id)) await delLesson(l.id, true);
+  await deleteDoc(doc(db, "subjects", id)); subjects();
+}
+
+/* ---------- الدروس ---------- */
+async function lessons(sub) {
+  const ls = await list("lessons", "subjectId", sub.id);
+  app.innerHTML = `<div class="row"><button class="sec" id="back">← المواد</button><h2 style="flex:1;margin:0">${esc(sub.name)}</h2>${admin ? `<button id="add">+ درس</button>` : ""}</div>
+    ${ls.map((l, i) => `<div class="item fr" data-id="${l.id}"><b class="n">${i + 1}</b><span>${esc(l.title)}</span>${admin ? `<button class="del" data-del="${l.id}">حذف</button>` : ""}</div>`).join("") || `<p class="mut">مفيش دروس لسه.</p>`}`;
+  $("#back").onclick = subjects;
+  if (admin) $("#add").onclick = () => form("درس جديد", [
+    { n: "title", l: "عنوان الدرس (فرنسي)" }, { n: "text", l: "نص الدرس (فرنسي)", t: "area" }, { n: "yt", l: "لينك يوتيوب (اختياري)" }],
+    async v => { await addDoc(collection(db, "lessons"), { subjectId: sub.id, title: v.title, text: v.text, youtube: v.yt, created: serverTimestamp() }); lessons(sub); });
+  app.querySelectorAll(".item").forEach(el => el.onclick = async e => {
+    if (e.target.dataset.del) { if (confirm("حذف الدرس؟")) { await delLesson(e.target.dataset.del); lessons(sub); } return; }
+    lesson(ls.find(l => l.id === el.dataset.id), sub);
+  });
+}
+async function delLesson(id, quiet) {
+  for (const q of await list("questions", "lessonId", id)) await deleteDoc(doc(db, "questions", q.id));
+  await deleteDoc(doc(db, "lessons", id));
+}
+
+/* ---------- الدرس ---------- */
+async function lesson(l, sub) {
+  const qs = await list("questions", "lessonId", l.id), yt = ytId(l.youtube);
+  app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2>${admin ? `<button id="addq">+ سؤال</button>` : ""}</div>
+    ${yt ? `<iframe src="https://www.youtube.com/embed/${yt}" allowfullscreen loading="lazy"></iframe>` : ""}
+    <p class="mut">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</p>
+    <div class="text fr" id="txt"></div><h3>الأسئلة</h3><div id="qs"></div>`;
+  $("#back").onclick = () => lessons(sub);
+  clickable($("#txt"), l.text || "");
+  const box = $("#qs");
+  box.innerHTML = qs.map((q, i) => `<div class="q"><div class="fr"><b>${i + 1}.</b> ${esc(q.q)}</div>
+    ${q.options.map((o, j) => `<button class="opt ${q.type === "mcq" ? "fr" : ""}" data-q="${i}" data-o="${j}">${esc(o)}</button>`).join("")}
+    ${admin ? `<button class="del" data-dq="${q.id}">حذف السؤال</button>` : ""}</div>`).join("") || `<p class="mut">مفيش أسئلة لسه.</p>`;
+  box.onclick = async e => {
+    const t = e.target;
+    if (t.dataset.dq) { await deleteDoc(doc(db, "questions", t.dataset.dq)); return lesson(l, sub); }
+    if (!t.classList.contains("opt")) return;
+    const q = qs[t.dataset.q], sib = t.parentElement.querySelectorAll(".opt");
+    if (t.parentElement.dataset.done) return; t.parentElement.dataset.done = 1;
+    sib[q.answer].classList.add("right"); if (+t.dataset.o !== q.answer) t.classList.add("wrong");
+  };
+  if (admin) $("#addq").onclick = () => form("سؤال جديد", [
+    { n: "type", l: "النوع", t: "sel", o: [["mcq", "اختيار من متعدد"], ["tf", "صح / غلط"]] },
+    { n: "q", l: "السؤال (فرنسي)" },
+    { n: "opts", l: "الاختيارات، كل اختيار في سطر (سيبها فاضية لو صح/غلط)", t: "area" },
+    { n: "ans", l: "رقم الإجابة الصح (للصح/غلط: 1 = صح، 2 = غلط)" }],
+    async v => {
+      const options = v.type === "tf" ? ["صح", "غلط"] : v.opts.split("\n").map(s => s.trim()).filter(Boolean);
+      const answer = (parseInt(v.ans) || 1) - 1;
+      if (!v.q || options.length < 2 || !options[answer]) return alert("البيانات ناقصة أو رقم الإجابة غلط");
+      await addDoc(collection(db, "questions"), { lessonId: l.id, type: v.type, q: v.q, options, answer, created: serverTimestamp() });
+      lesson(l, sub);
+    });
+}
+
+/* ---------- النطق والترجمة والكاردز ---------- */
+function speak(t) {
+  if (!("speechSynthesis" in window)) return;
+  speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = "fr-FR"; u.rate = .85;
+  const v = speechSynthesis.getVoices().find(v => v.lang.startsWith("fr")); if (v) u.voice = v; speechSynthesis.speak(u);
+}
+async function translate(w) {
+  const ref = doc(db, "translations", w), s = await getDoc(ref);
+  if (s.exists()) return s.data().ar;
+  const j = await (await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(w)}&langpair=fr|ar&de=${encodeURIComponent(MM_EMAIL)}`)).json();
+  const ar = j?.responseData?.translatedText;
+  if (!ar || /MYMEMORY WARNING/i.test(ar)) throw 0;
+  await setDoc(ref, { ar }); return ar;
+}
+let cur;
+function clickable(el, text) {
+  el.innerHTML = "";
+  text.split(/(?<=[.!?\n])/).forEach(sent => sent.split(/(\p{L}+)/gu).forEach(p => {
+    if (/^\p{L}+$/u.test(p)) { const s = document.createElement("span"); s.className = "w"; s.textContent = p; s.onclick = () => openWord(p, sent); el.appendChild(s); }
+    else el.appendChild(document.createTextNode(p));
+  }));
+}
+async function openWord(w, sent) {
+  cur = { fr: w.toLowerCase(), ar: "", ex: sent.trim() };
+  $("#sheet .f").textContent = w; $("#sheet .a").textContent = "..."; $("#sv").textContent = "➕ أضف للكاردز"; $("#sheet").style.display = "block";
+  speak(w);
+  try { cur.ar = await translate(cur.fr); $("#sheet .a").textContent = cur.ar; } catch { $("#sheet .a").textContent = "الترجمة مش متاحة دلوقتي، جرب بعدين"; }
+}
+$("#sp").onclick = () => speak(cur.fr);
+$("#cl").onclick = () => $("#sheet").style.display = "none";
+$("#sv").onclick = async e => {
+  if (!cur?.ar) return;
+  const ref = doc(db, "users", user.uid, "cards", cur.fr);
+  if ((await getDoc(ref)).exists()) return e.target.textContent = "✔ موجودة قبل كده";
+  await setDoc(ref, { fr: cur.fr, ar: cur.ar, example: cur.ex, box: 0, due: Date.now() }); e.target.textContent = "✔ اتضافت";
+};
+
+async function review() {
+  $("#sheet").style.display = "none";
+  const all = (await getDocs(collection(db, "users", user.uid, "cards"))).docs.map(d => ({ id: d.id, ...d.data() }));
+  const q = all.filter(c => c.due <= Date.now()), DAYS = [0, 1, 3, 7, 14, 30];
+  const show = () => {
+    app.innerHTML = `<div class="row"><button class="sec" id="back">← المواد</button><h2 style="margin:0">كاردز الكلمات (${all.length})</h2></div><div id="rv" style="text-align:center"></div>`;
+    $("#back").onclick = subjects;
+    const r = $("#rv");
+    if (!q.length) return r.innerHTML = `<p class="mut">${all.length ? "خلصت مراجعة النهارده 🎉" : "ضيف كلمات من الدروس الأول."}</p>`;
+    const c = q[0];
+    r.innerHTML = `<div class="q"><div class="fr" style="font-size:2rem;font-weight:600">${esc(c.fr)}</div><div class="fr mut">${esc(c.example)}</div>
+      <div id="ar" style="font-size:1.6rem;min-height:2.4rem"></div><button id="s">🔊</button> <button id="f">اظهر المعنى</button>
+      <div id="b" style="display:none;margin-top:10px"><button class="del" id="no">مش فاكرها</button> <button id="yes">فاكرها</button></div><p class="mut">متبقي: ${q.length}</p></div>`;
+    speak(c.fr); $("#s").onclick = () => speak(c.fr);
+    $("#f").onclick = () => { $("#ar").textContent = c.ar; $("#b").style.display = "block"; };
+    const ref = doc(db, "users", user.uid, "cards", c.id);
+    $("#yes").onclick = async () => { const b = Math.min((c.box || 0) + 1, 5); await updateDoc(ref, { box: b, due: Date.now() + DAYS[b] * 864e5 }); q.shift(); show(); };
+    $("#no").onclick = async () => { await updateDoc(ref, { box: 0, due: Date.now() }); q.push(q.shift()); show(); };
+  };
+  show();
+}
+</script>
+</body>
+</html>
