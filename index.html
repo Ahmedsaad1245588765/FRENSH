@@ -159,6 +159,9 @@ body.login-screen{background:#f9fbff;overflow-x:hidden}body.login-screen #app{ma
 .welcome-bar{display:flex;align-items:center;justify-content:space-between;gap:18px;min-height:76px;padding:18px 28px;margin-bottom:18px;border-radius:16px}.welcome-bar #hero{font-size:clamp(1.35rem,3vw,2.25rem);margin:0;max-width:none}.welcome-bar #hero:after{display:none}.home-actions{justify-content:flex-start;margin:0 0 28px}.home-actions button{min-width:130px}
 @media(max-width:600px){.welcome-bar{min-height:64px;padding:14px 17px}.home-actions{gap:7px}.home-actions button{min-width:0;padding:8px 11px;font-size:.82rem}}
 
+
+.add-subject{width:46px;height:46px;padding:0;border-radius:50%;font-size:1.8rem;line-height:1;background:linear-gradient(135deg,#1f55b5,#e0444d);display:grid;place-items:center;box-shadow:0 10px 22px rgba(31,85,181,.25)}.add-subject:hover{transform:rotate(90deg) scale(1.08)}
+
 </style>
 </head>
 <body>
@@ -224,35 +227,30 @@ $("#n8").onclick = () => announcementsPage();
 $("#n9").onclick = () => notificationsPage();
 $("#themeToggle").onclick = () => { document.body.classList.toggle("night"); localStorage.setItem("fr-theme", document.body.classList.contains("night") ? "night" : "light"); $("#themeToggle").textContent = document.body.classList.contains("night") ? "☀" : "☾"; };
 if (localStorage.getItem("fr-theme") === "night") { document.body.classList.add("night"); $("#themeToggle").textContent="☀"; }
+const withTimeout = (promise, ms=4500) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error("FIRESTORE_TIMEOUT")), ms))]);
 onAuthStateChanged(auth, async u => {
-  try {
-    user = u; admin = !!u && u.email === ADMIN_EMAIL;
-    $("#who").textContent = u ? (u.displayName || u.email) : "";
-    $("#n6").style.display = admin ? "" : "none";
-    $("#auth").textContent = u ? "خروج" : "دخول بجوجل";
-    if (u) {
-      const existing = await getDoc(doc(db,"users",u.uid));
-      if (existing.data()?.disabled) { alert("هذا الحساب متوقف من الإدارة"); await signOut(auth); return; }
-      if (!existing.data()?.name || existing.data()?.name.trim().split(/\s+/).length < 2) await ensureFullName(u);
-      await setDoc(doc(db, "users", u.uid), { name: u.displayName || u.email.split("@")[0], email: u.email, photo: u.photoURL || "", last: serverTimestamp() }, { merge: true });
-    }
-    editor = admin; $("#n5").style.display = admin ? "" : "none";
-    if (u) {
-      editor = admin || (await getDoc(doc(db, "users", u.uid))).data()?.role === "assistant";
-      if (admin) await setDoc(doc(db, "groups", "general"), { name: "الجروب العام", public: true, members: [] }, { merge: true });
-    }
-    subjects();
-  } catch (e) {
-    console.error("AUTH_INIT_ERROR", e);
-    app.innerHTML = `<section class="hero"><h2>حدث خطأ في تسجيل الدخول</h2><p>تأكد أن Google مفعّل وأن دومين الموقع موجود في Authorized domains داخل Firebase.</p><p class="danger">${esc(e.code || e.message || "خطأ غير معروف")}</p><button id="retryAuth">إعادة المحاولة</button></section>`;
-    $("#retryAuth").onclick = googleLogin;
-  }
+  user = u; admin = !!u && u.email === ADMIN_EMAIL;
+  $("#who").textContent = u ? (u.displayName || u.email) : "";
+  $("#n6").style.display = admin ? "" : "none";
+  $("#auth").textContent = u ? "خروج" : "دخول بجوجل";
+  editor = admin; $("#n5").style.display = admin ? "" : "none";
+  if (!u) return needLogin();
+  // اعرض الصفحة فورًا، ولا تجعل مزامنة Firestore تمنع تسجيل الدخول
+  subjects();
+  (async()=>{ try {
+    const existing=await withTimeout(getDoc(doc(db,"users",u.uid)));
+    if(existing.data()?.disabled){ alert("هذا الحساب متوقف من الإدارة"); await signOut(auth); return; }
+    await withTimeout(setDoc(doc(db,"users",u.uid),{name:u.displayName||u.email.split("@")[0],email:u.email,photo:u.photoURL||"",last:serverTimestamp()},{merge:true}));
+    editor=admin || existing.data()?.role === "assistant";
+    if(admin) await withTimeout(setDoc(doc(db,"groups","general"),{name:"الجروب العام",public:true,members:[]},{merge:true}));
+  } catch(e){ console.warn("Background Firebase sync skipped:",e.message); } })();
 });
 
 /* ---------- أدوات ---------- */
 const list = async (col, field, val) => {
   const q = field ? query(collection(db, col), where(field, "==", val)) : collection(db, col);
-  return (await getDocs(q)).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.created?.seconds || 0) - (b.created?.seconds || 0));
+  try { return (await withTimeout(getDocs(q))).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.created?.seconds || 0) - (b.created?.seconds || 0)); }
+  catch(e){ console.warn(`تعذر تحميل ${col}:`,e.message); return []; }
 };
 function form(title, fields, cb) {
   const d = document.createElement("dialog");
@@ -278,12 +276,11 @@ async function subjects() {
   document.body.classList.remove("login-screen");
   if (!user) return needLogin();
   const subs = await list("subjects");
-  app.innerHTML = `<section class="hero welcome-bar"><span>أهلاً ${esc((user.displayName || "").split(" ")[0])}</span><h2 class="fr" id="hero">Bonjour, bienvenue !</h2></section><div class="row home-actions"><button id="cards" class="sec">كاردز الكلمات</button><button id="myBoard" class="sec">لوحتي التعليمية</button><button id="notices" class="sec">إعلانات القسم</button>${admin ? `<button id="add" class="sec">+ إضافة مادة</button>` : ""}</div><h3 class="sh">المواد</h3><div class="grid">
+  app.innerHTML = `<section class="hero welcome-bar"><span>أهلاً ${esc((user.displayName || "").split(" ")[0])}</span><h2 class="fr" id="hero">Bonjour, bienvenue !</h2></section><div class="row home-actions">${admin ? `<button id="add" class="add-subject" title="إضافة مادة" aria-label="إضافة مادة">+</button>` : ""}</div><h3 class="sh">المواد</h3><div class="grid">
     ${subs.map((s, i) => `<div class="item tile" data-id="${s.id}"><div class="cv" style="${s.cover ? `background-image:url('${esc(s.cover).replace(/'/g, "%27")}')` : ""}"><em class="fr">${esc(s.name.trim()[0])}</em></div><div class="tb"><span>${esc(s.name)}</span>${admin ? `<button class="sec" data-edit-sub="${s.id}">تعديل</button><button class="del" data-del="${s.id}">حذف</button>` : ""}</div></div>`).join("") || `<p class="mut">مفيش مواد لسه.</p>`}</div>`;
   clickable($("#hero"), "Bonjour, on apprend ?");
   const welcome = app.querySelector(".hero");
   if (welcome) { welcome.classList.add("welcome-intro"); setTimeout(() => welcome.classList.add("welcome-hide"), 3000); }
-  $("#cards").onclick = review; $("#myBoard").onclick=studentDashboard; $("#notices").onclick=announcementsPage;
   if (admin) $("#add").onclick = () => form("مادة جديدة", [{ n: "name", l: "اسم المادة" }, { n: "cover", l: "لينك صورة المادة (اختياري)" }], async v => { await addDoc(collection(db, "subjects"), { name: v.name, cover: v.cover || "", created: serverTimestamp() }); subjects(); });
   app.querySelectorAll(".item").forEach(el => el.onclick = e => {
     if (e.target.dataset.editSub) return editSubject(subs.find(s => s.id === e.target.dataset.editSub));
