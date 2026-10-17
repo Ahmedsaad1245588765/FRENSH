@@ -226,6 +226,17 @@ body.night .sti{background:transparent;color:#9fb3da}
 .fbx .sti{opacity:1;font-size:.9em;vertical-align:baseline;background:#eaf1ff;color:#1f4da8;padding:0 7px;margin:0 8px}
 body.night .fbx .sti{background:#24365f;color:#bcd0ff}
 @media(max-width:600px){.text{padding:20px 16px;font-size:1.1rem}.lh1{font-size:1.6rem}.lh2{font-size:1.25rem}}
+/* organized paragraphs */
+.text{padding:34px 36px}
+.lh1::after{content:"";display:block;width:72px;height:4px;border-radius:4px;margin-top:12px;background:linear-gradient(90deg,#1f4da8,#e0444d)}
+.lp{margin:0 0 14px;padding:14px 20px;background:#f6f9ff;border:1px solid #e3ebf8;border-radius:14px;line-height:2.1;text-align:start}
+.lp:last-child{margin-bottom:0}
+.ll{margin:0 0 14px;padding:12px 22px 12px 42px;background:#f6f9ff;border:1px solid #e3ebf8;border-radius:14px;line-height:2.1}
+.ll li{margin:4px 0;padding-inline-start:4px}
+.ll li::marker{color:#e0444d;font-weight:800}
+.lh2+.lp,.lh2+.ll{margin-top:4px}
+body.night .lp,body.night .ll{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
+@media(max-width:600px){.text{padding:18px 12px}.lp{padding:11px 14px}.ll{padding:10px 14px 10px 34px}}
 .lh1{font-size:1.9rem;font-weight:800;margin:6px 0 10px;line-height:1.4}
 .lh2{font-size:1.4rem;font-weight:800;margin:18px 0 6px;line-height:1.5;color:#1f4da8}
 body.night .lh2{color:#8fb4ff}
@@ -281,7 +292,7 @@ function startAppCheck(){ if(appCheckStarted) return; appCheckStarted=true; try 
 startAppCheck();
 const auth = getAuth(fb), db = getFirestore(fb);
 const gem = getGenerativeModel(getAI(fb, { backend: new GoogleAIBackend() }), { model: "gemini-3.5-flash-lite", generationConfig: { responseMimeType: "application/json", temperature: 0.2 } });
-const examModel = getGenerativeModel(getAI(fb, { backend: new GoogleAIBackend() }), { model: "gemini-3.5-flash-lite", generationConfig: { responseMimeType: "application/json", temperature: 0.4, maxOutputTokens: 8192 } });
+const examModel = getGenerativeModel(getAI(fb, { backend: new GoogleAIBackend() }), { model: "gemini-3.5-flash-lite", generationConfig: { responseMimeType: "application/json", temperature: 0.4, maxOutputTokens: 16384 } });
 async function askJSON(prompt, tries = 2) {
   let last;
   for (let i = 0; i < tries; i++) {
@@ -429,6 +440,21 @@ async function compressImage(file) {
   }
   throw new Error("الصورة كبيرة جدًا، جرّب صورة أصغر");
 }
+function renderParas(sec, text) {
+  let buf = [], list = null;
+  const flushP = () => { const t = buf.join("\n").trim(); buf = []; if (t) { const n = document.createElement("div"); n.className = "lp"; sec.appendChild(n); clickable(n, t, true); } };
+  for (const raw of String(text).split("\n")) {
+    const line = raw.trimEnd(), m = line.match(/^\s*(?:([-•*])|(\d+)[.)])\s+(.*)$/);
+    if (m) {
+      flushP();
+      const tag = m[1] ? "ul" : "ol";
+      if (!list || list.tagName.toLowerCase() !== tag) { list = document.createElement(tag); list.className = "ll"; if (tag === "ol") list.start = parseInt(m[2]) || 1; sec.appendChild(list); }
+      const li = document.createElement("li"); list.appendChild(li); clickable(li, m[3], false);
+    } else if (!line.trim()) { flushP(); list = null; }
+    else { list = null; buf.push(line); }
+  }
+  flushP();
+}
 function renderLessonBody(el, l, imgMap) {
   const blocks = (l.blocks && l.blocks.length) ? l.blocks : [{ t: "p", v: l.text || "" }];
   el.textContent = "";
@@ -441,10 +467,10 @@ function renderLessonBody(el, l, imgMap) {
       if (imgMap[b.v]) { const im = document.createElement("img"); im.src = imgMap[b.v]; im.alt = ""; fig.appendChild(im); } else fig.textContent = "🖼 الصورة مش متاحة";
       sec.appendChild(fig); solid = true; return;
     }
-    const n = document.createElement(b.t === "h1" ? "h3" : b.t === "h2" ? "h4" : "div");
-    n.className = b.t === "h1" ? "lh1" : b.t === "h2" ? "lh2" : "lp";
-    sec.appendChild(n); clickable(n, b.v, b.t === "p");
-    if (b.t === "p") solid = true;
+    if (b.t === "p") { renderParas(sec, b.v); solid = true; return; }
+    const n = document.createElement(b.t === "h1" ? "h3" : "h4");
+    n.className = b.t === "h1" ? "lh1" : "lh2";
+    sec.appendChild(n); clickable(n, b.v, false);
   });
 }
 async function lessonEditor(x, sub, done) {
@@ -474,7 +500,7 @@ async function lessonEditor(x, sub, done) {
       if (b.t === "img") body.innerHTML = `${b.d ? `<img src="${b.d}" style="max-width:100%;max-height:220px;border-radius:10px;display:block;margin-bottom:8px">` : `<p class="mut">لم تُختر صورة</p>`}<button type="button" class="sec" data-pick="1">${b.d ? "تغيير الصورة" : "اختر صورة"}</button>`;
       else {
         const el = document.createElement(b.t === "p" ? "textarea" : "input"); el.dir = "ltr"; el.value = b.v; el.oninput = () => b.v = el.value;
-        if (b.t === "p") { el.rows = 5; el.placeholder = "اكتب الفقرة هنا..."; } else { el.placeholder = b.t === "h1" ? "العنوان الرئيسي" : "العنوان الفرعي"; el.style.fontWeight = "800"; }
+        if (b.t === "p") { el.rows = 5; el.placeholder = "اكتب الفقرة هنا. سطر فاضي = فقرة جديدة، وسطر يبدأ بـ - يتحول لنقطة، وبـ 1. لقائمة مرقمة"; } else { el.placeholder = b.t === "h1" ? "العنوان الرئيسي" : "العنوان الفرعي"; el.style.fontWeight = "800"; }
         body.appendChild(el);
       }
       box.appendChild(w);
@@ -615,8 +641,90 @@ async function showFeedback(qEl, q, chosen, lessonText) {
   ex.textContent = "⏳ جاري شرح السبب...";
   try { const t = await explainAnswer(q, chosen, lessonText); t ? attachExplanation(ex, t) : ex.remove(); } catch (e) { console.warn(e); ex.remove(); }
 }
-async function generateExam(l, count) {
-  const essayN = count >= 3 ? Math.max(1, Math.round(count * 0.2)) : 0, tfN = count >= 2 ? Math.max(1, Math.round(count * 0.25)) : 0, mcqN = Math.max(1, count - essayN - tfN);
+function examDashboard(l, sub, initialQs) {
+  let qsList = [...initialQs], dirty = false;
+  const TL = { mcq: "اختيار", tf: "صح/غلط", essay: "مقالي" };
+  const cnt = t => qsList.filter(q => q.type === t).length;
+  const d = document.createElement("dialog"); d.style.cssText = "width:min(96vw,780px);max-height:92vh;overflow:auto";
+  d.innerHTML = `<div>
+    <h3 style="margin-bottom:12px">📊 لوحة اختبار: <span class="fr">${esc(l.title)}</span></h3>
+    <div class="dashboard" style="grid-template-columns:repeat(3,1fr)">
+      <div class="metric"><b id="mCount">0</b><small>عدد الأسئلة الحالي</small></div>
+      <div class="metric"><b id="mPts">0</b><small>مجموع الدرجات</small></div>
+      <div class="metric"><b id="mMin">0</b><small>مدة الاختبار (دقيقة)</small></div>
+    </div>
+    <h4 class="sh">إعدادات الاختبار</h4>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
+      <label>اختيار من متعدد<input type="number" min="0" max="40" name="mcq"></label>
+      <label>صح / غلط<input type="number" min="0" max="40" name="tf"></label>
+      <label>مقالي (يصححه الذكاء الاصطناعي)<input type="number" min="0" max="40" name="essay"></label>
+      <label>الدرجة الكلية<input type="number" min="1" step="any" name="total"></label>
+      <label>مدة الاختبار بالدقائق<input type="number" min="1" name="mins"></label>
+    </div>
+    <p class="mut" id="dSum" style="margin:6px 0"></p>
+    <div class="row"><button type="button" id="dGen">⚡ توليد اختبار جديد</button><button type="button" class="sec" id="dSave">حفظ الدرجة والمدة فقط</button><button type="button" class="sec" id="dClose">إغلاق</button></div>
+    <div id="dStatus" style="min-height:1.6em"></div>
+    <h4 class="sh" style="margin-top:14px">الأسئلة الحالية</h4>
+    <div id="dList"></div>
+    <div class="row"><button type="button" class="sec" id="dAdd">+ سؤال يدوي</button></div>
+  </div>`;
+  document.body.appendChild(d);
+  const g = n => d.querySelector(`[name="${n}"]`), st = (m, bad) => { const e = d.querySelector("#dStatus"); e.className = bad ? "danger" : "mut"; e.textContent = m; };
+  g("mcq").value = qsList.length ? cnt("mcq") : (l.examMcq ?? 6); g("tf").value = qsList.length ? cnt("tf") : (l.examTf ?? 2); g("essay").value = qsList.length ? cnt("essay") : (l.examEssay ?? 2);
+  g("total").value = l.examTotal || 20; g("mins").value = l.examMinutes || 15;
+  const n0 = k => Math.max(0, parseInt(g(k).value) || 0);
+  const sum = () => d.querySelector("#dSum").textContent = `المجموع المطلوب: ${n0("mcq") + n0("tf") + n0("essay")} سؤال`;
+  ["mcq", "tf", "essay"].forEach(k => g(k).oninput = sum); sum();
+  const drawList = () => {
+    d.querySelector("#mCount").textContent = qsList.length;
+    d.querySelector("#mPts").textContent = Math.round(qsList.reduce((a, q) => a + (Number(q.points) || 0), 0) * 100) / 100;
+    d.querySelector("#mMin").textContent = l.examMinutes || "—";
+    d.querySelector("#dList").innerHTML = qsList.map(q => `<div class="item" style="cursor:default;padding:10px 14px;font-size:1rem" data-id="${q.id}"><small class="badge">${TL[q.type] || q.type}</small><span class="fr" style="font-weight:600">${esc((q.q || "").slice(0, 110))}</span><small class="mut">${Number(q.points) || 0}</small><button type="button" class="sec" data-e="${q.id}" style="padding:4px 10px">تعديل</button><button type="button" class="del" data-x="${q.id}" style="padding:4px 10px">حذف</button></div>`).join("") || `<p class="mut">مفيش أسئلة لسه. اضغط "توليد اختبار جديد".</p>`;
+  };
+  const reload = async () => { qsList = await list("questions", "lessonId", l.id); dirty = true; drawList(); };
+  drawList();
+  d.querySelector("#dList").onclick = async e => {
+    const t = e.target;
+    if (t.dataset.e) { const q = qsList.find(x => x.id === t.dataset.e); questionDialog(q, async v => { await updateDoc(doc(db, "questions", q.id), v); await reload(); }); }
+    else if (t.dataset.x && confirm("حذف السؤال؟")) { await deleteDoc(doc(db, "questions", t.dataset.x)); await reload(); }
+  };
+  d.querySelector("#dAdd").onclick = () => questionDialog(null, async v => { await addDoc(collection(db, "questions"), { lessonId: l.id, ...v, created: serverTimestamp() }); await reload(); });
+  const busy = b => d.querySelectorAll("#dGen,#dSave,#dClose,#dAdd").forEach(x => x.disabled = b);
+  const spread = (total, n) => { const per = Math.round(total / n * 100) / 100; return i => i === n - 1 ? Math.round((total - per * (n - 1)) * 100) / 100 : per; };
+  d.querySelector("#dGen").onclick = async () => {
+    const c = { mcq: n0("mcq"), tf: n0("tf"), essay: n0("essay") }, count = c.mcq + c.tf + c.essay, total = Number(g("total").value) || 0, mins = Number(g("mins").value) || 0;
+    if (count < 1 || count > 40) return alert("عدد الأسئلة لازم يكون من 1 لـ 40");
+    if (total <= 0 || mins <= 0) return alert("اكتب الدرجة الكلية والمدة");
+    if (!(l.text || "").trim()) return alert("الدرس مفيهوش نص يتولد منه اختبار");
+    if (qsList.length && !confirm("الاختبار الحالي هيتمسح ويتعمل اختبار جديد. تكمل؟")) return;
+    busy(true); st("⏳ جاري توليد الاختبار بالذكاء الاصطناعي... ممكن ياخد نص دقيقة");
+    try {
+      const items = await generateExam(l, c), pts = spread(total, items.length);
+      for (const q of qsList) await deleteDoc(doc(db, "questions", q.id));
+      for (let i = 0; i < items.length; i++) await addDoc(collection(db, "questions"), { lessonId: l.id, ...items[i], model: "", rubric: "", points: pts(i), created: serverTimestamp() });
+      const meta = { examCount: items.length, examTotal: total, examMinutes: mins, examMcq: c.mcq, examTf: c.tf, examEssay: c.essay };
+      await updateDoc(doc(db, "lessons", l.id), meta); Object.assign(l, meta);
+      await reload(); st("✅ تم توليد " + items.length + " سؤال");
+    } catch (e) { console.error(e); st("تعذر التوليد: " + (e.code ? e.code + " — " : "") + (e.message || "").slice(0, 300), true); }
+    busy(false);
+  };
+  d.querySelector("#dSave").onclick = async () => {
+    const total = Number(g("total").value) || 0, mins = Number(g("mins").value) || 0;
+    if (total <= 0 || mins <= 0) return alert("اكتب الدرجة الكلية والمدة");
+    busy(true); st("جاري الحفظ...");
+    try {
+      const meta = { examTotal: total, examMinutes: mins }; await updateDoc(doc(db, "lessons", l.id), meta); Object.assign(l, meta);
+      if (qsList.length) { const pts = spread(total, qsList.length); for (let i = 0; i < qsList.length; i++) await updateDoc(doc(db, "questions", qsList[i].id), { points: pts(i) }); }
+      await reload(); st("✅ تم الحفظ، والدرجات اتوزعت على الأسئلة");
+    } catch (e) { console.error(e); st("تعذر الحفظ: " + (e.code || e.message || ""), true); }
+    busy(false);
+  };
+  d.querySelector("#dClose").onclick = () => { d.close(); d.remove(); if (dirty) lesson(l, sub); };
+  d.addEventListener("cancel", () => { d.remove(); if (dirty) lesson(l, sub); });
+  d.showModal();
+}
+async function generateExam(l, c) {
+  const count = c.mcq + c.tf + c.essay, essayN = c.essay, tfN = c.tf, mcqN = c.mcq;
   const prompt = `أنت أستاذ لغة فرنسية. ضع اختبارًا من ${count} سؤالًا اعتمادًا على نص الدرس التالي فقط، بمستوى طلاب جامعيين.\nالتوزيع: ${mcqN} سؤال اختيار من متعدد (type "mcq")، ${tfN} سؤال صح/غلط (type "tf")، ${essayN} سؤال مقالي (type "essay").\nالقواعد: الأسئلة والاختيارات بالفرنسية. الاختيار من متعدد: 4 اختيارات وإجابة واحدة صحيحة، و"answer" هو رقم الاختيار الصحيح ويبدأ من 0. صح/غلط: "q" عبارة بالفرنسية، و"options" فارغة، و"answer" يساوي 0 إذا كانت العبارة صحيحة و1 إذا كانت خاطئة. المقالي: سؤال يطلب إجابة قصيرة بالفرنسية، بدون إجابة نموذجية. لكل سؤال اختيار من متعدد أو صح/غلط أضف "explanation": شرح بالفرنسية البسيطة (مستوى A2-B1) في جملتين أو ثلاث، يوضح لماذا الإجابة الصحيحة صحيحة ولماذا الاختيارات الأخرى خاطئة (اذكر نص الاختيار ولا تذكر رقمه أو حرفه). نوّع الأسئلة بين المفردات والقواعد والفهم ولا تكررها.\nعنوان الدرس: ${l.title}\nنص الدرس: ${(l.text || "").slice(0, 6000)}\nأعد JSON فقط: {"questions":[{"type":"mcq","q":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."}]}`;
   const j = await askJSON(prompt), out = [];
   const arr = Array.isArray(j) ? j : (j.questions || j.exam || j.items || j.data || Object.values(j).find(Array.isArray) || []);
@@ -667,11 +775,12 @@ async function lesson(l, sub) {
   const imgMap = {}; if ((l.blocks || []).some(b => b.t === "img")) (await list("lessonImages", "lessonId", l.id)).forEach(i => imgMap[i.id] = i.data);
   const shuffle = a => [...a].sort(() => Math.random() - .5);
   const qs = shuffle(rawQs).map(q => { const pairs=(q.options||[]).map((o,i)=>({o,i})); const opts=shuffle(pairs); return {...q, options:opts.map(x=>x.o), answer:opts.findIndex(x=>x.i===q.answer)}; });
+  const examSecs = l.examMinutes ? Math.round(l.examMinutes * 60) : Math.max(60, qs.length * 90);
   const totalPts = Math.round(qs.reduce((a, q) => a + (q.points || (q.type === "essay" ? 10 : 1)), 0) * 100) / 100;
-  app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button>${editor ? `<button id="examSetup">⚙ إعداد الاختبار</button>` : ""}<button class="sec" id="completeLesson">✓ إتمام الدرس</button></div>
+  app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button>${editor ? `<button id="examSetup">📊 لوحة الاختبار</button>` : ""}<button class="sec" id="completeLesson">✓ إتمام الدرس</button></div>
     ${yt ? `<iframe src="https://www.youtube.com/embed/${yt}" allowfullscreen loading="lazy"></iframe>` : ""}
     <p class="mut">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</p>
-    <div class="text fr" id="txt"></div><h3>الاختبار</h3><div class="q" id="quizBar"><span id="quizStatus">${qs.length ? `الاختبار: ${qs.length} سؤال — الدرجة الكلية ${totalPts}` : "مفيش اختبار للدرس ده لسه."}</span><span id="quizTimer" class="score" style="display:none"></span><div class="question-progress" style="flex:1;min-width:120px"><div class="progress-track"><div id="quizFill" class="progress-fill" style="width:0%"></div></div></div><button id="startQuiz">ابدأ الاختبار</button><button id="finishQuiz" class="sec" style="display:none">إنهاء الاختبار</button></div><div id="quizResult"></div><div id="qs" style="display:none"></div>`;
+    <div class="text fr" id="txt"></div><h3>الاختبار</h3><div class="q" id="quizBar"><span id="quizStatus">${qs.length ? `الاختبار: ${qs.length} سؤال — الدرجة الكلية ${totalPts} — المدة ${Math.round(examSecs / 60)} دقيقة` : "مفيش اختبار للدرس ده لسه."}</span><span id="quizTimer" class="score" style="display:none"></span><div class="question-progress" style="flex:1;min-width:120px"><div class="progress-track"><div id="quizFill" class="progress-fill" style="width:0%"></div></div></div><button id="startQuiz">ابدأ الاختبار</button><button id="finishQuiz" class="sec" style="display:none">إنهاء الاختبار</button></div><div id="quizResult"></div><div id="qs" style="display:none"></div>`;
   $("#back").onclick = () => { speechSynthesis.cancel(); window.lessonCtx = null; clearInterval(quizTimer); lessons(sub); };
   $("#speakLesson").onclick = () => speakLesson(l.text || "", $("#speakLesson"));
   if (user) await setDoc(doc(db, "progress", `${user.uid}_${l.id}`), { uid:user.uid, lessonId:l.id, subjectId:sub.id, lastOpened:serverTimestamp() }, {merge:true});
@@ -680,7 +789,7 @@ async function lesson(l, sub) {
   window.lessonCtx = { title: l.title, text: (l.text || "").slice(0, 3000) };
   const box = $("#qs");
   const mcqScores = {}, essayScores = {};
-  let finished = false, secondsLeft = Math.max(60, qs.length * 90);
+  let finished = false, secondsLeft = examSecs;
   $("#startQuiz").onclick = () => { box.style.display = "block"; $("#startQuiz").style.display = "none"; $("#finishQuiz").style.display = "inline-block"; $("#quizTimer").style.display = "inline-block"; $("#quizStatus").textContent = "الاختبار بدأ — بالتوفيق!"; quizTimer = setInterval(() => { secondsLeft--; const m = Math.floor(secondsLeft / 60), sec = String(secondsLeft % 60).padStart(2, "0"); $("#quizTimer").textContent = `${m}:${sec}`; if (secondsLeft <= 0) { clearInterval(quizTimer); finishExam(true); } }, 1000); };
   const finishExam = async force => {
     if (finished) return;
@@ -728,26 +837,7 @@ async function lesson(l, sub) {
     if (user) await addDoc(collection(db, "answers"), { uid:user.uid, lessonId:l.id, questionId:q.id, selected:+t.dataset.o, correct:+t.dataset.o === q.answer, score:+t.dataset.o === q.answer ? (q.points || 1) : 0, created:serverTimestamp() });
     const answered=box.querySelectorAll("[data-done]").length; $("#quizFill").style.width=`${qs.length?Math.round(answered/qs.length*100):0}%`;
   };
-  if (editor) $("#examSetup").onclick = () => form("إعداد اختبار الدرس", [
-    { n: "count", l: "عدد الأسئلة", v: String(l.examCount || 5) },
-    { n: "total", l: "الدرجة الكلية للاختبار", v: String(l.examTotal || 20) }],
-    async v => {
-      const count = Math.min(30, parseInt(v.count) || 0), total = Number(v.total) || 0;
-      if (count < 1 || total <= 0) return alert("اكتب أرقام صحيحة");
-      if (!(l.text || "").trim()) return alert("الدرس مفيهوش نص يتولد منه اختبار");
-      if (rawQs.length && !confirm("الاختبار الحالي هيتمسح ويتعمل اختبار جديد. تكمل؟")) return;
-      app.insertAdjacentHTML("afterbegin", `<div class="q">⏳ جاري توليد الاختبار بالذكاء الاصطناعي... ممكن ياخد نص دقيقة</div>`);
-      try {
-        const items = await generateExam(l, count), per = Math.round(total / items.length * 100) / 100;
-        for (const q of rawQs) await deleteDoc(doc(db, "questions", q.id));
-        for (let i = 0; i < items.length; i++) {
-          const pts = i === items.length - 1 ? Math.round((total - per * (items.length - 1)) * 100) / 100 : per;
-          await addDoc(collection(db, "questions"), { lessonId: l.id, ...items[i], model: "", rubric: "", points: pts, created: serverTimestamp() });
-        }
-        await updateDoc(doc(db, "lessons", l.id), { examCount: items.length, examTotal: total }); l.examCount = items.length; l.examTotal = total;
-      } catch (e) { console.error(e); alert("تعذر توليد الاختبار:\n" + (e.code ? e.code + " — " : "") + (e.message || "").slice(0, 300)); }
-      lesson(l, sub);
-    });
+  if (editor) $("#examSetup").onclick = () => examDashboard(l, sub, rawQs);
 }
 
 /* ---------- المستخدمين والجروبات ومركز الأسئلة ---------- */
