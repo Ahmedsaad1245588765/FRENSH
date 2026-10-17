@@ -63,6 +63,7 @@ footer{background:var(--navy2);color:#aab4cc;text-align:center;padding:22px 16px
 #sheet{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);width:min(92vw,460px);background:var(--navy);color:#fff;border-radius:14px;border-top:4px solid var(--gold);padding:18px;text-align:center;box-shadow:0 12px 40px rgba(13,26,56,.5);display:none;z-index:50}
 #sheet .f{font-size:1.8rem}
 #sheet .a{font-size:1.5rem;color:var(--gold);margin:2px 0 10px;min-height:2.4rem}
+#sheet .b{color:#cfd6e6;font-size:.95rem;margin-bottom:8px;min-height:1.4rem}
 #sheet button{background:var(--gold);color:var(--navy2)}
 #sheet .sec{background:transparent;color:#fff;box-shadow:inset 0 0 0 2px #fff}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -74,13 +75,15 @@ footer{background:var(--navy2);color:#aab4cc;text-align:center;padding:22px 16px
 <nav><a id="n1">المواد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n4">مركز الأسئلة</a><a id="n5" style="display:none">المستخدمين</a><span id="who"></span><button id="auth">تسجيل الدخول</button></nav></header>
 <main id="app"></main>
 <footer>© قسم اللغة الفرنسية — Département de français</footer>
-<div id="sheet"><div class="f fr"></div><div class="a"></div>
+<div id="sheet"><div class="f fr"></div><div class="a"></div><div class="b"></div>
 <button id="sp">🔊 نطق</button> <button id="sv">➕ أضف للكاردز</button> <button id="cl" class="sec">إغلاق</button></div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app-check.js";
+import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-ai.js";
 
 /* ===== غيّر دول بعد ما نعمل مشروع Firebase ===== */
 const firebaseConfig = {
@@ -95,7 +98,10 @@ const ADMIN_EMAIL = "ahmedsaad13k@gmail.com";   // إيميلك (صلاحيات 
 const MM_EMAIL = "ahmedsaad13k@gmail.com";      // لرفع حد الترجمة المجاني
 /* ============================================== */
 
-const fb = initializeApp(firebaseConfig), auth = getAuth(fb), db = getFirestore(fb);
+const fb = initializeApp(firebaseConfig);
+initializeAppCheck(fb, { provider: new ReCaptchaEnterpriseProvider("6Ld8J_MtAAAAAGpc-4AUO_qWeErr0Gyctgj2mse1"), isTokenAutoRefreshEnabled: true });
+const auth = getAuth(fb), db = getFirestore(fb);
+const gem = getGenerativeModel(getAI(fb, { backend: new GoogleAIBackend() }), { model: "gemini-3.8-flash", generationConfig: { responseMimeType: "application/json" } });
 const $ = s => document.querySelector(s), app = $("#app");
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let user = null, admin = false, editor = false;
@@ -279,13 +285,15 @@ function speak(t) {
   speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = "fr-FR"; u.rate = .85;
   const v = speechSynthesis.getVoices().find(v => v.lang.startsWith("fr")); if (v) u.voice = v; speechSynthesis.speak(u);
 }
-async function translate(w) {
-  const ref = doc(db, "translations", w), s = await getDoc(ref);
-  if (s.exists()) return s.data().ar;
-  const j = await (await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(w)}&langpair=fr|ar&de=${encodeURIComponent(MM_EMAIL)}`)).json();
-  const ar = j?.responseData?.translatedText;
-  if (!ar || /MYMEMORY WARNING/i.test(ar)) throw 0;
-  await setDoc(ref, { ar }); return ar;
+const hash = t => { let h = 0; for (const c of t) h = (h * 31 + c.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
+async function translate(w, sent) {
+  const ref = doc(db, "translations", w + "_" + hash(sent)), s = await getDoc(ref);
+  if (s.exists()) return s.data();
+  const prompt = `أنت مدرس لغة فرنسية للمتحدثين بالعربية. الجملة: "${sent}"\nالكلمة: "${w}"\nأعد JSON فقط بالشكل: {"base": "الشكل الأصلي في القاموس (مصدر الفعل، ومفرد الاسم مع أداته مثل le livre)", "ar": "معنى الكلمة بالعربي حسب سياق الجملة تحديدًا، كلمة أو كلمتين", "note": "ملاحظة قصيرة جدًا بالعربي، مثل: فعل في الماضي، أو مؤنث (اختيارية)"}`;
+  const j = JSON.parse((await gem.generateContent(prompt)).response.text());
+  if (!j.ar) throw 0;
+  const out = { ar: j.ar, base: j.base || w, note: j.note || "" };
+  await setDoc(ref, out); return out;
 }
 let cur;
 function clickable(el, text) {
@@ -296,12 +304,12 @@ function clickable(el, text) {
   }));
 }
 async function openWord(w, sent) {
-  cur = { fr: w.toLowerCase(), ar: "", ex: sent.trim() };
-  $("#sheet .f").textContent = w; $("#sheet .a").textContent = "..."; $("#sv").textContent = "➕ أضف للكاردز"; $("#sheet").style.display = "block";
+  cur = { fr: w.toLowerCase(), word: w, ar: "", ex: sent.trim() };
+  $("#sheet .f").textContent = w; $("#sheet .a").textContent = "..."; $("#sheet .b").textContent = ""; $("#sv").textContent = "➕ أضف للكاردز"; $("#sheet").style.display = "block";
   speak(w);
-  try { cur.ar = await translate(cur.fr); $("#sheet .a").textContent = cur.ar; } catch { $("#sheet .a").textContent = "الترجمة مش متاحة دلوقتي، جرب بعدين"; }
+  try { const t = await translate(cur.fr, cur.ex); cur.ar = t.ar; cur.fr = t.base || cur.fr; $("#sheet .a").textContent = t.ar; $("#sheet .b").textContent = [t.base.toLowerCase() !== w.toLowerCase() ? t.base : "", t.note].filter(Boolean).join(" — "); } catch { $("#sheet .a").textContent = "الترجمة مش متاحة دلوقتي، جرب بعدين"; }
 }
-$("#sp").onclick = () => speak(cur.fr);
+$("#sp").onclick = () => speak(cur.word || cur.fr);
 $("#cl").onclick = () => $("#sheet").style.display = "none";
 $("#sv").onclick = async e => {
   if (!cur?.ar) return;
