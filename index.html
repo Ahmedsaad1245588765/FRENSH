@@ -210,6 +210,22 @@ body.night #aiBar textarea{background:#0d1833;color:#fff;border-color:#304570}
 .sti:hover{opacity:1;background:#d6e4ff}
 body.night .sti{background:#24365f;color:#bcd0ff}
 .item.locked{opacity:.55;cursor:not-allowed}
+/* lesson look */
+.text{font-size:1.22rem;line-height:2.05;padding:30px 32px}
+.lsec+.lsec{margin-top:30px;padding-top:26px;border-top:2px solid #dfe6f3}
+body.night .lsec+.lsec{border-top-color:rgba(255,255,255,.14)}
+.lh1{font-size:2rem;margin:0 0 12px}
+.lh2{font-size:1.45rem;margin:0 0 10px;padding-inline-start:12px;border-inline-start:4px solid #e0444d}
+.lp{margin:10px 0}
+.limg{margin:18px 0}
+/* quiet sentence icon */
+.sti{margin:0 3px;padding:0 3px;font-size:.55em;line-height:1.4;background:transparent;color:#8a96ad;border-radius:4px;vertical-align:super;opacity:.35}
+.sti:hover{background:#eaf1ff;color:#1f4da8;opacity:1}
+body.night .sti{background:transparent;color:#9fb3da}
+@media (hover:hover){.lp .sti{opacity:0}.lp:hover .sti{opacity:.55}.lp .sti:hover{opacity:1}}
+.fbx .sti{opacity:1;font-size:.9em;vertical-align:baseline;background:#eaf1ff;color:#1f4da8;padding:0 7px;margin:0 8px}
+body.night .fbx .sti{background:#24365f;color:#bcd0ff}
+@media(max-width:600px){.text{padding:20px 16px;font-size:1.1rem}.lh1{font-size:1.6rem}.lh2{font-size:1.25rem}}
 .lh1{font-size:1.9rem;font-weight:800;margin:6px 0 10px;line-height:1.4}
 .lh2{font-size:1.4rem;font-weight:800;margin:18px 0 6px;line-height:1.5;color:#1f4da8}
 body.night .lh2{color:#8fb4ff}
@@ -416,15 +432,19 @@ async function compressImage(file) {
 function renderLessonBody(el, l, imgMap) {
   const blocks = (l.blocks && l.blocks.length) ? l.blocks : [{ t: "p", v: l.text || "" }];
   el.textContent = "";
+  let sec = null, solid = false;
+  const newSec = () => { sec = document.createElement("section"); sec.className = "lsec"; el.appendChild(sec); solid = false; };
   blocks.forEach(b => {
+    if (!sec || ((b.t === "h1" || b.t === "h2") && solid)) newSec();
     if (b.t === "img") {
       const fig = document.createElement("figure"); fig.className = "limg";
       if (imgMap[b.v]) { const im = document.createElement("img"); im.src = imgMap[b.v]; im.alt = ""; fig.appendChild(im); } else fig.textContent = "🖼 الصورة مش متاحة";
-      el.appendChild(fig); return;
+      sec.appendChild(fig); solid = true; return;
     }
     const n = document.createElement(b.t === "h1" ? "h3" : b.t === "h2" ? "h4" : "div");
     n.className = b.t === "h1" ? "lh1" : b.t === "h2" ? "lh2" : "lp";
-    el.appendChild(n); clickable(n, b.v, b.t === "p");
+    sec.appendChild(n); clickable(n, b.v, b.t === "p");
+    if (b.t === "p") solid = true;
   });
 }
 async function lessonEditor(x, sub, done) {
@@ -599,14 +619,29 @@ async function generateExam(l, count) {
   const essayN = count >= 3 ? Math.max(1, Math.round(count * 0.2)) : 0, tfN = count >= 2 ? Math.max(1, Math.round(count * 0.25)) : 0, mcqN = Math.max(1, count - essayN - tfN);
   const prompt = `أنت أستاذ لغة فرنسية. ضع اختبارًا من ${count} سؤالًا اعتمادًا على نص الدرس التالي فقط، بمستوى طلاب جامعيين.\nالتوزيع: ${mcqN} سؤال اختيار من متعدد (type "mcq")، ${tfN} سؤال صح/غلط (type "tf")، ${essayN} سؤال مقالي (type "essay").\nالقواعد: الأسئلة والاختيارات بالفرنسية. الاختيار من متعدد: 4 اختيارات وإجابة واحدة صحيحة، و"answer" هو رقم الاختيار الصحيح ويبدأ من 0. صح/غلط: "q" عبارة بالفرنسية، و"options" فارغة، و"answer" يساوي 0 إذا كانت العبارة صحيحة و1 إذا كانت خاطئة. المقالي: سؤال يطلب إجابة قصيرة بالفرنسية، بدون إجابة نموذجية. لكل سؤال اختيار من متعدد أو صح/غلط أضف "explanation": شرح بالفرنسية البسيطة (مستوى A2-B1) في جملتين أو ثلاث، يوضح لماذا الإجابة الصحيحة صحيحة ولماذا الاختيارات الأخرى خاطئة (اذكر نص الاختيار ولا تذكر رقمه أو حرفه). نوّع الأسئلة بين المفردات والقواعد والفهم ولا تكررها.\nعنوان الدرس: ${l.title}\nنص الدرس: ${(l.text || "").slice(0, 6000)}\nأعد JSON فقط: {"questions":[{"type":"mcq","q":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."}]}`;
   const j = await askJSON(prompt), out = [];
-  for (const x of (j.questions || [])) {
-    const type = ["mcq", "tf", "essay"].includes(x.type) ? x.type : "mcq", q = String(x.q || "").trim();
+  const arr = Array.isArray(j) ? j : (j.questions || j.exam || j.items || j.data || Object.values(j).find(Array.isArray) || []);
+  for (const x of arr) {
+    const rt = String(x.type || x.kind || "").toLowerCase();
+    const type = /essay|open|written|مقال/.test(rt) ? "essay" : /tf|true|false|bool|صح/.test(rt) ? "tf" : "mcq";
+    const q = String(x.q || x.question || x.text || x.statement || "").trim();
     if (!q) continue;
-    if (type === "mcq") { const options = (x.options || []).map(o => String(o).trim()).filter(Boolean), answer = Number(x.answer); if (options.length < 2 || !Number.isInteger(answer) || answer < 0 || answer >= options.length) continue; out.push({ type, q, options, answer, explanation: String(x.explanation || "").trim() }); }
-    else if (type === "tf") out.push({ type, q, options: ["صح", "غلط"], answer: Number(x.answer) === 1 ? 1 : 0, explanation: String(x.explanation || "").trim() });
-    else out.push({ type, q, options: [], answer: 0 });
+    const explanation = String(x.explanation || x.why || x.rationale || "").trim();
+    const a = x.answer ?? x.correct ?? x.correct_answer ?? x.correctAnswer ?? x.correctIndex ?? x.correct_index;
+    if (type === "essay") { out.push({ type, q, options: [], answer: 0 }); continue; }
+    if (a === undefined || a === null) continue;
+    if (type === "tf") {
+      const t = String(a).trim().toLowerCase(), ans = typeof a === "boolean" ? (a ? 0 : 1) : (/^(1|false|faux|غلط|خطأ)$/.test(t) ? 1 : 0);
+      out.push({ type, q, options: ["صح", "غلط"], answer: ans, explanation });
+      continue;
+    }
+    const options = (x.options || x.choices || x.answers || []).map(o => String(o?.text ?? o).trim()).filter(Boolean);
+    let idx = -1;
+    if (typeof a === "number") idx = a;
+    else { const t = String(a).trim(); idx = /^\d+$/.test(t) ? Number(t) : /^[A-Da-d]$/.test(t) ? t.toUpperCase().charCodeAt(0) - 65 : options.findIndex(o => o === t); }
+    if (options.length < 2 || !Number.isInteger(idx) || idx < 0 || idx >= options.length) continue;
+    out.push({ type, q, options, answer: idx, explanation });
   }
-  if (!out.length) throw new Error("لم يتم توليد أسئلة صالحة، جرب مرة تانية");
+  if (!out.length) { console.warn("Exam JSON had no valid questions:", j); throw new Error("لم يتم توليد أسئلة صالحة. الرد: " + JSON.stringify(j).slice(0, 200)); }
   return out.slice(0, count);
 }
 
@@ -860,7 +895,7 @@ function clickable(el, text, icons = true) {
       if (/^\p{L}+$/u.test(p)) { const s = document.createElement("span"); s.className = "w"; s.textContent = p; s.dataset.si = si; frag.appendChild(s); }
       else if (p) frag.appendChild(document.createTextNode(p));
     });
-    if (icons && /\p{L}/u.test(body)) { const i = document.createElement("span"); i.className = "sti"; i.textContent = "🌐"; i.title = "ترجمة الجملة"; i.dataset.si = si; frag.appendChild(i); }
+    if (icons && /\p{L}/u.test(body)) { const i = document.createElement("span"); i.className = "sti"; i.textContent = "⇄"; i.title = "ترجمة الجملة"; i.dataset.si = si; frag.appendChild(i); }
     if (tail) frag.appendChild(document.createTextNode(tail));
   });
   el.replaceChildren(frag);
