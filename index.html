@@ -223,7 +223,7 @@ let appCheckStarted = false;
 function startAppCheck(){ if(appCheckStarted) return; appCheckStarted=true; try { initializeAppCheck(fb, { provider: new ReCaptchaEnterpriseProvider("6Ld8J_MtAAAAAGpc-4AUO_qWeErr0Gyctgj2mse1"), isTokenAutoRefreshEnabled: true }); } catch(e) { console.warn("App Check delayed:",e); } }
 startAppCheck();
 const auth = getAuth(fb), db = getFirestore(fb);
-const gem = getGenerativeModel(getAI(fb, { backend: new GoogleAIBackend() }), { model: "gemini-2.5-flash-lite", generationConfig: { responseMimeType: "application/json", temperature: 0.2 } });
+const gem = getGenerativeModel(getAI(fb, { backend: new GoogleAIBackend() }), { model: "gemini-3.5-flash-lite", generationConfig: { responseMimeType: "application/json", temperature: 0.2 } });
 const $ = s => document.querySelector(s), app = $("#app");
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let user = null, admin = false, editor = false;
