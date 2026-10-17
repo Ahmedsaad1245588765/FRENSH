@@ -198,7 +198,8 @@ const MM_EMAIL = "ahmedsaad13k@gmail.com";      // لرفع حد الترجمة 
 /* ============================================== */
 
 const fb = initializeApp(firebaseConfig);
-initializeAppCheck(fb, { provider: new ReCaptchaEnterpriseProvider("6Ld8J_MtAAAAAGpc-4AUO_qWeErr0Gyctgj2mse1"), isTokenAutoRefreshEnabled: true });
+let appCheckStarted = false;
+function startAppCheck(){ if(appCheckStarted) return; appCheckStarted=true; try { initializeAppCheck(fb, { provider: new ReCaptchaEnterpriseProvider("6Ld8J_MtAAAAAGpc-4AUO_qWeErr0Gyctgj2mse1"), isTokenAutoRefreshEnabled: true }); } catch(e) { console.warn("App Check delayed:",e); } }
 const auth = getAuth(fb), db = getFirestore(fb);
 const gem = getGenerativeModel(getAI(fb, { backend: new GoogleAIBackend() }), { model: "gemini-3.8-flash", generationConfig: { responseMimeType: "application/json" } });
 const $ = s => document.querySelector(s), app = $("#app");
@@ -216,7 +217,7 @@ function authDialog() {
   d.querySelector("form").onsubmit=async e=>{e.preventDefault(); error.textContent=""; const fd=new FormData(e.target), email=String(fd.get("email")).trim(), password=String(fd.get("password")), fullName=String(fd.get("fullName")||"").trim(); if(signup&&!fullName)return error.textContent="اكتب اسمك الكامل أولًا"; submit.disabled=true; submit.textContent="جاري التحميل..."; try{let cred;if(signup){cred=await createUserWithEmailAndPassword(auth,email,password); await updateProfile(cred.user,{displayName:fullName}); await setDoc(doc(db,"users",cred.user.uid),{name:fullName,email,photo:"",created:serverTimestamp(),last:serverTimestamp()},{merge:true});}else{cred=await signInWithEmailAndPassword(auth,email,password); await ensureFullName(cred.user);} d.close();d.remove();}catch(err){error.textContent=err.code==="auth/email-already-in-use"?"البريد مستخدم بالفعل":err.code==="auth/invalid-credential"?"البريد أو كلمة المرور غير صحيحة":err.code==="auth/weak-password"?"كلمة المرور يجب أن تكون 6 أحرف على الأقل":"تعذر تسجيل الدخول، راجع البيانات";submit.disabled=false;submit.textContent=signup?"إنشاء الحساب":"تسجيل الدخول";}};
 }
 async function ensureFullName(u){ const snap=await getDoc(doc(db,"users",u.uid)); const old=snap.data()?.name||u.displayName||""; if(old.trim().split(/\s+/).length>=2)return; await new Promise(resolve=>form("أكمل بياناتك",[{n:"name",l:"الاسم الكامل",v:old}],async v=>{const name=v.name.trim(); if(name.split(/\s+/).length<2)return alert("اكتب الاسم الأول واسم العائلة"); await updateProfile(u,{displayName:name}); await setDoc(doc(db,"users",u.uid),{name,email:u.email,last:serverTimestamp()},{merge:true}); resolve();})); }
-async function googleLogin(){ const provider=new GoogleAuthProvider(); provider.setCustomParameters({prompt:"select_account"}); const btn=$("#auth"), old=btn.textContent; btn.disabled=true; btn.textContent="جاري فتح Google..."; let warned=false; const timer=setTimeout(()=>{warned=true; btn.disabled=false; btn.textContent=old; alert("لم تفتح نافذة Google. اسمح بالنوافذ المنبثقة لهذا الموقع، ثم اضغط دخول بجوجل مرة أخرى.");},8000); try{ await signInWithPopup(auth,provider); }catch(e){ clearTimeout(timer); btn.disabled=false; btn.textContent=old; if(e.code==="auth/popup-blocked") alert("المتصفح منع نافذة Google. اسمح بالنوافذ المنبثقة لهذا الموقع."); else if(e.code!=="auth/popup-closed-by-user") alert(`تعذر تسجيل الدخول بجوجل: ${e.code||"تأكد من تفعيل Google في Firebase"}`); } }
+async function googleLogin(){ startAppCheck(); const provider=new GoogleAuthProvider(); provider.setCustomParameters({prompt:"select_account"}); const btn=$("#auth"), old=btn.textContent; btn.disabled=true; btn.textContent="جاري فتح Google..."; let warned=false; const timer=setTimeout(()=>{warned=true; btn.disabled=false; btn.textContent=old; alert("لم تفتح نافذة Google. اسمح بالنوافذ المنبثقة لهذا الموقع، ثم اضغط دخول بجوجل مرة أخرى.");},8000); try{ await signInWithPopup(auth,provider); }catch(e){ clearTimeout(timer); btn.disabled=false; btn.textContent=old; if(e.code==="auth/popup-blocked") alert("المتصفح منع نافذة Google. اسمح بالنوافذ المنبثقة لهذا الموقع."); else if(e.code!=="auth/popup-closed-by-user") alert(`تعذر تسجيل الدخول بجوجل: ${e.code||"تأكد من تفعيل Google في Firebase"}`); } }
 $("#auth").onclick = () => user ? signOut(auth) : googleLogin();
 $("#menuToggle").onclick = () => { const n=$("#menuToggle").parentElement; n.classList.toggle("open"); const open=n.classList.contains("open"); $("#menuToggle").textContent=open?"✕":"☰"; $("#menuToggle").setAttribute("aria-expanded",String(open)); };
 document.querySelectorAll("nav a").forEach(a=>a.addEventListener("click",()=>{const n=a.parentElement;n.classList.remove("open");if($("#menuToggle")){ $("#menuToggle").textContent="☰"; $("#menuToggle").setAttribute("aria-expanded","false"); }}));
@@ -239,6 +240,7 @@ onAuthStateChanged(auth, async u => {
   $("#auth").textContent = u ? "خروج" : "دخول بجوجل";
   editor = admin; $("#n5").style.display = admin ? "" : "none";
   if (!u) return needLogin();
+  startAppCheck();
   // اعرض الصفحة فورًا، ولا تجعل مزامنة Firestore تمنع تسجيل الدخول
   subjects();
   (async()=>{ try {
