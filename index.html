@@ -342,16 +342,32 @@ async function gradeEssay(q, answer) {
   return { score: Math.max(0, Math.min(q.points || 10, Number(x.score) || 0)), feedback: String(x.feedback || "تم التقييم") };
 }
 
+/* ---------- النطق الصوتي ---------- */
+let lessonSpeech = null;
+function speakLesson(text, button) {
+  if (!("speechSynthesis" in window)) return alert("النطق الصوتي غير مدعوم في هذا المتصفح");
+  if (speechSynthesis.speaking && !speechSynthesis.paused) { speechSynthesis.pause(); button.textContent="▶ استكمال الدرس"; return; }
+  if (speechSynthesis.paused) { speechSynthesis.resume(); button.textContent="⏸ إيقاف مؤقت"; return; }
+  speechSynthesis.cancel();
+  lessonSpeech = new SpeechSynthesisUtterance(String(text || "").replace(/<[^>]*>/g, " "));
+  lessonSpeech.lang = "fr-FR"; lessonSpeech.rate = 0.88; lessonSpeech.pitch = 1;
+  const voice = speechSynthesis.getVoices().find(v => /^fr(-|_)/i.test(v.lang));
+  if (voice) lessonSpeech.voice = voice;
+  lessonSpeech.onend = lessonSpeech.onerror = () => { button.textContent="🔊 تشغيل الدرس"; lessonSpeech=null; };
+  button.textContent="⏸ إيقاف مؤقت"; speechSynthesis.speak(lessonSpeech);
+}
+
 /* ---------- الدرس ---------- */
 async function lesson(l, sub) {
   const rawQs = await list("questions", "lessonId", l.id), yt = ytId(l.youtube);
   const shuffle = a => [...a].sort(() => Math.random() - .5);
   const qs = shuffle(rawQs).map(q => { const pairs=(q.options||[]).map((o,i)=>({o,i})); const opts=shuffle(pairs); return {...q, options:opts.map(x=>x.o), answer:opts.findIndex(x=>x.i===q.answer)}; });
-  app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2>${editor ? `<button id="addq">+ سؤال</button>` : ""}<button class="sec" id="completeLesson">✓ إتمام الدرس</button></div>
+  app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button>${editor ? `<button id="addq">+ سؤال</button>` : ""}<button class="sec" id="completeLesson">✓ إتمام الدرس</button></div>
     ${yt ? `<iframe src="https://www.youtube.com/embed/${yt}" allowfullscreen loading="lazy"></iframe>` : ""}
     <p class="mut">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</p>
     <div class="text fr" id="txt"></div><h3>الاختبار</h3><div class="q" id="quizBar"><span id="quizStatus">ابدأ الاختبار عند جاهزيتك.</span><span id="quizTimer" class="score" style="display:none"></span><div class="question-progress" style="flex:1;min-width:120px"><div class="progress-track"><div id="quizFill" class="progress-fill" style="width:0%"></div></div></div><button id="startQuiz">ابدأ الاختبار</button><button id="finishQuiz" class="sec" style="display:none">إنهاء الاختبار</button></div><div id="quizResult"></div><div id="qs" style="display:none"></div>`;
-  $("#back").onclick = () => lessons(sub);
+  $("#back").onclick = () => { speechSynthesis.cancel(); lessons(sub); };
+  $("#speakLesson").onclick = () => speakLesson(l.text || "", $("#speakLesson"));
   if (user) await setDoc(doc(db, "progress", `${user.uid}_${l.id}`), { uid:user.uid, lessonId:l.id, subjectId:sub.id, lastOpened:serverTimestamp() }, {merge:true});
   $("#completeLesson").onclick = async () => { if(user){ await setDoc(doc(db,"progress",`${user.uid}_${l.id}`), {uid:user.uid, lessonId:l.id, subjectId:sub.id, completed:true, completedAt:serverTimestamp()}, {merge:true}); $("#completeLesson").textContent="✓ تم إتمام الدرس"; } };
   clickable($("#txt"), l.text || "");
@@ -503,14 +519,29 @@ function speak(t) {
   const v = speechSynthesis.getVoices().find(v => v.lang.startsWith("fr")); if (v) u.voice = v; speechSynthesis.speak(u);
 }
 const hash = t => { let h = 0; for (const c of t) h = (h * 31 + c.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
+const translationPending = new Map();
 async function translate(w, sent) {
-  const ref = doc(db, "translations", w + "_" + hash(sent)), s = await getDoc(ref);
-  if (s.exists()) return s.data();
-  const prompt = `أنت مدرس لغة فرنسية للمتحدثين بالعربية. الجملة: "${sent}"\nالكلمة: "${w}"\nأعد JSON فقط بالشكل: {"base": "الشكل الأصلي في القاموس (مصدر الفعل، ومفرد الاسم مع أداته مثل le livre)", "ar": "معنى الكلمة بالعربي حسب سياق الجملة تحديدًا، كلمة أو كلمتين", "note": "ملاحظة قصيرة جدًا بالعربي", "pos": "نوع الكلمة", "synonyms": ["مرادف فرنسي واحد"], "level": "A1 أو A2 أو B1"}`;
-  const j = JSON.parse((await gem.generateContent(prompt)).response.text());
-  if (!j.ar) throw 0;
-  const out = { ar: j.ar, base: j.base || w, note: j.note || "", pos: j.pos || "", synonyms: Array.isArray(j.synonyms) ? j.synonyms.slice(0,3) : [], level: j.level || "" };
-  await setDoc(ref, out); return out;
+  const cacheKey = `fr_translation_${hash(w + "|" + sent)}`;
+  try { const local = localStorage.getItem(cacheKey); if (local) return JSON.parse(local); } catch {}
+  if (translationPending.has(cacheKey)) return translationPending.get(cacheKey);
+  const task = (async () => {
+    const ref = doc(db, "translations", w + "_" + hash(sent));
+    const cloud = withTimeout(getDoc(ref), 1800).then(snap => snap.exists() ? snap.data() : null).catch(e => { console.warn("Translation cache skipped:",e.message); return null; });
+    const ai = (async () => {
+      const prompt = `ترجم الكلمة الفرنسية حسب السياق إلى العربية. الجملة: "${sent}"\nالكلمة: "${w}"\nأعد JSON فقط: {"base":"الشكل الأصلي","ar":"المعنى المختصر","note":"ملاحظة قصيرة","pos":"نوع الكلمة","synonyms":[],"level":"A1"}`;
+      const j = JSON.parse((await gem.generateContent(prompt)).response.text());
+      if (!j.ar) throw 0;
+      return { ar: j.ar, base: j.base || w, note: j.note || "", pos: j.pos || "", synonyms: Array.isArray(j.synonyms) ? j.synonyms.slice(0,3) : [], level: j.level || "" };
+    })();
+    const first = await Promise.race([cloud, ai]);
+    if (first) { try { localStorage.setItem(cacheKey, JSON.stringify(first)); } catch {}; return first; }
+    const out = await ai;
+    try { localStorage.setItem(cacheKey, JSON.stringify(out)); } catch {}
+    setDoc(ref, out).catch(e => console.warn("Translation cache save skipped:",e.message));
+    return out;
+  })();
+  translationPending.set(cacheKey, task);
+  try { return await task; } finally { translationPending.delete(cacheKey); }
 }
 let cur;
 function clickable(el, text) {
