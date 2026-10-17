@@ -142,12 +142,17 @@ body.login-screen{background:#f9fbff;overflow-x:hidden}body.login-screen #app{ma
 .dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:18px 0}.metric{padding:19px;border:1px solid #dce6f4;background:linear-gradient(145deg,#fff,#f3f7ff);border-radius:18px;box-shadow:0 10px 24px rgba(36,68,126,.1)}.metric b{display:block;font-size:2rem;color:#1d4da7;line-height:1.1}.metric small{color:#72809d}.progress-track{height:10px;background:#e7edf7;border-radius:99px;overflow:hidden}.progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#1d54b6,#e0444d,#edbd44);transition:width .8s ease}.notice{border-inline-start:4px solid #e0444d;background:linear-gradient(90deg,#fff8f5,#fff);padding:16px 18px;border-radius:14px;margin:10px 0;box-shadow:0 8px 20px rgba(49,69,120,.08)}.notice h4{margin:0 0 4px;color:#1e438d}.notice time{font-size:.8rem;color:#8a96ad}.question-progress{margin:10px 0 18px}.question-progress .progress-track{height:7px}.group-tools{display:flex;gap:8px;align-items:center;margin:10px 0}.group-tools input{margin:0;max-width:310px}.badge{display:inline-block;border-radius:99px;padding:3px 10px;font-size:.78rem;background:#eaf1ff;color:#2452a4;font-weight:700}
 @media(max-width:600px){.dashboard{grid-template-columns:1fr 1fr}.metric b{font-size:1.55rem}}
 
+/* Responsive navigation */
+#menuToggle{display:none;background:#fff;color:#214a9b;border:1px solid #d7e2f3;box-shadow:0 5px 14px rgba(35,67,126,.1);font-size:1.35rem;line-height:1;padding:8px 11px}header nav{margin-inline-start:auto;justify-content:flex-end;max-width:75%}header nav a{white-space:nowrap}#auth{white-space:nowrap}
+@media(max-width:760px){header{padding:10px 12px;gap:8px}.brand{min-width:0;flex:1}.brand b{font-size:.98rem}.brand small{font-size:.7rem}header nav{position:relative;width:auto;max-width:none;margin:0;gap:6px;overflow:visible;flex-wrap:nowrap}#menuToggle{display:inline-block}header nav a{display:none;position:relative;white-space:normal}header nav.open{position:relative}header nav.open a{display:block}header nav.open{flex-wrap:wrap;justify-content:flex-end}header nav.open a{width:100%;text-align:center;background:#fff;border:1px solid #e0e7f3;box-shadow:0 4px 14px rgba(33,61,117,.08);padding:9px 12px}header nav.open a:first-of-type{margin-top:8px}header nav.open #who{display:block;width:100%;text-align:center;padding:5px;color:#2452a4}header nav.open #auth,header nav.open #themeToggle{display:inline-block}#auth{font-size:.78rem;padding:8px 10px}#themeToggle{font-size:.95rem;padding:7px 9px}.top{font-size:.7rem;padding:5px 8px}main{padding:20px 12px 120px}.hero{padding:38px 18px 28px}.login-shell{margin-top:0}}
+@media(min-width:761px){header{min-height:76px}header nav{gap:5px}header nav a{font-size:.88rem}main{padding-top:34px}}
+
 </style>
 </head>
 <body>
 <div class="top">Faculté · Département de français — قسم اللغة الفرنسية</div>
 <header><div class="brand" id="home"><svg viewBox="0 0 44 52"><path d="M22 2 L42 9 V26 C42 38 33 46 22 50 C11 46 2 38 2 26 V9Z" fill="#14264f" stroke="#c19a4b" stroke-width="2.5"/><text x="22" y="34" text-anchor="middle" font-family="Fraunces,serif" font-size="26" font-style="italic" fill="#c19a4b">F</text></svg><div><b>Département de français</b><small>قسم اللغة الفرنسية</small></div></div>
-<nav><a id="n1">المواد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n4">مركز الأسئلة</a><a id="n5" style="display:none">المستخدمين</a><a id="n6" style="display:none">الدرجات</a><a id="n7">لوحتي</a><a id="n8">الإعلانات</a><span id="who"></span><button id="themeToggle" title="الوضع الليلي">☾</button><button id="auth">تسجيل الدخول</button></nav></header>
+<nav><button id="menuToggle" aria-label="فتح القائمة" aria-expanded="false">☰</button><a id="n1">المواد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n4">مركز الأسئلة</a><a id="n5" style="display:none">المستخدمين</a><a id="n6" style="display:none">الدرجات</a><a id="n7">لوحتي</a><a id="n8">الإعلانات</a><a id="n9">الإشعارات</a><span id="who"></span><button id="themeToggle" title="الوضع الليلي">☾</button><button id="auth">تسجيل الدخول</button></nav></header>
 <main id="app"></main>
 <footer>© قسم اللغة الفرنسية — Département de français</footer>
 <div id="sheet"><div class="f fr"></div><div class="a"></div><div class="b"></div>
@@ -155,7 +160,7 @@ body.login-screen{background:#f9fbff;overflow-x:hidden}body.login-screen #app{ma
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app-check.js";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-ai.js";
@@ -182,7 +187,19 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 let user = null, admin = false, editor = false;
 
 /* ---------- Auth ---------- */
-$("#auth").onclick = () => user ? signOut(auth) : signInWithPopup(auth, new GoogleAuthProvider());
+function authDialog() {
+  const d=document.createElement("dialog");
+  d.innerHTML=`<form id="authForm"><h3 class="fr">Connexion</h3><p class="mut">سجل دخولك أو أنشئ حسابًا جديدًا</p><label>البريد الإلكتروني<input name="email" type="email" required autocomplete="email"></label><label>كلمة المرور<input name="password" type="password" minlength="6" required autocomplete="current-password"></label><label id="fullNameLabel" style="display:none">الاسم الكامل<input name="fullName" autocomplete="name"></label><div class="row"><button type="submit" id="loginSubmit">تسجيل الدخول</button><button type="button" class="sec" id="toggleAuth">إنشاء حساب جديد</button><button type="button" class="sec" id="closeAuth">إلغاء</button></div><p id="authError" class="danger"></p></form>`;
+  document.body.appendChild(d); d.showModal(); let signup=false;
+  const title=d.querySelector("h3"), submit=d.querySelector("#loginSubmit"), toggle=d.querySelector("#toggleAuth"), name=d.querySelector("#fullNameLabel"), error=d.querySelector("#authError");
+  toggle.onclick=()=>{signup=!signup; title.textContent=signup?"إنشاء حساب":"Connexion"; submit.textContent=signup?"إنشاء الحساب":"تسجيل الدخول"; toggle.textContent=signup?"لدي حساب بالفعل":"إنشاء حساب جديد"; name.style.display=signup?"block":"none"; d.querySelector('[name="password"]').autocomplete=signup?"new-password":"current-password";};
+  d.querySelector("#closeAuth").onclick=()=>{d.close();d.remove();};
+  d.querySelector("form").onsubmit=async e=>{e.preventDefault(); error.textContent=""; const fd=new FormData(e.target), email=String(fd.get("email")).trim(), password=String(fd.get("password")), fullName=String(fd.get("fullName")||"").trim(); if(signup&&!fullName)return error.textContent="اكتب اسمك الكامل أولًا"; submit.disabled=true; submit.textContent="جاري التحميل..."; try{let cred;if(signup){cred=await createUserWithEmailAndPassword(auth,email,password); await updateProfile(cred.user,{displayName:fullName}); await setDoc(doc(db,"users",cred.user.uid),{name:fullName,email,photo:"",created:serverTimestamp(),last:serverTimestamp()},{merge:true});}else{cred=await signInWithEmailAndPassword(auth,email,password); await ensureFullName(cred.user);} d.close();d.remove();}catch(err){error.textContent=err.code==="auth/email-already-in-use"?"البريد مستخدم بالفعل":err.code==="auth/invalid-credential"?"البريد أو كلمة المرور غير صحيحة":err.code==="auth/weak-password"?"كلمة المرور يجب أن تكون 6 أحرف على الأقل":"تعذر تسجيل الدخول، راجع البيانات";submit.disabled=false;submit.textContent=signup?"إنشاء الحساب":"تسجيل الدخول";}};
+}
+async function ensureFullName(u){ const snap=await getDoc(doc(db,"users",u.uid)); const old=snap.data()?.name||u.displayName||""; if(old.trim().split(/\s+/).length>=2)return; await new Promise(resolve=>form("أكمل بياناتك",[{n:"name",l:"الاسم الكامل",v:old}],async v=>{const name=v.name.trim(); if(name.split(/\s+/).length<2)return alert("اكتب الاسم الأول واسم العائلة"); await updateProfile(u,{displayName:name}); await setDoc(doc(db,"users",u.uid),{name,email:u.email,last:serverTimestamp()},{merge:true}); resolve();})); }
+$("#auth").onclick = () => user ? signOut(auth) : authDialog();
+$("#menuToggle").onclick = () => { const n=$("#menuToggle").parentElement; n.classList.toggle("open"); const open=n.classList.contains("open"); $("#menuToggle").textContent=open?"✕":"☰"; $("#menuToggle").setAttribute("aria-expanded",String(open)); };
+document.querySelectorAll("nav a").forEach(a=>a.addEventListener("click",()=>{const n=a.parentElement;n.classList.remove("open");if($("#menuToggle")){ $("#menuToggle").textContent="☰"; $("#menuToggle").setAttribute("aria-expanded","false"); }}));
 $("#home").onclick = $("#n1").onclick = () => subjects();
 $("#n2").onclick = () => user ? review() : needLogin();
 $("#n3").onclick = () => groupsPage();
@@ -191,14 +208,15 @@ $("#n5").onclick = () => usersPage();
 $("#n6").onclick = () => gradesPage();
 $("#n7").onclick = () => studentDashboard();
 $("#n8").onclick = () => announcementsPage();
+$("#n9").onclick = () => notificationsPage();
 $("#themeToggle").onclick = () => { document.body.classList.toggle("night"); localStorage.setItem("fr-theme", document.body.classList.contains("night") ? "night" : "light"); $("#themeToggle").textContent = document.body.classList.contains("night") ? "☀" : "☾"; };
 if (localStorage.getItem("fr-theme") === "night") { document.body.classList.add("night"); $("#themeToggle").textContent="☀"; }
 onAuthStateChanged(auth, async u => {
   user = u; admin = !!u && u.email === ADMIN_EMAIL;
   $("#who").textContent = u ? u.displayName : "";
   $("#n6").style.display = admin ? "" : "none";
-  $("#auth").textContent = u ? "خروج" : "تسجيل الدخول بجوجل";
-  if (u) { const existing = await getDoc(doc(db,"users",u.uid)); if (existing.data()?.disabled) { alert("هذا الحساب متوقف من الإدارة"); await signOut(auth); return; } await setDoc(doc(db, "users", u.uid), { name: u.displayName, email: u.email, photo: u.photoURL, last: serverTimestamp() }, { merge: true }); }
+  $("#auth").textContent = u ? "خروج" : "تسجيل الدخول";
+  if (u) { const existing = await getDoc(doc(db,"users",u.uid)); if (existing.data()?.disabled) { alert("هذا الحساب متوقف من الإدارة"); await signOut(auth); return; } if (!existing.data()?.name || existing.data()?.name.trim().split(/\s+/).length < 2) await ensureFullName(u); await setDoc(doc(db, "users", u.uid), { name: u.displayName, email: u.email, photo: u.photoURL, last: serverTimestamp() }, { merge: true }); }
   editor = admin; $("#n5").style.display = admin ? "" : "none";
   if (u) {
     editor = admin || (await getDoc(doc(db, "users", u.uid))).data()?.role === "assistant";
@@ -276,17 +294,19 @@ async function delLesson(id, quiet) {
 
 function editSubject(x) { form("تعديل المادة", [{n:"name",l:"اسم المادة",v:x.name},{n:"cover",l:"لينك الصورة",v:x.cover||""}], async v => { await updateDoc(doc(db,"subjects",x.id), {name:v.name,cover:v.cover||""}); subjects(); }); }
 function editLesson(x, sub) { form("تعديل الدرس", [{n:"title",l:"عنوان الدرس",v:x.title},{n:"text",l:"نص الدرس",t:"area",v:x.text||""},{n:"yt",l:"لينك يوتيوب",v:x.youtube||""}], async v => { await updateDoc(doc(db,"lessons",x.id), {title:v.title,text:v.text,youtube:v.yt}); lessons(sub); }); }
-function editQuestion(x, l, sub) { form("تعديل السؤال", [{n:"type",l:"النوع",t:"sel",v:x.type,o:[["mcq","اختيار من متعدد"],["tf","صح / غلط"],["essay","مقالي — تقييم Gemini"]]},{n:"q",l:"السؤال",v:x.q},{n:"opts",l:"الاختيارات كل اختيار في سطر",t:"area",v:(x.options||[]).join("\n")},{n:"ans",l:"رقم الإجابة الصحيحة",v:String((x.answer||0)+1)},{n:"model",l:"الإجابة النموذجية",t:"area",v:x.model||""},{n:"points",l:"الدرجة القصوى",v:String(x.points||10)}], async v => { const options=v.type==="tf"?["صح","غلط"]:(v.opts||"").split("\n").map(x=>x.trim()).filter(Boolean), answer=(parseInt(v.ans)||1)-1; await updateDoc(doc(db,"questions",x.id),{type:v.type,q:v.q,options,answer,model:v.model||"",points:Math.max(1,parseInt(v.points)||10)}); lesson(l,sub); }); }
+function editQuestion(x, l, sub) { form("تعديل السؤال", [{n:"type",l:"النوع",t:"sel",v:x.type,o:[["mcq","اختيار من متعدد"],["tf","صح / غلط"],["essay","مقالي — تقييم Gemini"]]},{n:"q",l:"السؤال",v:x.q},{n:"opts",l:"الاختيارات كل اختيار في سطر",t:"area",v:(x.options||[]).join("\n")},{n:"ans",l:"رقم الإجابة الصحيحة",v:String((x.answer||0)+1)},{n:"model",l:"الإجابة النموذجية",t:"area",v:x.model||""},{n:"rubric",l:"معايير التصحيح",t:"area",v:x.rubric||""},{n:"points",l:"الدرجة القصوى",v:String(x.points||10)}], async v => { const options=v.type==="tf"?["صح","غلط"]:(v.opts||"").split("\n").map(x=>x.trim()).filter(Boolean), answer=(parseInt(v.ans)||1)-1; await updateDoc(doc(db,"questions",x.id),{type:v.type,q:v.q,options,answer,model:v.model||"",rubric:v.rubric||"",points:Math.max(1,parseInt(v.points)||10)}); lesson(l,sub); }); }
 
 async function gradeEssay(q, answer) {
-  const prompt = `قيّم إجابة طالب في سؤال تعليمي. السؤال: ${q.q}\nالإجابة النموذجية: ${q.model || "غير متاحة"}\nإجابة الطالب: ${answer}\nالدرجة القصوى: ${q.points || 10}. أعد JSON فقط: {"score": رقم بين 0 والدرجة القصوى, "feedback": "ملاحظة عربية قصيرة ومفيدة"}`;
+  const prompt = `قيّم إجابة طالب في سؤال تعليمي. السؤال: ${q.q}\nالإجابة النموذجية: ${q.model || "غير متاحة"}\nإجابة الطالب: ${answer}\nمعايير التصحيح: ${q.rubric || "قيّم الدقة والمعنى والقواعد"}\nالدرجة القصوى: ${q.points || 10}. أعد JSON فقط: {"score": رقم بين 0 والدرجة القصوى, "feedback": "ملاحظة عربية قصيرة ومفيدة"}`;
   const x = JSON.parse((await gem.generateContent(prompt)).response.text());
   return { score: Math.max(0, Math.min(q.points || 10, Number(x.score) || 0)), feedback: String(x.feedback || "تم التقييم") };
 }
 
 /* ---------- الدرس ---------- */
 async function lesson(l, sub) {
-  const qs = await list("questions", "lessonId", l.id), yt = ytId(l.youtube);
+  const rawQs = await list("questions", "lessonId", l.id), yt = ytId(l.youtube);
+  const shuffle = a => [...a].sort(() => Math.random() - .5);
+  const qs = shuffle(rawQs).map(q => { const pairs=(q.options||[]).map((o,i)=>({o,i})); const opts=shuffle(pairs); return {...q, options:opts.map(x=>x.o), answer:opts.findIndex(x=>x.i===q.answer)}; });
   app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2>${editor ? `<button id="addq">+ سؤال</button>` : ""}<button class="sec" id="completeLesson">✓ إتمام الدرس</button></div>
     ${yt ? `<iframe src="https://www.youtube.com/embed/${yt}" allowfullscreen loading="lazy"></iframe>` : ""}
     <p class="mut">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</p>
@@ -302,6 +322,7 @@ async function lesson(l, sub) {
   box.innerHTML = qs.map((q, i) => `<div class="q" data-qid="${q.id}"><div class="fr"><b>${i + 1}.</b> ${esc(q.q)} ${q.type === "essay" ? `<small class="mut">(مقالي — ${q.points || 10} درجات)</small>` : ""}</div>
     ${q.type === "essay" ? `<textarea class="essay" data-answer="${q.id}" placeholder="اكتب إجابتك هنا..."></textarea><button class="submitEssay" data-submit="${q.id}">إرسال للتقييم</button><span class="essayResult" data-result="${q.id}"></span>` : q.options.map((o, j) => `<button class="opt ${q.type === "mcq" ? "fr" : ""}" data-q="${i}" data-o="${j}">${esc(o)}</button>`).join("")}
     ${editor ? `<div class="row"><button class="sec" data-eq="${q.id}">تعديل السؤال</button><button class="del" data-dq="${q.id}">حذف السؤال</button></div>` : ""}</div>`).join("") || `<p class="mut">مفيش أسئلة لسه.</p>`;
+  box.querySelectorAll("textarea[data-answer]").forEach(a=>{ const key=`draft_${user?.uid}_${a.dataset.answer}`; a.value=localStorage.getItem(key)||""; a.oninput=()=>localStorage.setItem(key,a.value); });
   box.onclick = async e => {
     const t = e.target;
     if (t.dataset.eq) { return editQuestion(qs.find(x => x.id === t.dataset.eq), l, sub); }
@@ -310,7 +331,7 @@ async function lesson(l, sub) {
       const q = qs.find(x => x.id === t.dataset.submit), area = box.querySelector(`[data-answer="${q.id}"]`), result = box.querySelector(`[data-result="${q.id}"]`);
       if (!area.value.trim()) return alert("اكتب إجابتك أولًا");
       t.disabled = true; t.textContent = "جاري التقييم...";
-      try { const g = await gradeEssay(q, area.value.trim()); await addDoc(collection(db, "answers"), { uid:user.uid, lessonId:l.id, questionId:q.id, answer:area.value.trim(), score:g.score, feedback:g.feedback, created:serverTimestamp() }); result.innerHTML = `<span class="score">${g.score}/${q.points || 10}</span> ${esc(g.feedback)}`; } catch { result.innerHTML = `<span class="danger">تعذر التقييم الآن، حاول لاحقًا.</span>`; }
+      try { localStorage.removeItem(`draft_${user?.uid}_${q.id}`); const g = await gradeEssay(q, area.value.trim()); await addDoc(collection(db, "answers"), { uid:user.uid, lessonId:l.id, questionId:q.id, answer:area.value.trim(), score:g.score, feedback:g.feedback, created:serverTimestamp() }); result.innerHTML = `<span class="score">${g.score}/${q.points || 10}</span> ${esc(g.feedback)}`; } catch { result.innerHTML = `<span class="danger">تعذر التقييم الآن، حاول لاحقًا.</span>`; }
       t.disabled = false; t.textContent = "إرسال للتقييم"; return;
     }
     if (!t.classList.contains("opt")) return;
@@ -326,12 +347,13 @@ async function lesson(l, sub) {
     { n: "opts", l: "الاختيارات، كل اختيار في سطر (للاختيار فقط)", t: "area" },
     { n: "ans", l: "رقم الإجابة الصح (للاختيار/صح غلط)" },
     { n: "model", l: "الإجابة النموذجية للمقالي (اختياري)", t: "area" },
+    { n: "rubric", l: "معايير التصحيح (قواعد، مفردات، معنى...)", t: "area" },
     { n: "points", l: "الدرجة القصوى (افتراضي 10)" }],
     async v => {
       const options = v.type === "tf" ? ["صح", "غلط"] : (v.opts || "").split("\n").map(s => s.trim()).filter(Boolean);
       const answer = (parseInt(v.ans) || 1) - 1, points = Math.max(1, parseInt(v.points) || 10);
       if (!v.q || (v.type !== "essay" && (options.length < 2 || !options[answer]))) return alert("البيانات ناقصة أو رقم الإجابة غلط");
-      await addDoc(collection(db, "questions"), { lessonId: l.id, type: v.type, q: v.q, options, answer, model: v.model || "", points, created: serverTimestamp() });
+      await addDoc(collection(db, "questions"), { lessonId: l.id, type: v.type, q: v.q, options, answer, model: v.model || "", rubric: v.rubric || "", points, created: serverTimestamp() });
       lesson(l, sub);
     });
 }
@@ -343,11 +365,19 @@ async function myGroups() {
   else for (const c of [where("members", "array-contains", user.uid), where("public", "==", true)]) add(await getDocs(query(collection(db, "groups"), c)));
   return [...m.values()].sort((a, b) => (b.id === "general") - (a.id === "general"));
 }
+async function notificationsPage() {
+  if (!user) return needLogin();
+  const ns=await list("notifications","uid",user.uid);
+  app.innerHTML=`<div class="row"><h3 class="sh" style="flex:1;margin:0">الإشعارات</h3><button class="sec" id="readAll">تحديد الكل كمقروء</button></div>${ns.sort((a,b)=>(b.created?.seconds||0)-(a.created?.seconds||0)).map(n=>`<article class="notice" style="opacity:${n.read?.8:1}"><h4>${n.read?"":"● "}${esc(n.title)}</h4><div>${esc(n.text)}</div><button class="sec" data-read="${n.id}">${n.read?"مقروء":"تحديد كمقروء"}</button></article>`).join("")||`<p class="mut">لا توجد إشعارات.</p>`}`;
+  app.querySelectorAll("[data-read]").forEach(b=>b.onclick=async()=>{await updateDoc(doc(db,"notifications",b.dataset.read),{read:true}); notificationsPage();});
+  $("#readAll").onclick=async()=>{for(const n of ns)if(!n.read)await updateDoc(doc(db,"notifications",n.id),{read:true});notificationsPage();};
+}
+
 async function announcementsPage() {
   if (!user) return needLogin();
   const ns = await list("announcements");
   app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">إعلانات القسم</h3>${admin ? `<button id="addNotice">+ إعلان</button>` : ""}</div><div>${ns.map(n => `<article class="notice"><h4>${esc(n.title)}</h4><div>${esc(n.text)}</div><time>${n.by ? esc(n.by) : "إدارة القسم"}</time></article>`).join("") || `<p class="mut">لا توجد إعلانات جديدة.</p>`}</div>`;
-  if (admin) $("#addNotice").onclick=()=>form("إعلان جديد",[{n:"title",l:"العنوان"},{n:"text",l:"نص الإعلان",t:"area"}],async v=>{await addDoc(collection(db,"announcements"),{title:v.title,text:v.text,by:user.displayName,created:serverTimestamp()}); announcementsPage();});
+  if (admin) $("#addNotice").onclick=()=>form("إعلان جديد",[{n:"title",l:"العنوان"},{n:"text",l:"نص الإعلان",t:"area"}],async v=>{await addDoc(collection(db,"announcements"),{title:v.title,text:v.text,by:user.displayName,created:serverTimestamp()}); const us=await list("users"); for(const x of us) await addDoc(collection(db,"notifications"),{uid:x.id,title:v.title,text:v.text,read:false,created:serverTimestamp()}); announcementsPage();});
 }
 async function studentDashboard() {
   if (!user) return needLogin();
@@ -362,7 +392,8 @@ async function gradesPage() {
   const [answers, users, questions, lessonsAll] = await Promise.all([list("answers"), list("users"), list("questions"), list("lessons")]);
   const um = new Map(users.map(x => [x.id, x])), qm = new Map(questions.map(x => [x.id, x])), lm = new Map(lessonsAll.map(x => [x.id, x]));
   const total = answers.reduce((a,x) => a + Number(x.score || 0), 0), max = answers.reduce((a,x) => a + Number(qm.get(x.questionId)?.points || (qm.get(x.questionId)?.type === "essay" ? 10 : 1)), 0);
-  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">درجات ومحاولات الطلاب</h3><button class="sec" id="refreshGrades">تحديث</button><button class="sec" id="exportGrades">تصدير CSV</button></div><div class="q"><b>إجمالي المحاولات:</b> ${answers.length} &nbsp; <b>مجموع الدرجات:</b> ${total}/${max || 0}</div><div class="grid">${answers.map(a => { const u=um.get(a.uid)||{}, q=qm.get(a.questionId)||{}, l=lm.get(a.lessonId)||{}; return `<div class="q"><b>${esc(u.name || a.uid)}</b><small class="mut"> ${esc(u.email || "")}</small><hr><div>${esc(q.q || "سؤال محذوف")}</div><small class="mut">الدرس: ${esc(l.title || "غير معروف")}</small><p><span class="score">${Number(a.score||0)}/${Number(q.points || (q.type === "essay" ? 10 : 1))}</span>${a.correct !== undefined ? (a.correct ? " إجابة صحيحة" : " إجابة خاطئة") : ""}</p>${a.feedback ? `<div class="mut">${esc(a.feedback)}</div>` : ""}${a.answer ? `<details><summary>إجابة الطالب</summary><p>${esc(a.answer)}</p></details>` : ""}</div>`; }).join("") || `<p class="mut">لا توجد محاولات بعد.</p>`}</div>`;
+  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">درجات ومحاولات الطلاب</h3><button class="sec" id="refreshGrades">تحديث</button><button class="sec" id="exportGrades">تصدير CSV</button></div><div class="dashboard"><div class="metric"><b>${new Set(answers.map(x=>x.uid)).size}</b><small>طلاب لديهم محاولات</small></div><div class="metric"><b>${answers.length}</b><small>إجمالي الإجابات</small></div><div class="metric"><b>${max ? Math.round(total/max*100) : 0}%</b><small>متوسط الأداء العام</small></div><div class="metric"><b>${new Set(answers.map(x=>x.lessonId)).size}</b><small>دروس تم حلها</small></div></div><div class="grid">${answers.map(a => { const u=um.get(a.uid)||{}, q=qm.get(a.questionId)||{}, l=lm.get(a.lessonId)||{}; return `<div class="q"><b>${esc(u.name || a.uid)}</b><small class="mut"> ${esc(u.email || "")}</small><hr><div>${esc(q.q || "سؤال محذوف")}</div><small class="mut">الدرس: ${esc(l.title || "غير معروف")}</small><p><span class="score">${Number(a.score||0)}/${Number(q.points || (q.type === "essay" ? 10 : 1))}</span>${a.correct !== undefined ? (a.correct ? " إجابة صحيحة" : " إجابة خاطئة") : ""}</p>${a.feedback ? `<div class="mut">${esc(a.feedback)}</div>` : ""}<button class="sec" data-manual="${a.id}">تعديل الدرجة</button>${a.answer ? `<details><summary>إجابة الطالب</summary><p>${esc(a.answer)}</p></details>` : ""}</div>`; }).join("") || `<p class="mut">لا توجد محاولات بعد.</p>`}</div>`;
+  app.querySelectorAll("[data-manual]").forEach(b=>b.onclick=()=>{const a=answers.find(x=>x.id===b.dataset.manual); form("تعديل الدرجة",[{n:"score",l:"الدرجة",v:String(a.score||0)},{n:"feedback",l:"ملاحظة",t:"area",v:a.feedback||""}],async v=>{await updateDoc(doc(db,"answers",a.id),{score:Number(v.score)||0,feedback:v.feedback||""}); gradesPage();});});
   $("#refreshGrades").onclick = gradesPage;
   $("#exportGrades").onclick = () => { const rows=[["الطالب","البريد","السؤال","الدرجة","الدرجة القصوى","الملاحظات"],...answers.map(a=>{const u=um.get(a.uid)||{},q=qm.get(a.questionId)||{};return [u.name||a.uid,u.email||q.q||"",q.q||"",a.score||0,q.points||1,a.feedback||""];})]; const csv="\ufeff"+rows.map(r=>r.map(x=>`"${String(x).replaceAll("\"","\"\"")}"`).join(",")).join("\n"), blob=new Blob([csv],{type:"text/csv;charset=utf-8"}), a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="grades.csv"; a.click(); URL.revokeObjectURL(a.href); };
 }
@@ -434,10 +465,10 @@ const hash = t => { let h = 0; for (const c of t) h = (h * 31 + c.charCodeAt(0))
 async function translate(w, sent) {
   const ref = doc(db, "translations", w + "_" + hash(sent)), s = await getDoc(ref);
   if (s.exists()) return s.data();
-  const prompt = `أنت مدرس لغة فرنسية للمتحدثين بالعربية. الجملة: "${sent}"\nالكلمة: "${w}"\nأعد JSON فقط بالشكل: {"base": "الشكل الأصلي في القاموس (مصدر الفعل، ومفرد الاسم مع أداته مثل le livre)", "ar": "معنى الكلمة بالعربي حسب سياق الجملة تحديدًا، كلمة أو كلمتين", "note": "ملاحظة قصيرة جدًا بالعربي، مثل: فعل في الماضي، أو مؤنث (اختيارية)"}`;
+  const prompt = `أنت مدرس لغة فرنسية للمتحدثين بالعربية. الجملة: "${sent}"\nالكلمة: "${w}"\nأعد JSON فقط بالشكل: {"base": "الشكل الأصلي في القاموس (مصدر الفعل، ومفرد الاسم مع أداته مثل le livre)", "ar": "معنى الكلمة بالعربي حسب سياق الجملة تحديدًا، كلمة أو كلمتين", "note": "ملاحظة قصيرة جدًا بالعربي", "pos": "نوع الكلمة", "synonyms": ["مرادف فرنسي واحد"], "level": "A1 أو A2 أو B1"}`;
   const j = JSON.parse((await gem.generateContent(prompt)).response.text());
   if (!j.ar) throw 0;
-  const out = { ar: j.ar, base: j.base || w, note: j.note || "" };
+  const out = { ar: j.ar, base: j.base || w, note: j.note || "", pos: j.pos || "", synonyms: Array.isArray(j.synonyms) ? j.synonyms.slice(0,3) : [], level: j.level || "" };
   await setDoc(ref, out); return out;
 }
 let cur;
@@ -452,7 +483,7 @@ async function openWord(w, sent) {
   cur = { fr: w.toLowerCase(), word: w, ar: "", ex: sent.trim() };
   $("#sheet .f").textContent = w; $("#sheet .a").textContent = "..."; $("#sheet .b").textContent = ""; $("#sv").textContent = "➕ أضف للكاردز"; $("#sheet").style.display = "block";
   speak(w);
-  try { const t = await translate(cur.fr, cur.ex); cur.ar = t.ar; cur.fr = t.base || cur.fr; $("#sheet .a").textContent = t.ar; $("#sheet .b").textContent = [t.base.toLowerCase() !== w.toLowerCase() ? t.base : "", t.note].filter(Boolean).join(" — "); } catch { $("#sheet .a").textContent = "الترجمة مش متاحة دلوقتي، جرب بعدين"; }
+  try { const t = await translate(cur.fr, cur.ex); cur.ar = t.ar; cur.fr = t.base || cur.fr; $("#sheet .a").textContent = t.ar; $("#sheet .b").textContent = [t.base.toLowerCase() !== w.toLowerCase() ? t.base : "", t.note, t.pos, t.level, t.synonyms?.length ? "مرادفات: " + t.synonyms.join(", ") : ""].filter(Boolean).join(" — "); } catch { $("#sheet .a").textContent = "الترجمة مش متاحة دلوقتي، جرب بعدين"; }
 }
 $("#sp").onclick = () => speak(cur.word || cur.fr);
 $("#cl").onclick = () => $("#sheet").style.display = "none";
