@@ -52,6 +52,7 @@ h2,h3{margin:0}
 .w{cursor:pointer;border-radius:4px}.w:hover{background:#f3e3b8}
 iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:12px;margin:12px 0}
 .q{background:#fff;border-radius:12px;padding:20px;margin:14px 0;font-size:1.1rem;box-shadow:0 1px 3px rgba(20,38,79,.12)}
+.essay{min-height:130px}.score{display:inline-block;padding:3px 10px;border-radius:999px;background:#e8f5ee;color:var(--ok);font-weight:800}.danger{color:var(--red)}
 .q>.fr b{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--navy);color:var(--gold);font-size:.9rem;margin-inline-end:8px}
 .opt{display:block;width:100%;text-align:start;background:var(--bg);color:#1b2438;border-radius:8px;margin:8px 0;padding:10px 16px}
 .opt.right{background:var(--ok);color:#fff}.opt.wrong{background:var(--red);color:#fff}
@@ -72,7 +73,7 @@ footer{background:var(--navy2);color:#aab4cc;text-align:center;padding:22px 16px
 <body>
 <div class="top">Faculté · Département de français — قسم اللغة الفرنسية</div>
 <header><div class="brand" id="home"><svg viewBox="0 0 44 52"><path d="M22 2 L42 9 V26 C42 38 33 46 22 50 C11 46 2 38 2 26 V9Z" fill="#14264f" stroke="#c19a4b" stroke-width="2.5"/><text x="22" y="34" text-anchor="middle" font-family="Fraunces,serif" font-size="26" font-style="italic" fill="#c19a4b">F</text></svg><div><b>Département de français</b><small>قسم اللغة الفرنسية</small></div></div>
-<nav><a id="n1">المواد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n4">مركز الأسئلة</a><a id="n5" style="display:none">المستخدمين</a><span id="who"></span><button id="auth">تسجيل الدخول</button></nav></header>
+<nav><a id="n1">المواد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n4">مركز الأسئلة</a><a id="n5" style="display:none">المستخدمين</a><a id="n6" style="display:none">الدرجات</a><span id="who"></span><button id="auth">تسجيل الدخول</button></nav></header>
 <main id="app"></main>
 <footer>© قسم اللغة الفرنسية — Département de français</footer>
 <div id="sheet"><div class="f fr"></div><div class="a"></div><div class="b"></div>
@@ -113,9 +114,11 @@ $("#n2").onclick = () => user ? review() : needLogin();
 $("#n3").onclick = () => groupsPage();
 $("#n4").onclick = () => askPage();
 $("#n5").onclick = () => usersPage();
+$("#n6").onclick = () => gradesPage();
 onAuthStateChanged(auth, async u => {
   user = u; admin = !!u && u.email === ADMIN_EMAIL;
   $("#who").textContent = u ? u.displayName : "";
+  $("#n6").style.display = admin ? "" : "none";
   $("#auth").textContent = u ? "خروج" : "تسجيل الدخول بجوجل";
   if (u) await setDoc(doc(db, "users", u.uid), { name: u.displayName, email: u.email, photo: u.photoURL, last: serverTimestamp() }, { merge: true });
   editor = admin; $("#n5").style.display = admin ? "" : "none";
@@ -187,6 +190,12 @@ async function delLesson(id, quiet) {
   await deleteDoc(doc(db, "lessons", id));
 }
 
+async function gradeEssay(q, answer) {
+  const prompt = `قيّم إجابة طالب في سؤال تعليمي. السؤال: ${q.q}\nالإجابة النموذجية: ${q.model || "غير متاحة"}\nإجابة الطالب: ${answer}\nالدرجة القصوى: ${q.points || 10}. أعد JSON فقط: {"score": رقم بين 0 والدرجة القصوى, "feedback": "ملاحظة عربية قصيرة ومفيدة"}`;
+  const x = JSON.parse((await gem.generateContent(prompt)).response.text());
+  return { score: Math.max(0, Math.min(q.points || 10, Number(x.score) || 0)), feedback: String(x.feedback || "تم التقييم") };
+}
+
 /* ---------- الدرس ---------- */
 async function lesson(l, sub) {
   const qs = await list("questions", "lessonId", l.id), yt = ytId(l.youtube);
@@ -197,27 +206,37 @@ async function lesson(l, sub) {
   $("#back").onclick = () => lessons(sub);
   clickable($("#txt"), l.text || "");
   const box = $("#qs");
-  box.innerHTML = qs.map((q, i) => `<div class="q"><div class="fr"><b>${i + 1}.</b> ${esc(q.q)}</div>
-    ${q.options.map((o, j) => `<button class="opt ${q.type === "mcq" ? "fr" : ""}" data-q="${i}" data-o="${j}">${esc(o)}</button>`).join("")}
-    ${editor ? `<button class="del" data-dq="${q.id}">حذف السؤال</button>` : ""}</div>`).join("") || `<p class="mut">مفيش أسئلة لسه.</p>`;
+  box.innerHTML = qs.map((q, i) => `<div class="q" data-qid="${q.id}"><div class="fr"><b>${i + 1}.</b> ${esc(q.q)} ${q.type === "essay" ? `<small class="mut">(مقالي — ${q.points || 10} درجات)</small>` : ""}</div>
+    ${q.type === "essay" ? `<textarea class="essay" data-answer="${q.id}" placeholder="اكتب إجابتك هنا..."></textarea><button class="submitEssay" data-submit="${q.id}">إرسال للتقييم</button><span class="essayResult" data-result="${q.id}"></span>` : q.options.map((o, j) => `<button class="opt ${q.type === "mcq" ? "fr" : ""}" data-q="${i}" data-o="${j}">${esc(o)}</button>`).join("")}
+    ${editor ? `<div class="row"><button class="del" data-dq="${q.id}">حذف السؤال</button></div>` : ""}</div>`).join("") || `<p class="mut">مفيش أسئلة لسه.</p>`;
   box.onclick = async e => {
     const t = e.target;
     if (t.dataset.dq) { await deleteDoc(doc(db, "questions", t.dataset.dq)); return lesson(l, sub); }
+    if (t.dataset.submit) {
+      const q = qs.find(x => x.id === t.dataset.submit), area = box.querySelector(`[data-answer="${q.id}"]`), result = box.querySelector(`[data-result="${q.id}"]`);
+      if (!area.value.trim()) return alert("اكتب إجابتك أولًا");
+      t.disabled = true; t.textContent = "جاري التقييم...";
+      try { const g = await gradeEssay(q, area.value.trim()); await addDoc(collection(db, "answers"), { uid:user.uid, lessonId:l.id, questionId:q.id, answer:area.value.trim(), score:g.score, feedback:g.feedback, created:serverTimestamp() }); result.innerHTML = `<span class="score">${g.score}/${q.points || 10}</span> ${esc(g.feedback)}`; } catch { result.innerHTML = `<span class="danger">تعذر التقييم الآن، حاول لاحقًا.</span>`; }
+      t.disabled = false; t.textContent = "إرسال للتقييم"; return;
+    }
     if (!t.classList.contains("opt")) return;
     const q = qs[t.dataset.q], sib = t.parentElement.querySelectorAll(".opt");
     if (t.parentElement.dataset.done) return; t.parentElement.dataset.done = 1;
     sib[q.answer].classList.add("right"); if (+t.dataset.o !== q.answer) t.classList.add("wrong");
+    if (user) await addDoc(collection(db, "answers"), { uid:user.uid, lessonId:l.id, questionId:q.id, selected:+t.dataset.o, correct:+t.dataset.o === q.answer, score:+t.dataset.o === q.answer ? (q.points || 1) : 0, created:serverTimestamp() });
   };
   if (editor) $("#addq").onclick = () => form("سؤال جديد", [
-    { n: "type", l: "النوع", t: "sel", o: [["mcq", "اختيار من متعدد"], ["tf", "صح / غلط"]] },
-    { n: "q", l: "السؤال (فرنسي)" },
-    { n: "opts", l: "الاختيارات، كل اختيار في سطر (سيبها فاضية لو صح/غلط)", t: "area" },
-    { n: "ans", l: "رقم الإجابة الصح (للصح/غلط: 1 = صح، 2 = غلط)" }],
+    { n: "type", l: "النوع", t: "sel", o: [["mcq", "اختيار من متعدد"], ["tf", "صح / غلط"], ["essay", "مقالي — تقييم Gemini"]] },
+    { n: "q", l: "السؤال (فرنسي أو عربي)" },
+    { n: "opts", l: "الاختيارات، كل اختيار في سطر (للاختيار فقط)", t: "area" },
+    { n: "ans", l: "رقم الإجابة الصح (للاختيار/صح غلط)" },
+    { n: "model", l: "الإجابة النموذجية للمقالي (اختياري)", t: "area" },
+    { n: "points", l: "الدرجة القصوى (افتراضي 10)" }],
     async v => {
-      const options = v.type === "tf" ? ["صح", "غلط"] : v.opts.split("\n").map(s => s.trim()).filter(Boolean);
-      const answer = (parseInt(v.ans) || 1) - 1;
-      if (!v.q || options.length < 2 || !options[answer]) return alert("البيانات ناقصة أو رقم الإجابة غلط");
-      await addDoc(collection(db, "questions"), { lessonId: l.id, type: v.type, q: v.q, options, answer, created: serverTimestamp() });
+      const options = v.type === "tf" ? ["صح", "غلط"] : (v.opts || "").split("\n").map(s => s.trim()).filter(Boolean);
+      const answer = (parseInt(v.ans) || 1) - 1, points = Math.max(1, parseInt(v.points) || 10);
+      if (!v.q || (v.type !== "essay" && (options.length < 2 || !options[answer]))) return alert("البيانات ناقصة أو رقم الإجابة غلط");
+      await addDoc(collection(db, "questions"), { lessonId: l.id, type: v.type, q: v.q, options, answer, model: v.model || "", points, created: serverTimestamp() });
       lesson(l, sub);
     });
 }
@@ -229,6 +248,15 @@ async function myGroups() {
   else for (const c of [where("members", "array-contains", user.uid), where("public", "==", true)]) add(await getDocs(query(collection(db, "groups"), c)));
   return [...m.values()].sort((a, b) => (b.id === "general") - (a.id === "general"));
 }
+async function gradesPage() {
+  if (!admin) return;
+  const [answers, users, questions, lessonsAll] = await Promise.all([list("answers"), list("users"), list("questions"), list("lessons")]);
+  const um = new Map(users.map(x => [x.id, x])), qm = new Map(questions.map(x => [x.id, x])), lm = new Map(lessonsAll.map(x => [x.id, x]));
+  const total = answers.reduce((a,x) => a + Number(x.score || 0), 0), max = answers.reduce((a,x) => a + Number(qm.get(x.questionId)?.points || (qm.get(x.questionId)?.type === "essay" ? 10 : 1)), 0);
+  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">درجات ومحاولات الطلاب</h3><button class="sec" id="refreshGrades">تحديث</button></div><div class="q"><b>إجمالي المحاولات:</b> ${answers.length} &nbsp; <b>مجموع الدرجات:</b> ${total}/${max || 0}</div><div class="grid">${answers.map(a => { const u=um.get(a.uid)||{}, q=qm.get(a.questionId)||{}, l=lm.get(a.lessonId)||{}; return `<div class="q"><b>${esc(u.name || a.uid)}</b><small class="mut"> ${esc(u.email || "")}</small><hr><div>${esc(q.q || "سؤال محذوف")}</div><small class="mut">الدرس: ${esc(l.title || "غير معروف")}</small><p><span class="score">${Number(a.score||0)}/${Number(q.points || (q.type === "essay" ? 10 : 1))}</span>${a.correct !== undefined ? (a.correct ? " إجابة صحيحة" : " إجابة خاطئة") : ""}</p>${a.feedback ? `<div class="mut">${esc(a.feedback)}</div>` : ""}${a.answer ? `<details><summary>إجابة الطالب</summary><p>${esc(a.answer)}</p></details>` : ""}</div>`; }).join("") || `<p class="mut">لا توجد محاولات بعد.</p>`}</div>`;
+  $("#refreshGrades").onclick = gradesPage;
+}
+
 async function usersPage() {
   if (!admin) return;
   const us = await list("users");
@@ -272,11 +300,14 @@ async function groupView(g) {
 async function askPage() {
   if (!user) return needLogin();
   const gs = await myGroups();
-  app.innerHTML = `<h3 class="sh">مركز الأسئلة</h3><div class="q"><label>اكتب سؤالك<textarea id="aq" rows="4"></textarea></label><label>حوّله لجروب<select id="ag">${gs.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join("")}</select></label><div class="row"><button id="ago">حوّل للجروب</button></div></div>`;
-  $("#ago").onclick = async () => {
-    const t = $("#aq").value.trim(); if (!t) return;
-    const g = gs.find(g => g.id === $("#ag").value); await post(g, t); groupView(g);
-  };
+  const bank = editor ? await list("questionBank") : [];
+  app.innerHTML = `<h3 class="sh">مركز الأسئلة</h3><div class="q"><p class="mut">اكتب سؤالًا ثم حوّله إلى جروب. ويمكن للأدمن/المساعد حفظه في بنك الأسئلة لإعادة استخدامه.</p><label>السؤال<textarea id="aq" rows="4"></textarea></label><label>الجروب<select id="ag">${gs.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join("")}</select></label><div class="row"><button id="ago">حوّل للجروب</button>${editor ? `<button id="saveBank" class="sec">حفظ في بنك الأسئلة</button>` : ""}</div></div>${editor ? `<h3 class="sh">بنك الأسئلة</h3>${bank.map(x => `<div class="item"><span>${esc(x.text)}</span><select data-move="${x.id}">${gs.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join("")}</select><button data-send="${x.id}">إرسال</button><button class="del" data-db="${x.id}">حذف</button></div>`).join("") || `<p class="mut">البنك فارغ.</p>`}` : ""}`;
+  $("#ago").onclick = async () => { const t = $("#aq").value.trim(); if (!t) return; const g = gs.find(g => g.id === $("#ag").value); await post(g, t); groupView(g); };
+  if (editor) {
+    $("#saveBank").onclick = async () => { const t = $("#aq").value.trim(); if (!t) return; await addDoc(collection(db, "questionBank"), { text:t, by:user.displayName, uid:user.uid, created:serverTimestamp() }); askPage(); };
+    app.querySelectorAll("[data-send]").forEach(b => b.onclick = async () => { const x=bank.find(x=>x.id===b.dataset.send), g=gs.find(g=>g.id===app.querySelector(`[data-move="${x.id}"]`).value); await post(g,x.text); groupView(g); });
+    app.querySelectorAll("[data-db]").forEach(b => b.onclick = async () => { await deleteDoc(doc(db,"questionBank",b.dataset.db)); askPage(); });
+  }
 }
 
 /* ---------- النطق والترجمة والكاردز ---------- */
