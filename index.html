@@ -160,7 +160,7 @@ body.login-screen{background:#f9fbff;overflow-x:hidden}body.login-screen #app{ma
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, EmailAuthProvider, linkWithCredential, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app-check.js";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-ai.js";
@@ -398,10 +398,21 @@ async function gradesPage() {
   $("#exportGrades").onclick = () => { const rows=[["الطالب","البريد","السؤال","الدرجة","الدرجة القصوى","الملاحظات"],...answers.map(a=>{const u=um.get(a.uid)||{},q=qm.get(a.questionId)||{};return [u.name||a.uid,u.email||q.q||"",q.q||"",a.score||0,q.points||1,a.feedback||""];})]; const csv="\ufeff"+rows.map(r=>r.map(x=>`"${String(x).replaceAll("\"","\"\"")}"`).join(",")).join("\n"), blob=new Blob([csv],{type:"text/csv;charset=utf-8"}), a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="grades.csv"; a.click(); URL.revokeObjectURL(a.href); };
 }
 
+async function linkAdminPassword(){
+  if(!admin || !user) return alert("هذه الخاصية للأدمن فقط");
+  const password=prompt("اكتب كلمة مرور الأدمن الجديدة (6 أحرف على الأقل):");
+  if(!password || password.length<6) return alert("كلمة المرور يجب أن تكون 6 أحرف على الأقل");
+  const again=prompt("اكتب كلمة المرور مرة أخرى للتأكيد:");
+  if(password!==again) return alert("كلمتا المرور غير متطابقتين");
+  try{ await linkWithCredential(user,EmailAuthProvider.credential(user.email,password)); alert("تم ربط كلمة المرور بحساب جوجل بنجاح. يمكنك الآن الدخول بالبريد وكلمة المرور."); }
+  catch(e){ if(e.code==="auth/provider-already-linked") alert("حسابك مرتبط بكلمة مرور بالفعل."); else if(e.code==="auth/email-already-in-use") alert("هذا البريد مرتبط بحساب آخر."); else alert("تعذر ربط كلمة المرور. تأكد من تفعيل Email/Password في Firebase ثم حاول مرة أخرى."); }
+}
+
 async function usersPage() {
   if (!admin) return;
   const us = await list("users");
-  app.innerHTML = `<h3 class="sh">المستخدمين</h3>` + us.map(u => `<div class="item"><span>${esc(u.name)} <small class="mut">${esc(u.email)}</small></span>${u.email === ADMIN_EMAIL ? "<b>أدمن</b>" : `<button data-u="${u.id}" class="${u.role === "assistant" ? "del" : ""}">${u.role === "assistant" ? "إلغاء المساعد" : "اجعله مساعد"}</button><button class="sec" data-ban="${u.id}">${u.disabled ? "تفعيل" : "تعطيل"}</button>`}</div>`).join("");
+  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">المستخدمين</h3><button id="linkAdminPwd" class="sec">تعيين باسورد للأدمن</button></div>` + us.map(u => `<div class="item"><span>${esc(u.name)} <small class="mut">${esc(u.email)}</small></span>${u.email === ADMIN_EMAIL ? "<b>أدمن</b>" : `<button data-u="${u.id}" class="${u.role === "assistant" ? "del" : ""}">${u.role === "assistant" ? "إلغاء المساعد" : "اجعله مساعد"}</button><button class="sec" data-ban="${u.id}">${u.disabled ? "تفعيل" : "تعطيل"}</button>`}</div>`).join("");
+  $("#linkAdminPwd").onclick=linkAdminPassword;
   app.querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => { const x=us.find(x=>x.id===b.dataset.ban); await updateDoc(doc(db,"users",x.id),{disabled:!x.disabled}); usersPage(); });
   app.querySelectorAll("[data-u]").forEach(b => b.onclick = async () => {
     const u = us.find(x => x.id === b.dataset.u);
