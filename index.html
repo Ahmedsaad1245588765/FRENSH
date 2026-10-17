@@ -371,7 +371,62 @@ async function delLesson(id, quiet) {
 
 function editSubject(x) { form("تعديل المادة", [{n:"name",l:"اسم المادة",v:x.name}], async v => { await updateDoc(doc(db,"subjects",x.id), {name:v.name}); subjects(); }); }
 function editLesson(x, sub) { form("تعديل الدرس", [{n:"title",l:"عنوان الدرس",v:x.title},{n:"text",l:"نص الدرس",t:"area",v:x.text||""},{n:"yt",l:"لينك يوتيوب",v:x.youtube||""}], async v => { await updateDoc(doc(db,"lessons",x.id), {title:v.title,text:v.text,youtube:v.yt}); lessons(sub); }); }
-function editQuestion(x, l, sub) { form("تعديل السؤال", [{n:"type",l:"النوع",t:"sel",v:x.type,o:[["mcq","اختيار من متعدد"],["tf","صح / غلط"],["essay","مقالي — تقييم Gemini"]]},{n:"q",l:"السؤال",v:x.q},{n:"opts",l:"الاختيارات كل اختيار في سطر",t:"area",v:(x.options||[]).join("\n")},{n:"ans",l:"رقم الإجابة الصحيحة",v:String((x.answer||0)+1)},{n:"model",l:"الإجابة النموذجية",t:"area",v:x.model||""},{n:"rubric",l:"معايير التصحيح",t:"area",v:x.rubric||""},{n:"points",l:"الدرجة القصوى",v:String(x.points||10)}], async v => { const options=v.type==="tf"?["صح","غلط"]:(v.opts||"").split("\n").map(x=>x.trim()).filter(Boolean), answer=(parseInt(v.ans)||1)-1; await updateDoc(doc(db,"questions",x.id),{type:v.type,q:v.q,options,answer,model:v.model||"",rubric:v.rubric||"",points:Math.max(1,parseInt(v.points)||10)}); lesson(l,sub); }); }
+function questionDialog(x, cb) {
+  x = x || {};
+  const d = document.createElement("dialog");
+  d.style.maxHeight = "90vh"; d.style.overflow = "auto";
+  d.innerHTML = `<form>
+    <h3>${x.id ? "تعديل السؤال" : "سؤال جديد"}</h3>
+    <label>النوع<select name="type"><option value="mcq">اختيار من متعدد</option><option value="tf">صح / غلط</option><option value="essay">مقالي — يصححه الذكاء الاصطناعي</option></select></label>
+    <label>السؤال<textarea name="q" rows="3"></textarea></label>
+    <div data-sec="mcq"><b>الاختيارات</b> <small class="mut">علّم ✔ على الإجابة الصحيحة</small><div id="qoRows"></div><button type="button" class="sec" id="qoAdd">+ اختيار</button></div>
+    <div data-sec="tf"><b>الإجابة الصحيحة</b><div class="row"><label style="margin:0;display:flex;align-items:center;gap:8px"><input type="checkbox" name="tfv" value="0" style="width:22px;height:22px;margin:0"> صح</label><label style="margin:0;display:flex;align-items:center;gap:8px"><input type="checkbox" name="tfv" value="1" style="width:22px;height:22px;margin:0"> غلط</label></div></div>
+    <div data-sec="essay"><label>الإجابة النموذجية<textarea name="model" rows="4"></textarea></label><label>معايير التصحيح (قواعد، مفردات، معنى...)<textarea name="rubric" rows="3"></textarea></label></div>
+    <label>الدرجة<input name="points" type="number" min="1"></label>
+    <p class="danger" id="qErr"></p>
+    <div class="row"><button>حفظ</button><button type="button" class="sec" id="qCancel">إلغاء</button></div></form>`;
+  document.body.appendChild(d);
+  const f = d.querySelector("form"), g = n => f.querySelector(`[name="${n}"]`), rows = d.querySelector("#qoRows");
+  const addRow = (text = "", checked = false) => {
+    const r = document.createElement("div"); r.className = "row"; r.style.flexWrap = "nowrap";
+    r.innerHTML = `<input type="checkbox" class="qoc" title="الإجابة الصحيحة" style="width:22px;height:22px;margin:0;flex:none"><input class="qot" placeholder="نص الاختيار" style="margin:0"><button type="button" class="del qox" style="padding:6px 10px;flex:none">✕</button>`;
+    r.querySelector(".qoc").checked = checked; r.querySelector(".qot").value = text; rows.appendChild(r);
+  };
+  const type0 = x.type || "mcq";
+  g("type").value = type0; g("q").value = x.q || ""; g("model").value = x.model || ""; g("rubric").value = x.rubric || ""; g("points").value = x.points || "";
+  if (type0 === "mcq" && (x.options || []).length) x.options.forEach((o, i) => addRow(o, i === x.answer));
+  else for (let i = 0; i < 4; i++) addRow();
+  if (type0 === "tf") f.querySelector(`[name="tfv"][value="${x.answer === 1 ? 1 : 0}"]`).checked = true;
+  const sync = () => d.querySelectorAll("[data-sec]").forEach(el => el.style.display = el.dataset.sec === g("type").value ? "" : "none");
+  g("type").onchange = sync; sync();
+  d.querySelector("#qoAdd").onclick = () => addRow();
+  rows.onchange = e => { if (e.target.classList.contains("qoc") && e.target.checked) rows.querySelectorAll(".qoc").forEach(c => { if (c !== e.target) c.checked = false; }); };
+  rows.onclick = e => { if (e.target.classList.contains("qox")) e.target.closest(".row").remove(); };
+  f.querySelectorAll('[name="tfv"]').forEach(c => c.onchange = () => { if (c.checked) f.querySelectorAll('[name="tfv"]').forEach(o => { if (o !== c) o.checked = false; }); });
+  d.querySelector("#qCancel").onclick = () => { d.close(); d.remove(); };
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const err = m => d.querySelector("#qErr").textContent = m, type = g("type").value, q = g("q").value.trim();
+    if (!q) return err("اكتب نص السؤال");
+    let options = [], answer = 0;
+    if (type === "mcq") {
+      const list = [...rows.querySelectorAll(".row")].map(r => ({ t: r.querySelector(".qot").value.trim(), c: r.querySelector(".qoc").checked })).filter(o => o.t);
+      if (list.length < 2) return err("اكتب اختيارين على الأقل");
+      answer = list.findIndex(o => o.c);
+      if (answer < 0) return err("علّم ✔ على الإجابة الصحيحة");
+      options = list.map(o => o.t);
+    } else if (type === "tf") {
+      const c = f.querySelector('[name="tfv"]:checked');
+      if (!c) return err("علّم الإجابة الصحيحة: صح أو غلط");
+      options = ["صح", "غلط"]; answer = +c.value;
+    }
+    const points = Math.max(1, parseInt(g("points").value) || (type === "essay" ? 10 : 1));
+    const v = { type, q, options, answer, model: type === "essay" ? g("model").value.trim() : "", rubric: type === "essay" ? g("rubric").value.trim() : "", points };
+    d.close(); d.remove(); await cb(v);
+  };
+  d.showModal();
+}
+function editQuestion(x, l, sub) { questionDialog(x, async v => { await updateDoc(doc(db, "questions", x.id), v); lesson(l, sub); }); }
 
 async function gradeEssay(q, answer) {
   const prompt = `قيّم إجابة طالب في سؤال تعليمي. السؤال: ${q.q}\nالإجابة النموذجية: ${q.model || "غير متاحة"}\nإجابة الطالب: ${answer}\nمعايير التصحيح: ${q.rubric || "قيّم الدقة والمعنى والقواعد"}\nالدرجة القصوى: ${q.points || 10}. أعد JSON فقط: {"score": رقم بين 0 والدرجة القصوى, "feedback": "ملاحظة عربية قصيرة ومفيدة"}`;
@@ -419,7 +474,7 @@ async function lesson(l, sub) {
   box.querySelectorAll("textarea[data-answer]").forEach(a=>{ const key=`draft_${user?.uid}_${a.dataset.answer}`; a.value=localStorage.getItem(key)||""; a.oninput=()=>localStorage.setItem(key,a.value); });
   box.onclick = async e => {
     const t = e.target;
-    if (t.dataset.eq) { return editQuestion(qs.find(x => x.id === t.dataset.eq), l, sub); }
+    if (t.dataset.eq) { return editQuestion(rawQs.find(x => x.id === t.dataset.eq), l, sub); }
     if (t.dataset.dq) { await deleteDoc(doc(db, "questions", t.dataset.dq)); return lesson(l, sub); }
     if (t.dataset.submit) {
       const q = qs.find(x => x.id === t.dataset.submit), area = box.querySelector(`[data-answer="${q.id}"]`), result = box.querySelector(`[data-result="${q.id}"]`);
@@ -435,21 +490,7 @@ async function lesson(l, sub) {
     if (user) await addDoc(collection(db, "answers"), { uid:user.uid, lessonId:l.id, questionId:q.id, selected:+t.dataset.o, correct:+t.dataset.o === q.answer, score:+t.dataset.o === q.answer ? (q.points || 1) : 0, created:serverTimestamp() });
     const answered=box.querySelectorAll("[data-done]").length; $("#quizFill").style.width=`${qs.length?Math.round(answered/qs.length*100):0}%`;
   };
-  if (editor) $("#addq").onclick = () => form("سؤال جديد", [
-    { n: "type", l: "النوع", t: "sel", o: [["mcq", "اختيار من متعدد"], ["tf", "صح / غلط"], ["essay", "مقالي — تقييم Gemini"]] },
-    { n: "q", l: "السؤال (فرنسي أو عربي)" },
-    { n: "opts", l: "الاختيارات، كل اختيار في سطر (للاختيار فقط)", t: "area" },
-    { n: "ans", l: "رقم الإجابة الصح (للاختيار/صح غلط)" },
-    { n: "model", l: "الإجابة النموذجية للمقالي (اختياري)", t: "area" },
-    { n: "rubric", l: "معايير التصحيح (قواعد، مفردات، معنى...)", t: "area" },
-    { n: "points", l: "الدرجة القصوى (افتراضي 10)" }],
-    async v => {
-      const options = v.type === "tf" ? ["صح", "غلط"] : (v.opts || "").split("\n").map(s => s.trim()).filter(Boolean);
-      const answer = (parseInt(v.ans) || 1) - 1, points = Math.max(1, parseInt(v.points) || 10);
-      if (!v.q || (v.type !== "essay" && (options.length < 2 || !options[answer]))) return alert("البيانات ناقصة أو رقم الإجابة غلط");
-      await addDoc(collection(db, "questions"), { lessonId: l.id, type: v.type, q: v.q, options, answer, model: v.model || "", rubric: v.rubric || "", points, created: serverTimestamp() });
-      lesson(l, sub);
-    });
+  if (editor) $("#addq").onclick = () => questionDialog(null, async v => { await addDoc(collection(db, "questions"), { lessonId: l.id, ...v, created: serverTimestamp() }); lesson(l, sub); });
 }
 
 /* ---------- المستخدمين والجروبات ومركز الأسئلة ---------- */
