@@ -562,15 +562,15 @@ const memCache = new Map();
 async function translate(w, sent) {
   const key = `${w.toLowerCase()}|${hash(sent)}`;
   if (memCache.has(key)) return memCache.get(key);
-  const lk = `fr_tr_${key}`;
+  const lk = `fr_tr2_${key}`;
   try { const l = localStorage.getItem(lk); if (l) { const o = JSON.parse(l); memCache.set(key, o); return o; } } catch {}
   if (translationPending.has(key)) return translationPending.get(key);
   const task = (async () => {
-    const ref = doc(db, "translations", w.toLowerCase() + "_" + hash(sent));
+    const ref = doc(db, "translations", "v2_" + w.toLowerCase() + "_" + hash(sent));
     let fromAI = false;
     const cloud = withTimeout(getDoc(ref), 2500).then(s => { if (!s.exists()) throw new Error("miss"); return s.data(); });
     const ai = (async () => {
-      const prompt = `ترجم الكلمة الفرنسية حسب السياق إلى العربية. الجملة: "${sent}"\nالكلمة: "${w}"\nأعد JSON فقط: {"base":"الشكل الأصلي","ar":"المعنى المختصر","note":"ملاحظة قصيرة","pos":"نوع الكلمة","synonyms":[],"level":"A1"}`;
+      const prompt = `ترجم الكلمة الفرنسية حسب السياق إلى العربية. الجملة: "${sent}"\nالكلمة: "${w}"\nالمرادفات (synonyms) تكون كلمات فرنسية فقط وليست عربية، من 0 إلى 3 كلمات. المعنى والملاحظة بالعربية.\nأعد JSON فقط: {"base":"الشكل الأصلي بالفرنسية","ar":"المعنى المختصر بالعربية","note":"ملاحظة قصيرة بالعربية","pos":"نوع الكلمة","synonyms":["synonyme français"],"level":"A1"}`;
       const j = JSON.parse((await gem.generateContent(prompt)).response.text());
       if (!j.ar) throw new Error("empty");
       fromAI = true;
