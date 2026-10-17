@@ -210,7 +210,9 @@ function form(title, fields, cb) {
     f.t === "chk" ? `<div style="max-height:200px;overflow:auto">${f.o.map(o => `<div><input type="checkbox" name="${f.n}" value="${o[0]}" style="width:auto"> ${esc(o[1])}</div>`).join("")}</div>` : f.t === "sel" ? `<select name="${f.n}">${f.o.map(o => `<option value="${o[0]}">${o[1]}</option>`).join("")}</select>` :
     `<input name="${f.n}">`}</label>`).join("")}
     <div class="row"><button>حفظ</button><button type="button" class="sec">إلغاء</button></div></form>`;
-  document.body.appendChild(d); d.showModal();
+  document.body.appendChild(d);
+  fields.forEach(f => { const el = d.querySelector(`[name="${f.n}"]`); if (el && f.v != null && f.t !== "chk") el.value = f.v; });
+  d.showModal();
   d.querySelector(".sec").onclick = () => { d.close(); d.remove(); };
   d.querySelector("form").onsubmit = async e => {
     e.preventDefault(); const fd = new FormData(e.target), v = Object.fromEntries(fd); fields.filter(f => f.t === "chk").forEach(f => v[f.n] = fd.getAll(f.n));
@@ -226,11 +228,12 @@ async function subjects() {
   if (!user) return needLogin();
   const subs = await list("subjects");
   app.innerHTML = `<section class="hero"><p>أهلاً ${esc((user.displayName || "").split(" ")[0])}</p><h2 class="fr" id="hero"></h2><p>اضغط على أي كلمة فرنسية تسمع نطقها وتشوف معناها.</p><div class="row"><button id="cards" class="sec">كاردز الكلمات</button>${admin ? `<button id="add" class="sec">+ مادة</button>` : ""}</div></section><h3 class="sh">المواد</h3><div class="grid">
-    ${subs.map((s, i) => `<div class="item tile" data-id="${s.id}"><div class="cv" style="${s.cover ? `background-image:url('${esc(s.cover).replace(/'/g, "%27")}')` : ""}"><em class="fr">${esc(s.name.trim()[0])}</em></div><div class="tb"><span>${esc(s.name)}</span>${admin ? `<button class="del" data-del="${s.id}">حذف</button>` : ""}</div></div>`).join("") || `<p class="mut">مفيش مواد لسه.</p>`}</div>`;
+    ${subs.map((s, i) => `<div class="item tile" data-id="${s.id}"><div class="cv" style="${s.cover ? `background-image:url('${esc(s.cover).replace(/'/g, "%27")}')` : ""}"><em class="fr">${esc(s.name.trim()[0])}</em></div><div class="tb"><span>${esc(s.name)}</span>${admin ? `<button class="sec" data-edit-sub="${s.id}">تعديل</button><button class="del" data-del="${s.id}">حذف</button>` : ""}</div></div>`).join("") || `<p class="mut">مفيش مواد لسه.</p>`}</div>`;
   clickable($("#hero"), "Bonjour, on apprend ?");
   $("#cards").onclick = review;
   if (admin) $("#add").onclick = () => form("مادة جديدة", [{ n: "name", l: "اسم المادة" }, { n: "cover", l: "لينك صورة المادة (اختياري)" }], async v => { await addDoc(collection(db, "subjects"), { name: v.name, cover: v.cover || "", created: serverTimestamp() }); subjects(); });
   app.querySelectorAll(".item").forEach(el => el.onclick = e => {
+    if (e.target.dataset.editSub) return editSubject(subs.find(s => s.id === e.target.dataset.editSub));
     if (e.target.dataset.del) return delSubject(e.target.dataset.del);
     lessons(subs.find(s => s.id === el.dataset.id));
   });
@@ -245,12 +248,13 @@ async function delSubject(id) {
 async function lessons(sub) {
   const ls = await list("lessons", "subjectId", sub.id);
   app.innerHTML = `<div class="row"><button class="sec" id="back">← المواد</button><h2 style="flex:1;margin:0">${esc(sub.name)}</h2>${editor ? `<button id="add">+ درس</button>` : ""}</div>
-    ${ls.map((l, i) => `<div class="item fr" data-id="${l.id}"><b class="n">${i + 1}</b><span>${esc(l.title)}</span>${editor ? `<button class="del" data-del="${l.id}">حذف</button>` : ""}</div>`).join("") || `<p class="mut">مفيش دروس لسه.</p>`}`;
+    ${ls.map((l, i) => `<div class="item fr" data-id="${l.id}"><b class="n">${i + 1}</b><span>${esc(l.title)}</span>${editor ? `<button class="sec" data-edit-lesson="${l.id}">تعديل</button><button class="del" data-del="${l.id}">حذف</button>` : ""}</div>`).join("") || `<p class="mut">مفيش دروس لسه.</p>`}`;
   $("#back").onclick = subjects;
   if (editor) $("#add").onclick = () => form("درس جديد", [
     { n: "title", l: "عنوان الدرس (فرنسي)" }, { n: "text", l: "نص الدرس (فرنسي)", t: "area" }, { n: "yt", l: "لينك يوتيوب (اختياري)" }],
     async v => { await addDoc(collection(db, "lessons"), { subjectId: sub.id, title: v.title, text: v.text, youtube: v.yt, created: serverTimestamp() }); lessons(sub); });
   app.querySelectorAll(".item").forEach(el => el.onclick = async e => {
+    if (e.target.dataset.editLesson) return editLesson(ls.find(x => x.id === e.target.dataset.editLesson), sub);
     if (e.target.dataset.del) { if (confirm("حذف الدرس؟")) { await delLesson(e.target.dataset.del); lessons(sub); } return; }
     lesson(ls.find(l => l.id === el.dataset.id), sub);
   });
@@ -259,6 +263,10 @@ async function delLesson(id, quiet) {
   for (const q of await list("questions", "lessonId", id)) await deleteDoc(doc(db, "questions", q.id));
   await deleteDoc(doc(db, "lessons", id));
 }
+
+function editSubject(x) { form("تعديل المادة", [{n:"name",l:"اسم المادة",v:x.name},{n:"cover",l:"لينك الصورة",v:x.cover||""}], async v => { await updateDoc(doc(db,"subjects",x.id), {name:v.name,cover:v.cover||""}); subjects(); }); }
+function editLesson(x, sub) { form("تعديل الدرس", [{n:"title",l:"عنوان الدرس",v:x.title},{n:"text",l:"نص الدرس",t:"area",v:x.text||""},{n:"yt",l:"لينك يوتيوب",v:x.youtube||""}], async v => { await updateDoc(doc(db,"lessons",x.id), {title:v.title,text:v.text,youtube:v.yt}); lessons(sub); }); }
+function editQuestion(x, l, sub) { form("تعديل السؤال", [{n:"type",l:"النوع",t:"sel",v:x.type,o:[["mcq","اختيار من متعدد"],["tf","صح / غلط"],["essay","مقالي — تقييم Gemini"]]},{n:"q",l:"السؤال",v:x.q},{n:"opts",l:"الاختيارات كل اختيار في سطر",t:"area",v:(x.options||[]).join("\n")},{n:"ans",l:"رقم الإجابة الصحيحة",v:String((x.answer||0)+1)},{n:"model",l:"الإجابة النموذجية",t:"area",v:x.model||""},{n:"points",l:"الدرجة القصوى",v:String(x.points||10)}], async v => { const options=v.type==="tf"?["صح","غلط"]:(v.opts||"").split("\n").map(x=>x.trim()).filter(Boolean), answer=(parseInt(v.ans)||1)-1; await updateDoc(doc(db,"questions",x.id),{type:v.type,q:v.q,options,answer,model:v.model||"",points:Math.max(1,parseInt(v.points)||10)}); lesson(l,sub); }); }
 
 async function gradeEssay(q, answer) {
   const prompt = `قيّم إجابة طالب في سؤال تعليمي. السؤال: ${q.q}\nالإجابة النموذجية: ${q.model || "غير متاحة"}\nإجابة الطالب: ${answer}\nالدرجة القصوى: ${q.points || 10}. أعد JSON فقط: {"score": رقم بين 0 والدرجة القصوى, "feedback": "ملاحظة عربية قصيرة ومفيدة"}`;
@@ -269,18 +277,21 @@ async function gradeEssay(q, answer) {
 /* ---------- الدرس ---------- */
 async function lesson(l, sub) {
   const qs = await list("questions", "lessonId", l.id), yt = ytId(l.youtube);
-  app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2>${editor ? `<button id="addq">+ سؤال</button>` : ""}</div>
+  app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2>${editor ? `<button id="addq">+ سؤال</button>` : ""}<button class="sec" id="completeLesson">✓ إتمام الدرس</button></div>
     ${yt ? `<iframe src="https://www.youtube.com/embed/${yt}" allowfullscreen loading="lazy"></iframe>` : ""}
     <p class="mut">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</p>
     <div class="text fr" id="txt"></div><h3>الأسئلة</h3><div id="qs"></div>`;
   $("#back").onclick = () => lessons(sub);
+  if (user) await setDoc(doc(db, "progress", `${user.uid}_${l.id}`), { uid:user.uid, lessonId:l.id, subjectId:sub.id, lastOpened:serverTimestamp() }, {merge:true});
+  $("#completeLesson").onclick = async () => { if(user){ await setDoc(doc(db,"progress",`${user.uid}_${l.id}`), {uid:user.uid, lessonId:l.id, subjectId:sub.id, completed:true, completedAt:serverTimestamp()}, {merge:true}); $("#completeLesson").textContent="✓ تم إتمام الدرس"; } };
   clickable($("#txt"), l.text || "");
   const box = $("#qs");
   box.innerHTML = qs.map((q, i) => `<div class="q" data-qid="${q.id}"><div class="fr"><b>${i + 1}.</b> ${esc(q.q)} ${q.type === "essay" ? `<small class="mut">(مقالي — ${q.points || 10} درجات)</small>` : ""}</div>
     ${q.type === "essay" ? `<textarea class="essay" data-answer="${q.id}" placeholder="اكتب إجابتك هنا..."></textarea><button class="submitEssay" data-submit="${q.id}">إرسال للتقييم</button><span class="essayResult" data-result="${q.id}"></span>` : q.options.map((o, j) => `<button class="opt ${q.type === "mcq" ? "fr" : ""}" data-q="${i}" data-o="${j}">${esc(o)}</button>`).join("")}
-    ${editor ? `<div class="row"><button class="del" data-dq="${q.id}">حذف السؤال</button></div>` : ""}</div>`).join("") || `<p class="mut">مفيش أسئلة لسه.</p>`;
+    ${editor ? `<div class="row"><button class="sec" data-eq="${q.id}">تعديل السؤال</button><button class="del" data-dq="${q.id}">حذف السؤال</button></div>` : ""}</div>`).join("") || `<p class="mut">مفيش أسئلة لسه.</p>`;
   box.onclick = async e => {
     const t = e.target;
+    if (t.dataset.eq) { return editQuestion(qs.find(x => x.id === t.dataset.eq), l, sub); }
     if (t.dataset.dq) { await deleteDoc(doc(db, "questions", t.dataset.dq)); return lesson(l, sub); }
     if (t.dataset.submit) {
       const q = qs.find(x => x.id === t.dataset.submit), area = box.querySelector(`[data-answer="${q.id}"]`), result = box.querySelector(`[data-result="${q.id}"]`);
@@ -323,8 +334,9 @@ async function gradesPage() {
   const [answers, users, questions, lessonsAll] = await Promise.all([list("answers"), list("users"), list("questions"), list("lessons")]);
   const um = new Map(users.map(x => [x.id, x])), qm = new Map(questions.map(x => [x.id, x])), lm = new Map(lessonsAll.map(x => [x.id, x]));
   const total = answers.reduce((a,x) => a + Number(x.score || 0), 0), max = answers.reduce((a,x) => a + Number(qm.get(x.questionId)?.points || (qm.get(x.questionId)?.type === "essay" ? 10 : 1)), 0);
-  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">درجات ومحاولات الطلاب</h3><button class="sec" id="refreshGrades">تحديث</button></div><div class="q"><b>إجمالي المحاولات:</b> ${answers.length} &nbsp; <b>مجموع الدرجات:</b> ${total}/${max || 0}</div><div class="grid">${answers.map(a => { const u=um.get(a.uid)||{}, q=qm.get(a.questionId)||{}, l=lm.get(a.lessonId)||{}; return `<div class="q"><b>${esc(u.name || a.uid)}</b><small class="mut"> ${esc(u.email || "")}</small><hr><div>${esc(q.q || "سؤال محذوف")}</div><small class="mut">الدرس: ${esc(l.title || "غير معروف")}</small><p><span class="score">${Number(a.score||0)}/${Number(q.points || (q.type === "essay" ? 10 : 1))}</span>${a.correct !== undefined ? (a.correct ? " إجابة صحيحة" : " إجابة خاطئة") : ""}</p>${a.feedback ? `<div class="mut">${esc(a.feedback)}</div>` : ""}${a.answer ? `<details><summary>إجابة الطالب</summary><p>${esc(a.answer)}</p></details>` : ""}</div>`; }).join("") || `<p class="mut">لا توجد محاولات بعد.</p>`}</div>`;
+  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">درجات ومحاولات الطلاب</h3><button class="sec" id="refreshGrades">تحديث</button><button class="sec" id="exportGrades">تصدير CSV</button></div><div class="q"><b>إجمالي المحاولات:</b> ${answers.length} &nbsp; <b>مجموع الدرجات:</b> ${total}/${max || 0}</div><div class="grid">${answers.map(a => { const u=um.get(a.uid)||{}, q=qm.get(a.questionId)||{}, l=lm.get(a.lessonId)||{}; return `<div class="q"><b>${esc(u.name || a.uid)}</b><small class="mut"> ${esc(u.email || "")}</small><hr><div>${esc(q.q || "سؤال محذوف")}</div><small class="mut">الدرس: ${esc(l.title || "غير معروف")}</small><p><span class="score">${Number(a.score||0)}/${Number(q.points || (q.type === "essay" ? 10 : 1))}</span>${a.correct !== undefined ? (a.correct ? " إجابة صحيحة" : " إجابة خاطئة") : ""}</p>${a.feedback ? `<div class="mut">${esc(a.feedback)}</div>` : ""}${a.answer ? `<details><summary>إجابة الطالب</summary><p>${esc(a.answer)}</p></details>` : ""}</div>`; }).join("") || `<p class="mut">لا توجد محاولات بعد.</p>`}</div>`;
   $("#refreshGrades").onclick = gradesPage;
+  $("#exportGrades").onclick = () => { const rows=[["الطالب","البريد","السؤال","الدرجة","الدرجة القصوى","الملاحظات"],...answers.map(a=>{const u=um.get(a.uid)||{},q=qm.get(a.questionId)||{};return [u.name||a.uid,u.email||q.q||"",q.q||"",a.score||0,q.points||1,a.feedback||""];})]; const csv="\ufeff"+rows.map(r=>r.map(x=>`"${String(x).replaceAll("\"","\"\"")}"`).join(",")).join("\n"), blob=new Blob([csv],{type:"text/csv;charset=utf-8"}), a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="grades.csv"; a.click(); URL.revokeObjectURL(a.href); };
 }
 
 async function usersPage() {
