@@ -210,6 +210,22 @@ body.night #aiBar textarea{background:#0d1833;color:#fff;border-color:#304570}
 .sti:hover{opacity:1;background:#d6e4ff}
 body.night .sti{background:#24365f;color:#bcd0ff}
 .item.locked{opacity:.55;cursor:not-allowed}
+.lh1{font-size:1.9rem;font-weight:800;margin:6px 0 10px;line-height:1.4}
+.lh2{font-size:1.4rem;font-weight:800;margin:18px 0 6px;line-height:1.5;color:#1f4da8}
+body.night .lh2{color:#8fb4ff}
+.lp{margin:6px 0;white-space:pre-wrap}
+.limg{margin:16px 0;text-align:center}
+.limg img{max-width:100%;max-height:460px;border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.15)}
+.fb{margin-top:12px;padding:12px 14px;border-radius:12px;font-size:1rem;line-height:1.8}
+.fb.ok{background:#e8f5ee;color:#0b5d36;border:1px solid #b7e4cb}
+.fb.bad{background:#fdecee;color:#7a1b27;border:1px solid #f4c3c9}
+.fbx{margin-top:6px;font-size:.95rem}
+.fbx .sti{font-size:.85em}
+.fbtr{margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.65);font-size:.95rem;line-height:1.8}
+body.night .fbtr{background:rgba(0,0,0,.25)}
+.essayResult{display:block;margin-top:10px}
+body.night .fb.ok{background:#12372a;color:#bff0d6;border-color:#1f6b4c}
+body.night .fb.bad{background:#40202a;color:#ffd1d8;border-color:#7a3446}
 </style>
 </head>
 <body>
@@ -249,6 +265,17 @@ function startAppCheck(){ if(appCheckStarted) return; appCheckStarted=true; try 
 startAppCheck();
 const auth = getAuth(fb), db = getFirestore(fb);
 const gem = getGenerativeModel(getAI(fb, { backend: new GoogleAIBackend() }), { model: "gemini-3.5-flash-lite", generationConfig: { responseMimeType: "application/json", temperature: 0.2 } });
+const examModel = getGenerativeModel(getAI(fb, { backend: new GoogleAIBackend() }), { model: "gemini-3.5-flash-lite", generationConfig: { responseMimeType: "application/json", temperature: 0.4, maxOutputTokens: 8192 } });
+async function askJSON(prompt, tries = 2) {
+  let last;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const t = (await examModel.generateContent(prompt)).response.text();
+      try { return JSON.parse(t); } catch { const a = t.indexOf("{"), b = t.lastIndexOf("}"); if (a >= 0 && b > a) return JSON.parse(t.slice(a, b + 1)); throw new Error("رد غير مفهوم من الذكاء الاصطناعي"); }
+    } catch (e) { last = e; console.warn("askJSON try", i + 1, e); }
+  }
+  throw last;
+}
 const $ = s => document.querySelector(s), app = $("#app");
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let user = null, admin = false, editor = false;
@@ -359,9 +386,7 @@ async function lessons(sub) {
     <div id="lessonList">${ls.map((l, i) => `<div class="item fr${locked[i] ? " locked" : ""}" data-id="${l.id}"><b class="n">${locked[i] ? "🔒" : i + 1}</b><span>${esc(l.title)}</span>${doneSet.has(l.id) ? `<small class="badge">✓ تم الاختبار</small>` : (qCount[l.id] ? `<small class="badge">اختبار</small>` : "")}${editor ? `<button class="sec" data-edit-lesson="${l.id}">تعديل</button><button class="del" data-del="${l.id}">حذف</button>` : ""}</div>`).join("") || `<p class="mut">مفيش دروس لسه.</p>`}</div>`;
   $("#back").onclick = subjects;
   $("#lessonSearch").oninput = e => app.querySelectorAll("#lessonList .item").forEach(x => x.style.display = x.innerText.toLowerCase().includes(e.target.value.toLowerCase()) ? "" : "none");
-  if (editor) $("#add").onclick = () => form("درس جديد", [
-    { n: "title", l: "عنوان الدرس (فرنسي)" }, { n: "text", l: "نص الدرس (فرنسي)", t: "area" }, { n: "yt", l: "لينك يوتيوب (اختياري)" }],
-    async v => { await addDoc(collection(db, "lessons"), { subjectId: sub.id, title: v.title, text: v.text, youtube: v.yt, created: serverTimestamp() }); lessons(sub); });
+  if (editor) $("#add").onclick = () => lessonEditor(null, sub, () => lessons(sub));
   app.querySelectorAll(".item").forEach(el => el.onclick = async e => {
     if (e.target.dataset.editLesson) return editLesson(ls.find(x => x.id === e.target.dataset.editLesson), sub);
     if (e.target.dataset.del) { if (confirm("حذف الدرس؟")) { await delLesson(e.target.dataset.del); lessons(sub); } return; }
@@ -372,11 +397,109 @@ async function lessons(sub) {
 }
 async function delLesson(id, quiet) {
   for (const q of await list("questions", "lessonId", id)) await deleteDoc(doc(db, "questions", q.id));
+  for (const im of await list("lessonImages", "lessonId", id)) await deleteDoc(doc(db, "lessonImages", im.id));
   await deleteDoc(doc(db, "lessons", id));
 }
 
+async function compressImage(file) {
+  const url = URL.createObjectURL(file), img = new Image();
+  try { await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error("ملف الصورة غير مدعوم")); img.src = url; }); } finally { URL.revokeObjectURL(url); }
+  for (const [maxW, q0] of [[1000, 0.75], [800, 0.6], [600, 0.5]]) {
+    const sc = Math.min(1, maxW / img.naturalWidth), w = Math.max(1, Math.round(img.naturalWidth * sc)), h = Math.max(1, Math.round(img.naturalHeight * sc));
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+    const out = c.toDataURL("image/jpeg", q0);
+    if (out.length < 750000) return out;
+  }
+  throw new Error("الصورة كبيرة جدًا، جرّب صورة أصغر");
+}
+function renderLessonBody(el, l, imgMap) {
+  const blocks = (l.blocks && l.blocks.length) ? l.blocks : [{ t: "p", v: l.text || "" }];
+  el.textContent = "";
+  blocks.forEach(b => {
+    if (b.t === "img") {
+      const fig = document.createElement("figure"); fig.className = "limg";
+      if (imgMap[b.v]) { const im = document.createElement("img"); im.src = imgMap[b.v]; im.alt = ""; fig.appendChild(im); } else fig.textContent = "🖼 الصورة مش متاحة";
+      el.appendChild(fig); return;
+    }
+    const n = document.createElement(b.t === "h1" ? "h3" : b.t === "h2" ? "h4" : "div");
+    n.className = b.t === "h1" ? "lh1" : b.t === "h2" ? "lh2" : "lp";
+    el.appendChild(n); clickable(n, b.v, b.t === "p");
+  });
+}
+async function lessonEditor(x, sub, done) {
+  x = x || {};
+  const imgMap = {}; if (x.id) (await list("lessonImages", "lessonId", x.id)).forEach(i => imgMap[i.id] = i.data);
+  const blocks = (x.blocks && x.blocks.length) ? x.blocks.map(b => ({ t: b.t, v: b.v, d: b.t === "img" ? (imgMap[b.v] || "") : "" })) : [{ t: "p", v: x.text || "", d: "" }];
+  const removed = []; let pending = null;
+  const d = document.createElement("dialog"); d.style.width = "min(96vw,720px)"; d.style.maxHeight = "92vh"; d.style.overflow = "auto";
+  d.innerHTML = `<form><h3>${x.id ? "تعديل الدرس" : "درس جديد"}</h3>
+    <label>عنوان الدرس (فرنسي)<input name="title" dir="ltr"></label>
+    <label>لينك يوتيوب (اختياري)<input name="yt" dir="ltr"></label>
+    <div id="lbBlocks"></div>
+    <div class="row"><button type="button" class="sec" data-add="h1">+ عنوان رئيسي</button><button type="button" class="sec" data-add="h2">+ عنوان فرعي</button><button type="button" class="sec" data-add="p">+ فقرة</button><button type="button" class="sec" data-add="img">+ صورة</button></div>
+    <input type="file" accept="image/*" id="lbFile" style="display:none">
+    <p class="danger" id="lbErr"></p>
+    <div class="row"><button id="lbSave">حفظ</button><button type="button" class="sec" id="lbCancel">إلغاء</button></div></form>`;
+  document.body.appendChild(d);
+  const f = d.querySelector("form"), box = d.querySelector("#lbBlocks"), file = d.querySelector("#lbFile"), err = m => d.querySelector("#lbErr").textContent = m;
+  f.querySelector('[name="title"]').value = x.title || ""; f.querySelector('[name="yt"]').value = x.youtube || "";
+  const LBL = { h1: "عنوان رئيسي", h2: "عنوان فرعي", p: "فقرة", img: "صورة" };
+  const draw = () => {
+    box.innerHTML = "";
+    blocks.forEach(b => {
+      const w = document.createElement("div"); w.className = "q"; w.style.cssText = "padding:12px;margin:10px 0";
+      w.innerHTML = `<div class="row" style="margin:0 0 8px"><b style="flex:1">${LBL[b.t]}</b><button type="button" class="sec" data-mv="-1" style="padding:3px 10px">↑</button><button type="button" class="sec" data-mv="1" style="padding:3px 10px">↓</button><button type="button" class="del" data-rm="1" style="padding:3px 10px">✕</button></div><div class="bb"></div>`;
+      const body = w.querySelector(".bb");
+      if (b.t === "img") body.innerHTML = `${b.d ? `<img src="${b.d}" style="max-width:100%;max-height:220px;border-radius:10px;display:block;margin-bottom:8px">` : `<p class="mut">لم تُختر صورة</p>`}<button type="button" class="sec" data-pick="1">${b.d ? "تغيير الصورة" : "اختر صورة"}</button>`;
+      else {
+        const el = document.createElement(b.t === "p" ? "textarea" : "input"); el.dir = "ltr"; el.value = b.v; el.oninput = () => b.v = el.value;
+        if (b.t === "p") { el.rows = 5; el.placeholder = "اكتب الفقرة هنا..."; } else { el.placeholder = b.t === "h1" ? "العنوان الرئيسي" : "العنوان الفرعي"; el.style.fontWeight = "800"; }
+        body.appendChild(el);
+      }
+      box.appendChild(w);
+    });
+  };
+  draw();
+  box.onclick = e => {
+    const w = e.target.closest(".q"); if (!w || w.parentElement !== box) return;
+    const i = [...box.children].indexOf(w), t = e.target;
+    if (t.dataset.mv) { const j = i + Number(t.dataset.mv); if (j < 0 || j >= blocks.length) return; const tmp = blocks[i]; blocks[i] = blocks[j]; blocks[j] = tmp; draw(); }
+    else if (t.dataset.rm) { const b = blocks[i]; if (b.t === "img" && b.v) removed.push(b.v); blocks.splice(i, 1); draw(); }
+    else if (t.dataset.pick) { pending = i; file.click(); }
+  };
+  d.querySelectorAll("[data-add]").forEach(btn => btn.onclick = () => {
+    blocks.push({ t: btn.dataset.add, v: "", d: "" }); draw();
+    box.lastElementChild.scrollIntoView({ block: "nearest" });
+    if (btn.dataset.add === "img") { pending = blocks.length - 1; file.click(); }
+  });
+  file.onchange = async () => {
+    const fl = file.files[0]; file.value = ""; if (!fl || pending == null) return;
+    try { err(""); const data = await compressImage(fl), b = blocks[pending]; if (b.v) { removed.push(b.v); b.v = ""; } b.d = data; draw(); }
+    catch (e) { err("تعذر رفع الصورة: " + (e.message || "")); }
+  };
+  d.querySelector("#lbCancel").onclick = () => { d.close(); d.remove(); };
+  f.onsubmit = async e => {
+    e.preventDefault(); err("");
+    const title = f.querySelector('[name="title"]').value.trim(), btn = d.querySelector("#lbSave");
+    if (!title) return err("اكتب عنوان الدرس");
+    const kept = blocks.filter(b => b.t === "img" ? (b.v || b.d) : b.v.trim());
+    if (!kept.length) return err("ضيف محتوى للدرس");
+    btn.disabled = true; btn.textContent = "جاري الحفظ...";
+    try {
+      const ref = x.id ? doc(db, "lessons", x.id) : doc(collection(db, "lessons"));
+      for (const b of kept) if (b.t === "img" && b.d && !b.v) b.v = (await addDoc(collection(db, "lessonImages"), { lessonId: ref.id, data: b.d, created: serverTimestamp() })).id;
+      for (const id of removed) { try { await deleteDoc(doc(db, "lessonImages", id)); } catch {} }
+      const out = kept.map(b => ({ t: b.t, v: b.t === "img" ? b.v : b.v.trim() }));
+      const data = { title, text: out.filter(b => b.t !== "img").map(b => b.v).join("\n"), blocks: out, youtube: f.querySelector('[name="yt"]').value.trim() };
+      if (x.id) await updateDoc(ref, data); else await setDoc(ref, { subjectId: sub.id, ...data, created: serverTimestamp() });
+      d.close(); d.remove(); await done();
+    } catch (e2) { console.error(e2); err("تعذر الحفظ: " + (e2.code || e2.message || "").slice(0, 140)); btn.disabled = false; btn.textContent = "حفظ"; }
+  };
+  d.showModal();
+}
 function editSubject(x) { form("تعديل المادة", [{n:"name",l:"اسم المادة",v:x.name}], async v => { await updateDoc(doc(db,"subjects",x.id), {name:v.name}); subjects(); }); }
-function editLesson(x, sub) { form("تعديل الدرس", [{n:"title",l:"عنوان الدرس",v:x.title},{n:"text",l:"نص الدرس",t:"area",v:x.text||""},{n:"yt",l:"لينك يوتيوب",v:x.youtube||""}], async v => { await updateDoc(doc(db,"lessons",x.id), {title:v.title,text:v.text,youtube:v.yt}); lessons(sub); }); }
+function editLesson(x, sub) { lessonEditor(x, sub, () => lessons(sub)); }
 function questionDialog(x, cb) {
   x = x || {};
   const d = document.createElement("dialog");
@@ -435,19 +558,52 @@ function editQuestion(x, l, sub) { questionDialog(x, async v => { await updateDo
 
 async function gradeEssay(q, answer, lessonText) {
   const max = q.points || 10;
-  const prompt = `أنت مصحح لغة فرنسية لطلاب جامعيين. قيّم إجابة الطالب عن السؤال اعتمادًا على نص الدرس ومعرفتك باللغة الفرنسية. لا توجد إجابة نموذجية، فاستنتج الإجابة الصحيحة بنفسك.\nنص الدرس: ${(lessonText || "").slice(0, 4000)}\nالسؤال: ${q.q}\nإجابة الطالب: ${answer}\nمعايير التقييم: صحة المعنى، وسلامة القواعد والمفردات والإملاء، واكتمال الإجابة. الدرجة القصوى: ${max}.\nأعد JSON فقط: {"score": رقم بين 0 و${max} (يُسمح بنصف درجة), "feedback": "ملاحظة عربية قصيرة تذكر الخطأ والصواب"}`;
+  const prompt = `أنت مصحح لغة فرنسية لطلاب جامعيين. قيّم إجابة الطالب عن السؤال اعتمادًا على نص الدرس ومعرفتك باللغة الفرنسية. لا توجد إجابة نموذجية، فاستنتج الإجابة الصحيحة بنفسك.\nنص الدرس: ${(lessonText || "").slice(0, 4000)}\nالسؤال: ${q.q}\nإجابة الطالب: ${answer}\nمعايير التقييم: صحة المعنى، وسلامة القواعد والمفردات والإملاء، واكتمال الإجابة. الدرجة القصوى: ${max}.\nأعد JSON فقط: {"score": رقم بين 0 و${max} (يُسمح بنصف درجة), "feedback": "ملاحظة بالفرنسية البسيطة (جملتان على الأكثر) تذكر الخطأ والصواب"}`;
   const x = JSON.parse((await gem.generateContent(prompt)).response.text());
   return { score: Math.max(0, Math.min(max, Math.round((Number(x.score) || 0) * 2) / 2)), feedback: String(x.feedback || "تم التقييم") };
 }
+const explCache = new Map();
+async function explainAnswer(q, chosen, lessonText) {
+  const key = q.id + "|" + chosen;
+  if (explCache.has(key)) return explCache.get(key);
+  const prompt = `Tu es professeur de français langue étrangère pour des étudiants égyptiens. Un étudiant a répondu faux à la question ci-dessous. Explique en français simple (niveau A2-B1), en 3 phrases maximum : pourquoi son choix est faux, pourquoi la bonne réponse est correcte, et un conseil pour s'en souvenir. Cite le texte du choix, jamais son numéro.\nTexte de la leçon : ${(lessonText || "").slice(0, 3000)}\nQuestion : ${q.q}\nChoix : ${(q.options || []).join(" | ")}\nChoix de l'étudiant : ${q.options[chosen]}\nBonne réponse : ${q.options[q.answer]}\nRéponds uniquement en JSON : {"explanation":"..."}`;
+  const j = await askJSON(prompt, 1), t = String(j.explanation || "").trim();
+  if (t) explCache.set(key, t);
+  return t;
+}
+function attachExplanation(ex, text) {
+  ex.textContent = "";
+  const span = document.createElement("span"); span.className = "fr"; span.textContent = text;
+  const ic = document.createElement("span"); ic.className = "sti"; ic.textContent = "🌐"; ic.title = "ترجمة التفسير";
+  const tr = document.createElement("div"); tr.className = "fbtr"; tr.dir = "rtl"; tr.style.display = "none";
+  ic.onclick = async () => {
+    if (tr.style.display === "block") { tr.style.display = "none"; return; }
+    tr.style.display = "block"; tr.textContent = "⏳ جاري الترجمة...";
+    try { tr.textContent = await translateSentence(text); } catch (e) { console.warn(e); tr.textContent = "الترجمة مش متاحة دلوقتي"; }
+  };
+  ex.append(span, ic, tr);
+}
+async function showFeedback(qEl, q, chosen, lessonText) {
+  const ok = chosen === q.answer, fb = document.createElement("div");
+  fb.className = "fb " + (ok ? "ok" : "bad");
+  fb.innerHTML = ok ? `✅ إجابة صحيحة` : `❌ إجابة غلط — الإجابة الصحيحة: <b>${esc(q.options[q.answer])}</b>`;
+  const ex = document.createElement("div"); ex.className = "fbx"; ex.dir = "auto"; fb.appendChild(ex);
+  const row = qEl.querySelector(":scope > .row"); row ? qEl.insertBefore(fb, row) : qEl.appendChild(fb);
+  const stored = q.explanation && !/[\u0600-\u06FF]/.test(q.explanation) ? q.explanation : "";
+  if (stored) { attachExplanation(ex, stored); return; }
+  if (ok) { ex.remove(); return; }
+  ex.textContent = "⏳ جاري شرح السبب...";
+  try { const t = await explainAnswer(q, chosen, lessonText); t ? attachExplanation(ex, t) : ex.remove(); } catch (e) { console.warn(e); ex.remove(); }
+}
 async function generateExam(l, count) {
-  const essayN = count >= 5 ? Math.max(1, Math.round(count * 0.15)) : 0, tfN = Math.round(count * 0.25), mcqN = count - essayN - tfN;
-  const prompt = `أنت أستاذ لغة فرنسية. ضع اختبارًا من ${count} سؤالًا اعتمادًا على نص الدرس التالي فقط، بمستوى طلاب جامعيين.\nالتوزيع: ${mcqN} سؤال اختيار من متعدد (type "mcq")، ${tfN} سؤال صح/غلط (type "tf")، ${essayN} سؤال مقالي (type "essay").\nالقواعد: الأسئلة والاختيارات بالفرنسية. الاختيار من متعدد: 4 اختيارات وإجابة واحدة صحيحة، و"answer" هو رقم الاختيار الصحيح ويبدأ من 0. صح/غلط: "q" عبارة بالفرنسية، و"options" فارغة، و"answer" يساوي 0 إذا كانت العبارة صحيحة و1 إذا كانت خاطئة. المقالي: سؤال يطلب إجابة قصيرة بالفرنسية، بدون إجابة نموذجية. نوّع الأسئلة بين المفردات والقواعد والفهم ولا تكررها.\nعنوان الدرس: ${l.title}\nنص الدرس: ${(l.text || "").slice(0, 6000)}\nأعد JSON فقط: {"questions":[{"type":"mcq","q":"...","options":["...","...","...","..."],"answer":0}]}`;
-  const j = JSON.parse((await gem.generateContent(prompt)).response.text()), out = [];
+  const essayN = count >= 3 ? Math.max(1, Math.round(count * 0.2)) : 0, tfN = count >= 2 ? Math.max(1, Math.round(count * 0.25)) : 0, mcqN = Math.max(1, count - essayN - tfN);
+  const prompt = `أنت أستاذ لغة فرنسية. ضع اختبارًا من ${count} سؤالًا اعتمادًا على نص الدرس التالي فقط، بمستوى طلاب جامعيين.\nالتوزيع: ${mcqN} سؤال اختيار من متعدد (type "mcq")، ${tfN} سؤال صح/غلط (type "tf")، ${essayN} سؤال مقالي (type "essay").\nالقواعد: الأسئلة والاختيارات بالفرنسية. الاختيار من متعدد: 4 اختيارات وإجابة واحدة صحيحة، و"answer" هو رقم الاختيار الصحيح ويبدأ من 0. صح/غلط: "q" عبارة بالفرنسية، و"options" فارغة، و"answer" يساوي 0 إذا كانت العبارة صحيحة و1 إذا كانت خاطئة. المقالي: سؤال يطلب إجابة قصيرة بالفرنسية، بدون إجابة نموذجية. لكل سؤال اختيار من متعدد أو صح/غلط أضف "explanation": شرح بالفرنسية البسيطة (مستوى A2-B1) في جملتين أو ثلاث، يوضح لماذا الإجابة الصحيحة صحيحة ولماذا الاختيارات الأخرى خاطئة (اذكر نص الاختيار ولا تذكر رقمه أو حرفه). نوّع الأسئلة بين المفردات والقواعد والفهم ولا تكررها.\nعنوان الدرس: ${l.title}\nنص الدرس: ${(l.text || "").slice(0, 6000)}\nأعد JSON فقط: {"questions":[{"type":"mcq","q":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."}]}`;
+  const j = await askJSON(prompt), out = [];
   for (const x of (j.questions || [])) {
     const type = ["mcq", "tf", "essay"].includes(x.type) ? x.type : "mcq", q = String(x.q || "").trim();
     if (!q) continue;
-    if (type === "mcq") { const options = (x.options || []).map(o => String(o).trim()).filter(Boolean), answer = Number(x.answer); if (options.length < 2 || !Number.isInteger(answer) || answer < 0 || answer >= options.length) continue; out.push({ type, q, options, answer }); }
-    else if (type === "tf") out.push({ type, q, options: ["صح", "غلط"], answer: Number(x.answer) === 1 ? 1 : 0 });
+    if (type === "mcq") { const options = (x.options || []).map(o => String(o).trim()).filter(Boolean), answer = Number(x.answer); if (options.length < 2 || !Number.isInteger(answer) || answer < 0 || answer >= options.length) continue; out.push({ type, q, options, answer, explanation: String(x.explanation || "").trim() }); }
+    else if (type === "tf") out.push({ type, q, options: ["صح", "غلط"], answer: Number(x.answer) === 1 ? 1 : 0, explanation: String(x.explanation || "").trim() });
     else out.push({ type, q, options: [], answer: 0 });
   }
   if (!out.length) throw new Error("لم يتم توليد أسئلة صالحة، جرب مرة تانية");
@@ -473,6 +629,7 @@ function speakLesson(text, button) {
 async function lesson(l, sub) {
   const rawQs = await list("questions", "lessonId", l.id), yt = ytId(l.youtube);
   let quizTimer;
+  const imgMap = {}; if ((l.blocks || []).some(b => b.t === "img")) (await list("lessonImages", "lessonId", l.id)).forEach(i => imgMap[i.id] = i.data);
   const shuffle = a => [...a].sort(() => Math.random() - .5);
   const qs = shuffle(rawQs).map(q => { const pairs=(q.options||[]).map((o,i)=>({o,i})); const opts=shuffle(pairs); return {...q, options:opts.map(x=>x.o), answer:opts.findIndex(x=>x.i===q.answer)}; });
   const totalPts = Math.round(qs.reduce((a, q) => a + (q.points || (q.type === "essay" ? 10 : 1)), 0) * 100) / 100;
@@ -484,7 +641,7 @@ async function lesson(l, sub) {
   $("#speakLesson").onclick = () => speakLesson(l.text || "", $("#speakLesson"));
   if (user) await setDoc(doc(db, "progress", `${user.uid}_${l.id}`), { uid:user.uid, lessonId:l.id, subjectId:sub.id, lastOpened:serverTimestamp() }, {merge:true});
   $("#completeLesson").onclick = async () => { if(user){ await setDoc(doc(db,"progress",`${user.uid}_${l.id}`), {uid:user.uid, lessonId:l.id, subjectId:sub.id, completed:true, completedAt:serverTimestamp()}, {merge:true}); $("#completeLesson").textContent="✓ تم إتمام الدرس"; } };
-  clickable($("#txt"), l.text || "");
+  renderLessonBody($("#txt"), l, imgMap);
   window.lessonCtx = { title: l.title, text: (l.text || "").slice(0, 3000) };
   const box = $("#qs");
   const mcqScores = {}, essayScores = {};
@@ -523,7 +680,7 @@ async function lesson(l, sub) {
         await addDoc(collection(db, "answers"), { uid: user.uid, lessonId: l.id, questionId: q.id, answer: area.value.trim(), score: g.score, feedback: g.feedback, created: serverTimestamp() });
         localStorage.removeItem(`draft_${user?.uid}_${q.id}`);
         essayScores[q.id] = g.score; qEl.dataset.done = 1; area.readOnly = true; t.textContent = "تم التقييم ✓";
-        result.innerHTML = `<span class="score">${g.score}/${q.points || 10}</span> ${esc(g.feedback)}`;
+        result.innerHTML = `<span class="score">${g.score}/${q.points || 10}</span>`; const fx = document.createElement("div"); fx.className = "fbx"; result.appendChild(fx); attachExplanation(fx, g.feedback);
       } catch (e) { console.error(e); result.innerHTML = `<span class="danger">تعذر التقييم الآن، حاول لاحقًا.</span>`; t.disabled = false; t.textContent = "إرسال للتقييم"; }
       return;
     }
@@ -532,6 +689,7 @@ async function lesson(l, sub) {
     if (t.parentElement.dataset.done) return; t.parentElement.dataset.done = 1;
     sib[q.answer].classList.add("right"); if (+t.dataset.o !== q.answer) t.classList.add("wrong");
     mcqScores[q.id] = +t.dataset.o === q.answer ? (q.points || 1) : 0;
+    showFeedback(t.parentElement, q, +t.dataset.o, l.text);
     if (user) await addDoc(collection(db, "answers"), { uid:user.uid, lessonId:l.id, questionId:q.id, selected:+t.dataset.o, correct:+t.dataset.o === q.answer, score:+t.dataset.o === q.answer ? (q.points || 1) : 0, created:serverTimestamp() });
     const answered=box.querySelectorAll("[data-done]").length; $("#quizFill").style.width=`${qs.length?Math.round(answered/qs.length*100):0}%`;
   };
@@ -552,7 +710,7 @@ async function lesson(l, sub) {
           await addDoc(collection(db, "questions"), { lessonId: l.id, ...items[i], model: "", rubric: "", points: pts, created: serverTimestamp() });
         }
         await updateDoc(doc(db, "lessons", l.id), { examCount: items.length, examTotal: total }); l.examCount = items.length; l.examTotal = total;
-      } catch (e) { console.error(e); alert("تعذر توليد الاختبار: " + (e.message || "").slice(0, 120)); }
+      } catch (e) { console.error(e); alert("تعذر توليد الاختبار:\n" + (e.code ? e.code + " — " : "") + (e.message || "").slice(0, 300)); }
       lesson(l, sub);
     });
 }
@@ -694,7 +852,7 @@ async function translate(w, sent) {
   try { return await task; } finally { translationPending.delete(key); }
 }
 let cur;
-function clickable(el, text) {
+function clickable(el, text, icons = true) {
   const sents = text.split(/(?<=[.!?\n])/), frag = document.createDocumentFragment();
   sents.forEach((sent, si) => {
     const tail = sent.match(/\n*$/)[0], body = sent.slice(0, sent.length - tail.length);
@@ -702,7 +860,7 @@ function clickable(el, text) {
       if (/^\p{L}+$/u.test(p)) { const s = document.createElement("span"); s.className = "w"; s.textContent = p; s.dataset.si = si; frag.appendChild(s); }
       else if (p) frag.appendChild(document.createTextNode(p));
     });
-    if (/\p{L}/u.test(body)) { const i = document.createElement("span"); i.className = "sti"; i.textContent = "🌐"; i.title = "ترجمة الجملة"; i.dataset.si = si; frag.appendChild(i); }
+    if (icons && /\p{L}/u.test(body)) { const i = document.createElement("span"); i.className = "sti"; i.textContent = "🌐"; i.title = "ترجمة الجملة"; i.dataset.si = si; frag.appendChild(i); }
     if (tail) frag.appendChild(document.createTextNode(tail));
   });
   el.replaceChildren(frag);
