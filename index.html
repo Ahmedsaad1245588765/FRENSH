@@ -639,7 +639,7 @@ function renderBilingualParagraph(box, french, arabic, pairs = []) {
       }
       else if (part) side.appendChild(document.createTextNode(part));
     });
-    side.onclick = e => { const word = e.target.closest(".pair-word"); if (!word) return; e.preventDefault(); e.stopPropagation(); const pair = word.dataset.pair; row.querySelectorAll(".pair-word").forEach(x => x.classList.remove("pair-active")); word.classList.add("pair-active"); if (pairs.length) row.querySelectorAll(`.pair-word[data-pair="${pair}"]`).forEach(x => x.classList.add("pair-active")); const frWord = row.querySelector(".bilingual-side.fr .pair-word[data-pair=\"" + pair + "\"]"); if (lang === "fr" && frWord) { const selected = frWord.textContent.trim(); openWord(selected, value); } };
+    side.onclick = e => { const word = e.target.closest(".pair-word"); if (!word) return; e.preventDefault(); e.stopPropagation(); const pair = word.dataset.pair; const frWord = row.querySelector(".bilingual-side.fr .pair-word[data-pair=\"" + pair + "\"]"); if (lang === "fr" && frWord) { const selected = frWord.textContent.trim(); openWord(selected, value); } };
     return side;
   };
   const split = value => String(value || "").split(/\n\s*\n+/).map(x => x.trim()).filter(Boolean);
@@ -659,9 +659,6 @@ function focusLessonWord(term) {
   }
   if (!target) target = nodes.find(n => key(n.textContent) === wanted[0]);
   if (!target) return;
-  selected = selected.length ? selected : [target];
-  selected.forEach(n => n.classList.add(n.classList.contains("pair-word") ? "pair-active" : "word-focus"));
-  if (target.classList.contains("pair-word")) { const pair = target.dataset.pair; target.closest(".bilingual-row")?.querySelectorAll(`.pair-word[data-pair="${pair}"]`).forEach(n => n.classList.add("pair-active")); }
   target.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 async function translateAllParagraphs(root, button) {
@@ -1391,12 +1388,15 @@ const memCache = new Map();
 async function translate(w, sent) {
   const key = `${w.toLowerCase()}|${hash(sent)}`;
   if (memCache.has(key)) return memCache.get(key);
-  const lk = `fr_tr3_${key}`;
+  const lk = `fr_tr4_${key}`;
   try { const l = localStorage.getItem(lk); if (l) { const o = JSON.parse(l); memCache.set(key, o); return o; } } catch {}
   if (translationPending.has(key)) return translationPending.get(key);
   const task = (async () => {
-    const ref = doc(db, "translations", "v3_" + w.toLowerCase() + "_" + hash(sent));
+    const normalizedWord = w.toLowerCase().replace(/\s+/g, " ").trim();
+    const sharedRef = doc(db, "translations", "word_v1_" + hash(normalizedWord));
+    const ref = doc(db, "translations", "v3_" + normalizedWord + "_" + hash(sent));
     let fromAI = false;
+    try { const shared = await withTimeout(getDoc(sharedRef), 2500); if (shared.exists() && shared.data().ar) return shared.data(); } catch (e) { console.warn("Shared word cache unavailable", e); }
     const cloud = withTimeout(getDoc(ref), 2500).then(s => { if (!s.exists()) throw new Error("miss"); return s.data(); });
     const ai = (async () => {
       const prompt = `ترجم الكلمة أو التعبير الفرنسي المحدد فقط حسب سياق الجملة. لا تترجم الجملة كلها ولا تشرحها في حقل ar. الجملة: "${sent}"\nالكلمة أو التعبير المحدد: "${w}"\nأعد JSON فقط: {"base":"الشكل الأصلي بالفرنسية","ar":"معنى عربي مختصر من 1 إلى 8 كلمات فقط","note":"ملاحظة عربية قصيرة اختيارية عن القاعدة أو الزمن","pos":"نوع الكلمة أو التعبير بالعربية","synonyms":["0 إلى 3 مرادفات أو تعبيرات فرنسية فقط"],"level":"A1"}`;
@@ -1412,7 +1412,7 @@ async function translate(w, sent) {
     catch (e) { console.error("Translation failed:", e.errors || e); throw (e.errors && e.errors[1]) || e; }
     memCache.set(key, out);
     try { localStorage.setItem(lk, JSON.stringify(out)); } catch {}
-    if (fromAI) setDoc(ref, out).catch(e => console.warn("Translation cache save skipped:", e.message));
+    if (fromAI) { setDoc(sharedRef, { ...out, word: normalizedWord, example: sent }).catch(e => console.warn("Shared translation cache save skipped:", e.message)); setDoc(ref, out).catch(e => console.warn("Translation cache save skipped:", e.message)); }
     return out;
   })();
   translationPending.set(key, task);
