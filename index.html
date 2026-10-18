@@ -274,6 +274,7 @@ body.night .lesson-nav-actions.lesson-top,body.night .lesson-nav-actions.bottom{
 .block-ar{margin-top:8px;border-color:rgba(224,68,77,.35)!important;background:rgba(224,68,77,.04)!important}
 #sheet .b{white-space:pre-wrap}
 .important-words{margin:24px 0;padding:16px 18px;border-radius:16px;background:rgba(255,255,255,.58);border:1px solid #e3ebf8}
+.grammar-points{margin:24px 0;padding:16px 18px;border-radius:16px;background:rgba(255,255,255,.58);border:1px solid #e3ebf8}.grammar-points h3{margin:0 0 12px;color:#1f4da8}.grammar-card{margin:10px 0;padding:13px 15px;border-radius:12px;background:#f6f9ff;border-inline-start:4px solid #d28d2d}.grammar-card h4{margin:0 0 7px;color:#1f4da8}.grammar-card p{margin:0 0 8px;line-height:1.9}.grammar-example{padding:8px 10px;background:#fff;border-radius:8px;font-size:1.02rem}.grammar-translation{padding:6px 10px;color:#6c4b16}
 .w.word-focus{background:#ffe07a;color:#18264d;border-radius:5px;box-shadow:0 0 0 3px rgba(255,196,40,.3);padding:1px 3px}
 .important-words h3{margin:0 0 12px;color:#1f4da8}.important-words table{width:100%;border-collapse:collapse;table-layout:fixed}.important-words th,.important-words td{padding:9px 10px;border-bottom:1px solid #dfe6f3;text-align:start;vertical-align:top}.important-words th{color:#1f4da8;background:rgba(31,77,168,.06)}.important-words .word-link{border:0;background:transparent;color:#1f4da8;padding:0;font-weight:800;box-shadow:none;text-decoration:underline;cursor:pointer}.important-words .word-link:hover{transform:none;filter:none;box-shadow:none}
 body.night .important-words{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12)}body.night .important-words th,body.night .important-words td{border-color:rgba(255,255,255,.12)}body.night .important-words th{background:rgba(143,180,255,.1)}body.night .important-words .word-link{color:#9fc0ff}
@@ -299,6 +300,9 @@ body.night .important-words{background:rgba(255,255,255,.05);border-color:rgba(2
   .important-words th,.important-words td{font-size:10pt!important;padding:7px 8px!important;border-color:#d6deeb!important}
   .important-words th{background:#eef3fb!important;color:#14264f!important}
   .important-words .word-link{color:#14264f!important;text-decoration:none!important}
+  .grammar-points{margin:18px 0 0!important;padding:12px!important;border:1px solid #cbd7ea!important;border-radius:8px!important;background:#fff!important;break-inside:avoid;page-break-inside:avoid}
+  .grammar-points h3{font-size:14pt!important;margin:0 0 8px!important;color:#14264f!important}
+  .grammar-card{break-inside:avoid;page-break-inside:avoid;margin:8px 0!important;padding:9px 11px!important;background:#f7f9fd!important;border-inline-start:3px solid #d28d2d!important}
 }
 .ll{margin:0 0 14px;padding:12px 22px 12px 42px;background:#f6f9ff;border:1px solid #e3ebf8;border-radius:14px;line-height:2.1}
 .ll li{margin:4px 0;padding-inline-start:4px}
@@ -728,6 +732,7 @@ async function lessonEditor(x, sub, done) {
   const imgMap = {}; if (x.id) (await list(`lessons/${x.id}/images`)).forEach(i => imgMap[i.id] = i.data);
   const blocks = (c.blocks && c.blocks.length) ? c.blocks.map(b => ({ t: b.t, v: b.v, a: b.ar || "", pairs: b.pairs || [], d: b.t === "img" ? (imgMap[b.v] || "") : "" })) : [{ t: "p", v: c.text || "", a: "", pairs: [], d: "" }];
   let importantWords = Array.isArray(c.importantWords) ? c.importantWords : [];
+  let grammarPoints = Array.isArray(c.grammarPoints) ? c.grammarPoints : [];
   const removed = []; let pending = null;
   const d = document.createElement("dialog"); d.style.width = "min(96vw,720px)"; d.style.maxHeight = "92vh"; d.style.overflow = "auto";
   d.innerHTML = `<form><h3>${x.id ? "تعديل الدرس" : "درس جديد"}</h3>
@@ -742,7 +747,7 @@ async function lessonEditor(x, sub, done) {
       <div class="row"><button type="button" id="aiRun">✨ نظّم الدرس</button><span id="aiMsg" class="mut"></span></div>
     </div>
     <div id="lbBlocks"></div>
-    <div class="row"><button type="button" class="sec" data-add="h1">+ عنوان رئيسي</button><button type="button" class="sec" data-add="h2">+ عنوان فرعي</button><button type="button" class="sec" data-add="p">+ فقرة</button><button type="button" class="sec" data-add="img">+ صورة</button><button type="button" id="makeTranslations">🌐 ترجم كل البلوكات</button><button type="button" id="makeWords">✨ أنشئ أهم الكلمات</button></div>
+    <div class="row"><button type="button" class="sec" data-add="h1">+ عنوان رئيسي</button><button type="button" class="sec" data-add="h2">+ عنوان فرعي</button><button type="button" class="sec" data-add="p">+ فقرة</button><button type="button" class="sec" data-add="img">+ صورة</button><button type="button" id="makeTranslations">🌐 ترجم كل البلوكات</button><button type="button" id="makeWords">✨ أنشئ أهم الكلمات</button><button type="button" id="makeGrammar">📚 أنشئ أهم القواعد</button></div>
     <input type="file" accept="image/*" id="lbFile" style="display:none">
     <p class="danger" id="lbErr"></p>
     <div class="row"><button id="lbSave">حفظ</button><button type="button" class="sec" id="lbCancel">إلغاء</button></div></form>`;
@@ -790,6 +795,17 @@ async function lessonEditor(x, sub, done) {
     } catch (ex) { console.error(ex); err("تعذر إنشاء أهم الكلمات، حاول مرة أخرى"); }
     btn.disabled = false; btn.textContent = "✨ أنشئ أهم الكلمات";
   };
+  d.querySelector("#makeGrammar").onclick = async e => {
+    const btn = e.currentTarget, source = blocks.filter(b => b.t !== "img" && String(b.v || "").trim()).map(b => b.v.trim()).join("\n\n");
+    if (!source) return err("أضف محتوى الدرس أولًا");
+    btn.disabled = true; btn.textContent = "⏳ جاري تبسيط القواعد...";
+    try {
+      const j = await askJSON(`استخرج من درس الفرنسية التالي أهم 2 إلى 6 قواعد أو أزمنة ظهرت فعلًا في النص. لا تخترع قواعد غير موجودة. اشرح بالعربية المبسطة للطالب. أعد JSON فقط بالشكل {"rules":[{"title":"اسم القاعدة أو الزمن بالفرنسية والعربية","explanation":"شرح عربي مبسط","example":"مثال فرنسي من الدرس أو مطابق له","translation":"ترجمة المثال بالعربية"}]}.\nنص الدرس:\n${source.slice(0, 24000)}`);
+      grammarPoints = (Array.isArray(j) ? j : j.rules || []).filter(x => x && String(x.title || "").trim()).slice(0, 6).map(x => ({ title:String(x.title).trim(), explanation:String(x.explanation || "").trim(), example:String(x.example || "").trim(), translation:String(x.translation || "").trim() }));
+      err(grammarPoints.length ? `✅ تم إنشاء ${grammarPoints.length} قاعدة — اضغط حفظ لحفظها مع الدرس` : "لم يتم استخراج قواعد");
+    } catch (ex) { console.error(ex); err("تعذر إنشاء القواعد، حاول مرة أخرى"); }
+    btn.disabled = false; btn.textContent = "📚 أنشئ أهم القواعد";
+  };
   box.onclick = e => {
     const w = e.target.closest(".q"); if (!w || w.parentElement !== box) return;
     const i = [...box.children].indexOf(w), t = e.target;
@@ -830,7 +846,7 @@ async function lessonEditor(x, sub, done) {
     try {
       const res = picked ? await organizePdf(picked) : await organizeText(text, m => aiMsg.textContent = m);
       blocks.forEach(b => { if (b.t === "img" && b.v) removed.push(b.v); });
-      blocks.length = 0; res.blocks.forEach(b => blocks.push({ t: b.t, v: b.v, a: "", pairs: [], d: "" }));
+      blocks.length = 0; res.blocks.forEach(b => blocks.push({ t: b.t, v: b.v, a: "", pairs: [], d: "" })); importantWords = []; grammarPoints = [];
       const ti = f.querySelector('[name="title"]'); if (!ti.value.trim() && res.title) ti.value = res.title;
       draw(); aiMsg.textContent = `✅ تم تنظيم الدرس (${res.blocks.length} جزء) — راجعه وعدّل لو حبيت`;
     } catch (e) { console.error(e); aiMsg.className = "danger"; aiMsg.textContent = "تعذر التنظيم: " + (e.message || "").slice(0, 160); }
@@ -849,7 +865,7 @@ async function lessonEditor(x, sub, done) {
       for (const b of kept) if (b.t === "img" && b.d && !b.v) b.v = (await addDoc(collection(db, `lessons/${ref.id}/images`), { data: b.d, created: serverTimestamp() })).id;
       for (const id of removed) { try { await deleteDoc(doc(db, `lessons/${ref.id}/images`, id)); } catch {} }
       const out = kept.map(b => b.t === "img" ? ({ t: b.t, v: b.v }) : ({ t: b.t, v: b.v.trim(), ...(b.a && b.a.trim() ? { ar: b.a.trim(), pairs: Array.isArray(b.pairs) ? b.pairs : [] } : {}) }));
-      const content = { text: out.filter(b => b.t !== "img").map(b => b.v).join("\n"), blocks: out, importantWords, youtube: f.querySelector('[name="yt"]').value.trim(), youtubeAr: f.querySelector('[name="ytAr"]').value.trim() };
+      const content = { text: out.filter(b => b.t !== "img").map(b => b.v).join("\n"), blocks: out, importantWords, grammarPoints, youtube: f.querySelector('[name="yt"]').value.trim(), youtubeAr: f.querySelector('[name="ytAr"]').value.trim() };
       await setDoc(doc(db, "lessonContent", ref.id), content);
       if (x.id) { await updateDoc(ref, { title, v2: true, text: deleteField(), blocks: deleteField(), youtube: deleteField(), youtubeAr: deleteField() }); x.title = title; }
       else { await setDoc(ref, { subjectId: sub.id, title, v2: true, examCount: 0, prevId: "", created: serverTimestamp() }); await recomputeGates(sub.id); }
@@ -1082,7 +1098,7 @@ function examDashboard(l, sub, initialQs) {
 }
 async function generateExam(l, c) {
   const count = c.mcq + c.tf + c.essay, essayN = c.essay, tfN = c.tf, mcqN = c.mcq;
-  const prompt = `أنت أستاذ لغة فرنسية. ضع اختبارًا من ${count} سؤالًا اعتمادًا على نص الدرس التالي فقط، بمستوى طلاب جامعيين.\nالتوزيع: ${mcqN} سؤال اختيار من متعدد (type "mcq")، ${tfN} سؤال صح/غلط (type "tf")، ${essayN} سؤال مقالي (type "essay").\nالقواعد: الأسئلة والاختيارات بالفرنسية. الاختيار من متعدد: 4 اختيارات وإجابة واحدة صحيحة، و"answer" هو رقم الاختيار الصحيح ويبدأ من 0. صح/غلط: "q" عبارة بالفرنسية، و"options" فارغة، و"answer" يساوي 0 إذا كانت العبارة صحيحة و1 إذا كانت خاطئة. المقالي: سؤال يطلب إجابة قصيرة بالفرنسية، بدون إجابة نموذجية. لكل سؤال اختيار من متعدد أو صح/غلط أضف "explanation": شرح بالفرنسية البسيطة (مستوى A2-B1) في جملتين أو ثلاث، يوضح لماذا الإجابة الصحيحة صحيحة ولماذا الاختيارات الأخرى خاطئة (اذكر نص الاختيار ولا تذكر رقمه أو حرفه). نوّع الأسئلة بين المفردات والقواعد والفهم ولا تكررها.\nعنوان الدرس: ${l.title}\nنص الدرس: ${(l.text || "").slice(0, 20000)}\nأعد JSON فقط: {"questions":[{"type":"mcq","q":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."}]}`;
+  const prompt = `أنت أستاذ لغة فرنسية. ضع اختبارًا من ${count} سؤالًا يعتمد على فهم نص الدرس ومعلوماته ومفرداته فقط، وليس اختبارًا في القواعد النحوية أو الأزمنة. بمستوى طلاب جامعيين.\nالتوزيع: ${mcqN} سؤال اختيار من متعدد (type "mcq")، ${tfN} سؤال صح/غلط (type "tf")، ${essayN} سؤال مقالي (type "essay").\nالقواعد: الأسئلة والاختيارات بالفرنسية. الاختيار من متعدد: 4 اختيارات وإجابة واحدة صحيحة، و"answer" هو رقم الاختيار الصحيح ويبدأ من 0. صح/غلط: "q" عبارة عن معلومة من نص الدرس، و"options" فارغة، و"answer" يساوي 0 إذا كانت العبارة صحيحة و1 إذا كانت خاطئة. المقالي: سؤال يطلب إجابة قصيرة بالفرنسية عن محتوى الدرس، بدون إجابة نموذجية. لا تسأل عن تصريف أو تعريف قاعدة أو اختيار زمن. لكل سؤال اختيار من متعدد أو صح/غلط أضف "explanation": شرح بالفرنسية البسيطة (A2-B1) يوضح الإجابة اعتمادًا على النص. لا تكرر الأسئلة.\nعنوان الدرس: ${l.title}\nنص الدرس: ${(l.text || "").slice(0, 20000)}\nأعد JSON فقط: {"questions":[{"type":"mcq","q":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."}]}`;
   const j = await askJSON(prompt), out = [];
   const arr = Array.isArray(j) ? j : (j.questions || j.exam || j.items || j.data || Object.values(j).find(Array.isArray) || []);
   for (const x of arr) {
@@ -1186,11 +1202,14 @@ async function lesson(l, sub, startKey) {
   const totalPts = Math.round(qs.reduce((a, q) => a + (q.points || (q.type === "essay" ? 10 : 1)), 0) * 100) / 100;
   const passPct = l.examPass ?? 50, hasVideo = !!(yt || ytA);
   const importantWordsHtml = Array.isArray(l.importantWords) && l.importantWords.length ? `<section class="important-words"><h3>⭐ أهم الكلمات</h3><table><thead><tr><th>الكلمة الفرنسية</th><th>المعنى</th></tr></thead><tbody>${l.importantWords.map((w, i) => `<tr><td><button type="button" class="word-link" data-important-word="${i}">${esc(w.word)}</button></td><td>${esc(w.meaning)}</td></tr>`).join("")}</tbody></table></section>` : "";
-  const steps = [...(hasVideo ? [{ k: "video", t: "الفيديو", i: "🎬" }] : []), { k: "lesson", t: "الدرس", i: "📖" }, { k: "exam", t: "الاختبار", i: "📝" }];
+  const grammarHtml = Array.isArray(l.grammarPoints) && l.grammarPoints.length ? `<section class="grammar-points"><h3>📚 أهم القواعد النحوية</h3>${l.grammarPoints.map(g => `<article class="grammar-card"><h4>${esc(g.title)}</h4><p>${esc(g.explanation)}</p>${g.example ? `<div class="grammar-example fr">${esc(g.example)}</div>` : ""}${g.translation ? `<div class="grammar-translation">${esc(g.translation)}</div>` : ""}</article>`).join("")}</section>` : `<section class="grammar-points"><h3>📚 أهم القواعد النحوية</h3><p class="mut">لم تتم إضافة قواعد لهذا الدرس بعد.</p></section>`;
+  const steps = [...(hasVideo ? [{ k: "video", t: "الفيديو", i: "🎬" }] : []), { k: "lesson", t: "الدرس", i: "📖" }, { k: "words", t: "أهم الكلمات", i: "⭐" }, { k: "grammar", t: "القواعد", i: "📚" }, { k: "exam", t: "الاختبار", i: "📝" }];
   app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2><button class="sec important-print-hide" id="exportPdf">📄 PDF</button>${editor ? `<button id="examSetup">📊 لوحة الاختبار</button>` : ""}</div>
     <div class="stepper" id="stepper">${steps.map((s, i) => `<button type="button" class="stp" data-step="${i}"><b>${i + 1}</b> ${s.i} ${s.t}</button>`).join("")}</div>
     ${hasVideo ? `<section class="pane" id="p_video"><div class="vsw">${yt ? `<button type="button" class="vbtn on" data-v="fr" title="الفيديو بالفرنسية"><span class="vi">FR</span> فرنسي</button>` : ""}${ytA ? `<button type="button" class="vbtn${yt ? "" : " on"}" data-v="ar" title="الفيديو بالعربي"><span class="vi">ع</span> عربي</button>` : ""}</div><iframe id="vid" src="about:blank" allowfullscreen></iframe><div class="row"><button type="button" data-next="1">التالي: الدرس ←</button></div></section>` : ""}
-    <section class="pane" id="p_lesson"><div class="row"><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button><span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div><div id="ttsStatus" class="mut" style="margin:-4px 0 10px;font-size:.88rem"></div><div class="lesson-nav-actions lesson-top"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: الاختبار ←</button></div><div class="text fr" id="txt"></div>${importantWordsHtml}<div class="lesson-nav-actions bottom"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: الاختبار ←</button></div></section>
+    <section class="pane" id="p_lesson"><div class="row"><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button><span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div><div id="ttsStatus" class="mut" style="margin:-4px 0 10px;font-size:.88rem"></div><div class="lesson-nav-actions lesson-top"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: أهم الكلمات ←</button></div><div class="text fr" id="txt"></div><div class="lesson-nav-actions bottom"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: أهم الكلمات ←</button></div></section>
+    <section class="pane" id="p_words"><h3>⭐ أهم الكلمات</h3>${importantWordsHtml || `<p class="mut">لم تتم إضافة أهم الكلمات لهذا الدرس بعد.</p>`}<div class="lesson-nav-actions"><button type="button" data-next="1">التالي: القواعد ←</button></div></section>
+    <section class="pane" id="p_grammar">${grammarHtml}<div class="lesson-nav-actions"><button type="button" data-next="1">التالي: الاختبار ←</button></div></section>
     <section class="pane" id="p_exam"><h3>الاختبار</h3><div class="q" id="quizBar"><span id="quizStatus">${qs.length ? `الاختبار: ${qs.length} سؤال — الدرجة الكلية ${totalPts} — المدة ${Math.round(examSecs / 60)} دقيقة — النجاح من ${passPct}%` : "مفيش اختبار للدرس ده لسه."}</span><span id="quizTimer" class="score" style="display:none"></span><div class="question-progress" style="flex:1;min-width:120px"><div class="progress-track"><div id="quizFill" class="progress-fill" style="width:0%"></div></div></div><button id="startQuiz">ابدأ الاختبار</button><button id="finishQuiz" class="sec" style="display:none">إنهاء الاختبار</button></div><div id="quizResult"></div><div id="qs" style="display:none"></div></section>`;
   $("#back").onclick = () => { stopLessonSpeech(); window.lessonCtx = null; clearInterval(quizTimer); lessons(sub); };
   $("#exportPdf").onclick = () => { document.body.classList.add("printing"); setTimeout(() => { window.print(); setTimeout(() => document.body.classList.remove("printing"), 500); }, 30); };
