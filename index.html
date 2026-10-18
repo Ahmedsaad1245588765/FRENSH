@@ -51,6 +51,8 @@ h2,h3{margin:0}
 .lesson-stars .empty{color:rgba(255,255,255,.22);text-shadow:none}
 .n{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--navy);color:var(--gold);font-family:Fraunces,serif}
 .text{background:#fff;border-radius:12px;padding:28px;font-size:1.4rem;line-height:2;white-space:pre-wrap;box-shadow:0 1px 3px rgba(20,38,79,.12)}
+.tts-sentence{border-radius:7px;transition:background .2s ease,box-shadow .2s ease;color:inherit}
+.tts-sentence.reading{background:rgba(255,209,102,.28);box-shadow:0 0 0 3px rgba(255,209,102,.12);color:#fff1bd}
 .w{cursor:pointer;border-radius:4px}.w:hover{background:#f3e3b8}
 iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:12px;margin:12px 0}
 .q{background:#fff;border-radius:12px;padding:20px;margin:14px 0;font-size:1.1rem;box-shadow:0 1px 3px rgba(20,38,79,.12)}
@@ -956,23 +958,35 @@ function ttsChunks(text) {
       if (cur) { out.push(cur); cur = ""; }
       let w = ""; for (const x of p.split(" ")) { if (w && (w + " " + x).length > 170) { out.push(w); w = x; } else w = w ? w + " " + x : x; }
       if (w) out.push(w);
-    } else if (cur && (cur + " " + p).length > 170) { out.push(cur); cur = p; }
-    else cur = cur ? cur + " " + p : p;
+    } else { if (cur) out.push(cur); cur = p; }
   }
   if (cur) out.push(cur);
   return out;
+}
+function speechKey(text) { return String(text || "").replace(/\s+/g, " ").trim().toLowerCase(); }
+function highlightSpeechChunk(text) {
+  document.querySelectorAll(".tts-sentence.reading").forEach(e => e.classList.remove("reading"));
+  const key = speechKey(text); if (!key) return;
+  const target = [...document.querySelectorAll("#txt .tts-sentence")].find(e => {
+    const value = speechKey(e.dataset.sentence || e.textContent);
+    return value === key || value.includes(key) || key.includes(value);
+  });
+  if (target) { target.classList.add("reading"); target.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
 }
 function frVoice() { const vs = speechSynthesis.getVoices().filter(v => /^fr(-|_)/i.test(v.lang)); return vs.find(v => v.localService) || vs[0] || null; }
 function stopLessonSpeech() {
   ttsRun++; ttsState = "idle"; ttsIdx = 0; ttsQueue = [];
   if ("speechSynthesis" in window) speechSynthesis.cancel();
+  document.querySelectorAll(".tts-sentence.reading").forEach(e => e.classList.remove("reading"));
   if (ttsBtn) ttsBtn.textContent = TTS_LABEL;
   ttsNote("");
 }
 function ttsPlay(run) {
   if (run !== ttsRun) return;
-  if (ttsIdx >= ttsQueue.length) { ttsState = "idle"; ttsIdx = 0; if (ttsBtn) ttsBtn.textContent = TTS_LABEL; return; }
-  const u = new SpeechSynthesisUtterance(ttsQueue[ttsIdx]);
+  if (ttsIdx >= ttsQueue.length) { ttsState = "idle"; ttsIdx = 0; if (ttsBtn) ttsBtn.textContent = TTS_LABEL; document.querySelectorAll(".tts-sentence.reading").forEach(e => e.classList.remove("reading")); return; }
+  const chunk = ttsQueue[ttsIdx];
+  highlightSpeechChunk(chunk);
+  const u = new SpeechSynthesisUtterance(chunk);
   u.lang = "fr-FR"; u.rate = 0.9;
   const v = frVoice(); if (v) u.voice = v;
   const vn = v ? `🔊 الصوت: ${v.name} ${v.localService ? "(محلي)" : "(أونلاين — ممكن يتأخر)"}` : "⚠ مفيش صوت فرنسي على المتصفح ده، هيتنطق بالصوت الافتراضي وممكن يطلع غلط";
@@ -1237,10 +1251,12 @@ function clickable(el, text, icons = true) {
   const sents = text.split(/(?<=[.!?\n])/), frag = document.createDocumentFragment();
   sents.forEach((sent, si) => {
     const tail = sent.match(/\n*$/)[0], body = sent.slice(0, sent.length - tail.length);
+    const sentence = document.createElement("span"); sentence.className = "tts-sentence"; sentence.dataset.sentence = body.trim();
     body.split(/(\p{L}+)/gu).forEach(p => {
-      if (/^\p{L}+$/u.test(p)) { const s = document.createElement("span"); s.className = "w"; s.textContent = p; s.dataset.si = si; frag.appendChild(s); }
-      else if (p) frag.appendChild(document.createTextNode(p));
+      if (/^\p{L}+$/u.test(p)) { const s = document.createElement("span"); s.className = "w"; s.textContent = p; s.dataset.si = si; sentence.appendChild(s); }
+      else if (p) sentence.appendChild(document.createTextNode(p));
     });
+    if (body) frag.appendChild(sentence);
     if (icons && /\p{L}/u.test(body)) { const i = document.createElement("span"); i.className = "sti"; i.textContent = "⇄"; i.title = "ترجمة الجملة"; i.dataset.si = si; frag.appendChild(i); }
     if (tail) frag.appendChild(document.createTextNode(tail));
   });
