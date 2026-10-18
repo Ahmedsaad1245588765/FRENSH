@@ -28,7 +28,7 @@ button.del{background:var(--red)}
 h2,h3{margin:0}
 .fr{font-family:Fraunces,Georgia,serif;direction:ltr;text-align:left}
 .mut{color:var(--mut)}
-.hero{border-radius:14px;color:#fff;padding:70px 28px 44px;margin-bottom:34px;background:linear-gradient(90deg,rgba(13,26,56,.93),rgba(13,26,56,.55)),url(images/campus.jpg) center/cover,var(--navy2)}
+.hero{border-radius:14px;color:#fff;padding:70px 28px 44px;margin-bottom:34px;background:linear-gradient(90deg,rgba(13,26,56,.93),rgba(13,26,56,.55)),var(--navy2)}
 .hero p{margin:0;color:#e8d9b5}
 .hero h2{font-size:clamp(2.2rem,7vw,3.8rem);font-weight:600;line-height:1.1;margin:10px 0 20px;max-width:14ch}
 .hero h2::after{content:"";display:block;width:80px;height:4px;background:var(--gold);margin-top:14px}
@@ -272,6 +272,12 @@ body.night .fbtr{background:rgba(0,0,0,.25)}
 .essayResult{display:block;margin-top:10px}
 body.night .fb.ok{background:#12372a;color:#bff0d6;border-color:#1f6b4c}
 body.night .fb.bad{background:#40202a;color:#ffd1d8;border-color:#7a3446}
+
+/* pen tool */
+#penFab{position:fixed;top:50%;left:12px;transform:translateY(-50%);z-index:40;width:48px;height:48px;border-radius:50%;padding:0;font-size:1.3rem;display:none;place-items:center}
+#penFab.on{background:linear-gradient(135deg,#e0444d,#b91f48)}
+::highlight(pen){background-color:#ffe58a;color:#111}
+body.pen-on #app,body.pen-on #app *{user-select:text}
 </style>
 </head>
 <body>
@@ -284,11 +290,12 @@ body.night .fb.bad{background:#40202a;color:#ffd1d8;border-color:#7a3446}
 <button id="sp">🔊 نطق</button> <button id="sv">➕ أضف للكاردز</button> <button id="cl" class="sec">إغلاق</button></div>
 
 <button id="aiFab" title="مدرس الفرنسي" aria-label="مدرس الفرنسي">🎓</button>
+<button id="penFab" title="قلم: علّم على اللي مش فاهمه" aria-label="قلم">✏️</button>
 <div id="aiPanel"><div id="aiHead"><span>🎓 مدرس الفرنسي</span><button id="aiClose" aria-label="إغلاق">✕</button></div><div id="aiMsgs"></div><div id="aiBar"><textarea id="aiIn" placeholder="اسأل عن كلمة، قاعدة، أو اكتب جملة تتصحح..."></textarea><button id="aiSend">إرسال</button></div></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, EmailAuthProvider, linkWithCredential, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp, deleteField } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp, deleteField, writeBatch } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app-check.js";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-ai.js";
 
@@ -302,7 +309,6 @@ const firebaseConfig = {
   appId: "1:705960490968:web:2749f7193d8d82035924ad"
 };
 const ADMIN_EMAIL = "ahmedsaad13k@gmail.com";   // إيميلك (صلاحيات كاملة)
-const MM_EMAIL = "ahmedsaad13k@gmail.com";      // لرفع حد الترجمة المجاني
 /* ============================================== */
 
 const fb = initializeApp(firebaseConfig);
@@ -357,7 +363,7 @@ onAuthStateChanged(auth, async u => {
   user = u; admin = !!u && u.email === ADMIN_EMAIL;
   $("#who").textContent = u ? (u.displayName || u.email) : "";
   $("#n6").style.display = admin ? "" : "none";
-  $("#aiFab").style.display = u ? "grid" : "none"; if (!u) { $("#aiPanel").style.display = "none"; tutorChat = null; $("#aiMsgs").innerHTML = ""; }
+  $("#aiFab").style.display = u ? "grid" : "none"; $("#penFab").style.display = u ? "grid" : "none"; if (!u && penOn) $("#penFab").click(); if (!u) { $("#aiPanel").style.display = "none"; tutorChat = null; $("#aiMsgs").innerHTML = ""; }
   $("#auth").textContent = u ? "خروج" : "دخول بجوجل";
   editor = admin; $("#n5").style.display = admin ? "" : "none";
   if (!u) return needLogin();
@@ -446,6 +452,7 @@ async function delLesson(id, quiet) {
   for (const q of await list(`lessons/${id}/questions`)) await deleteDoc(doc(db, `lessons/${id}/questions`, q.id));
   for (const im of await list(`lessons/${id}/images`)) await deleteDoc(doc(db, `lessons/${id}/images`, im.id));
   try { await deleteDoc(doc(db, "lessonContent", id)); } catch {}
+  for (const col of ["progress","passes","attempts","answers"]) for (const r of await list(col, "lessonId", id)) { try { await deleteDoc(doc(db, col, r.id)); } catch {} }
   await deleteDoc(doc(db, "lessons", id));
 }
 
@@ -859,7 +866,7 @@ function examDashboard(l, sub, initialQs) {
 }
 async function generateExam(l, c) {
   const count = c.mcq + c.tf + c.essay, essayN = c.essay, tfN = c.tf, mcqN = c.mcq;
-  const prompt = `أنت أستاذ لغة فرنسية. ضع اختبارًا من ${count} سؤالًا اعتمادًا على نص الدرس التالي فقط، بمستوى طلاب جامعيين.\nالتوزيع: ${mcqN} سؤال اختيار من متعدد (type "mcq")، ${tfN} سؤال صح/غلط (type "tf")، ${essayN} سؤال مقالي (type "essay").\nالقواعد: الأسئلة والاختيارات بالفرنسية. الاختيار من متعدد: 4 اختيارات وإجابة واحدة صحيحة، و"answer" هو رقم الاختيار الصحيح ويبدأ من 0. صح/غلط: "q" عبارة بالفرنسية، و"options" فارغة، و"answer" يساوي 0 إذا كانت العبارة صحيحة و1 إذا كانت خاطئة. المقالي: سؤال يطلب إجابة قصيرة بالفرنسية، بدون إجابة نموذجية. لكل سؤال اختيار من متعدد أو صح/غلط أضف "explanation": شرح بالفرنسية البسيطة (مستوى A2-B1) في جملتين أو ثلاث، يوضح لماذا الإجابة الصحيحة صحيحة ولماذا الاختيارات الأخرى خاطئة (اذكر نص الاختيار ولا تذكر رقمه أو حرفه). نوّع الأسئلة بين المفردات والقواعد والفهم ولا تكررها.\nعنوان الدرس: ${l.title}\nنص الدرس: ${(l.text || "").slice(0, 6000)}\nأعد JSON فقط: {"questions":[{"type":"mcq","q":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."}]}`;
+  const prompt = `أنت أستاذ لغة فرنسية. ضع اختبارًا من ${count} سؤالًا اعتمادًا على نص الدرس التالي فقط، بمستوى طلاب جامعيين.\nالتوزيع: ${mcqN} سؤال اختيار من متعدد (type "mcq")، ${tfN} سؤال صح/غلط (type "tf")، ${essayN} سؤال مقالي (type "essay").\nالقواعد: الأسئلة والاختيارات بالفرنسية. الاختيار من متعدد: 4 اختيارات وإجابة واحدة صحيحة، و"answer" هو رقم الاختيار الصحيح ويبدأ من 0. صح/غلط: "q" عبارة بالفرنسية، و"options" فارغة، و"answer" يساوي 0 إذا كانت العبارة صحيحة و1 إذا كانت خاطئة. المقالي: سؤال يطلب إجابة قصيرة بالفرنسية، بدون إجابة نموذجية. لكل سؤال اختيار من متعدد أو صح/غلط أضف "explanation": شرح بالفرنسية البسيطة (مستوى A2-B1) في جملتين أو ثلاث، يوضح لماذا الإجابة الصحيحة صحيحة ولماذا الاختيارات الأخرى خاطئة (اذكر نص الاختيار ولا تذكر رقمه أو حرفه). نوّع الأسئلة بين المفردات والقواعد والفهم ولا تكررها.\nعنوان الدرس: ${l.title}\nنص الدرس: ${(l.text || "").slice(0, 20000)}\nأعد JSON فقط: {"questions":[{"type":"mcq","q":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."}]}`;
   const j = await askJSON(prompt), out = [];
   const arr = Array.isArray(j) ? j : (j.questions || j.exam || j.items || j.data || Object.values(j).find(Array.isArray) || []);
   for (const x of arr) {
@@ -1057,7 +1064,7 @@ async function announcementsPage() {
   if (!user) return needLogin();
   const ns = await list("announcements");
   app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">إعلانات القسم</h3>${admin ? `<button id="addNotice">+ إعلان</button>` : ""}</div><div>${ns.map(n => `<article class="notice"><h4>${esc(n.title)}</h4><div>${esc(n.text)}</div><time>${n.by ? esc(n.by) : "إدارة القسم"}</time></article>`).join("") || `<p class="mut">لا توجد إعلانات جديدة.</p>`}</div>`;
-  if (admin) $("#addNotice").onclick=()=>form("إعلان جديد",[{n:"title",l:"العنوان"},{n:"text",l:"نص الإعلان",t:"area"}],async v=>{await addDoc(collection(db,"announcements"),{title:v.title,text:v.text,by:user.displayName,created:serverTimestamp()}); const us=await list("users"); for(const x of us) await addDoc(collection(db,"notifications"),{uid:x.id,title:v.title,text:v.text,read:false,created:serverTimestamp()}); announcementsPage();});
+  if (admin) $("#addNotice").onclick=()=>form("إعلان جديد",[{n:"title",l:"العنوان"},{n:"text",l:"نص الإعلان",t:"area"}],async v=>{await addDoc(collection(db,"announcements"),{title:v.title,text:v.text,by:user.displayName,created:serverTimestamp()}); const us=await list("users"); for (let i = 0; i < us.length; i += 400) { const wb = writeBatch(db); us.slice(i, i + 400).forEach(x => wb.set(doc(collection(db, "notifications")), { uid: x.id, title: v.title, text: v.text, read: false, created: serverTimestamp() })); await wb.commit(); } announcementsPage();});
 }
 async function studentDashboard() {
   if (!user) return needLogin();
@@ -1076,7 +1083,7 @@ async function gradesPage() {
   app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">درجات ومحاولات الطلاب</h3><button class="sec" id="refreshGrades">تحديث</button><button class="sec" id="exportGrades">تصدير CSV</button></div><div class="dashboard"><div class="metric"><b>${new Set(answers.map(x=>x.uid)).size}</b><small>طلاب لديهم محاولات</small></div><div class="metric"><b>${answers.length}</b><small>إجمالي الإجابات</small></div><div class="metric"><b>${max ? Math.round(total/max*100) : 0}%</b><small>متوسط الأداء العام</small></div><div class="metric"><b>${new Set(answers.map(x=>x.lessonId)).size}</b><small>دروس تم حلها</small></div></div><div class="grid">${answers.map(a => { const u=um.get(a.uid)||{}, q=qm.get(a.questionId)||{}, l=lm.get(a.lessonId)||{}; return `<div class="q"><b>${esc(u.name || a.uid)}</b><small class="mut"> ${esc(u.email || "")}</small><hr><div>${esc(q.q || "سؤال محذوف")}</div><small class="mut">الدرس: ${esc(l.title || "غير معروف")}</small><p><span class="score">${Number(a.score||0)}/${Number(q.points || (q.type === "essay" ? 10 : 1))}</span>${a.correct !== undefined ? (a.correct ? " إجابة صحيحة" : " إجابة خاطئة") : ""}</p>${a.feedback ? `<div class="mut">${esc(a.feedback)}</div>` : ""}<button class="sec" data-manual="${a.id}">تعديل الدرجة</button>${a.answer ? `<details><summary>إجابة الطالب</summary><p>${esc(a.answer)}</p></details>` : ""}</div>`; }).join("") || `<p class="mut">لا توجد محاولات بعد.</p>`}</div>`;
   app.querySelectorAll("[data-manual]").forEach(b=>b.onclick=()=>{const a=answers.find(x=>x.id===b.dataset.manual); form("تعديل الدرجة",[{n:"score",l:"الدرجة",v:String(a.score||0)},{n:"feedback",l:"ملاحظة",t:"area",v:a.feedback||""}],async v=>{await updateDoc(doc(db,"answers",a.id),{score:Number(v.score)||0,feedback:v.feedback||""}); gradesPage();});});
   $("#refreshGrades").onclick = gradesPage;
-  $("#exportGrades").onclick = () => { const rows=[["الطالب","البريد","السؤال","الدرجة","الدرجة القصوى","الملاحظات"],...answers.map(a=>{const u=um.get(a.uid)||{},q=qm.get(a.questionId)||{};return [u.name||a.uid,u.email||q.q||"",q.q||"",a.score||0,q.points||1,a.feedback||""];})]; const csv="\ufeff"+rows.map(r=>r.map(x=>`"${String(x).replaceAll("\"","\"\"")}"`).join(",")).join("\n"), blob=new Blob([csv],{type:"text/csv;charset=utf-8"}), a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="grades.csv"; a.click(); URL.revokeObjectURL(a.href); };
+  $("#exportGrades").onclick = () => { const rows=[["الطالب","البريد","السؤال","الدرجة","الدرجة القصوى","الملاحظات"],...answers.map(a=>{const u=um.get(a.uid)||{},q=qm.get(a.questionId)||{};return [u.name||a.uid,u.email||"",q.q||"",a.score||0,q.points||1,a.feedback||""];})]; const csv="\ufeff"+rows.map(r=>r.map(x=>`"${String(x).replaceAll("\"","\"\"")}"`).join(",")).join("\n"), blob=new Blob([csv],{type:"text/csv;charset=utf-8"}), a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="grades.csv"; a.click(); URL.revokeObjectURL(a.href); };
 }
 
 
@@ -1285,6 +1292,39 @@ async function askTutor() {
 }
 $("#aiSend").onclick = askTutor;
 $("#aiIn").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askTutor(); } };
+
+/* ---------- أداة القلم ---------- */
+let penOn = false;
+const penCursor = "url(\"data:image/svg+xml," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><text y='26' font-size='26'>✏️</text></svg>") + "\") 2 30, text";
+const penStyle = document.createElement("style"); document.head.appendChild(penStyle);
+const clearPen = () => { if (window.CSS && CSS.highlights) CSS.highlights.delete("pen"); };
+$("#penFab").onclick = () => {
+  penOn = !penOn;
+  $("#penFab").classList.toggle("on", penOn);
+  document.body.classList.toggle("pen-on", penOn);
+  penStyle.textContent = penOn ? `body.pen-on #app, body.pen-on #app *{cursor:${penCursor} !important}` : "";
+  if (!penOn) clearPen();
+};
+document.addEventListener("click", e => { if (penOn && e.target.closest("#app")) { e.stopPropagation(); e.preventDefault(); } }, true);
+const penDone = () => {
+  if (!penOn || !user) return;
+  setTimeout(() => {
+    const sel = getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+    const r = sel.getRangeAt(0);
+    if (!$("#app").contains(r.commonAncestorContainer)) return;
+    const text = sel.toString().replace(/⇄|🌐/g, "").replace(/\s+/g, " ").trim();
+    if (text.length < 2) return;
+    if (window.CSS && CSS.highlights) { const h = CSS.highlights.get("pen") || new Highlight(); h.add(r.cloneRange()); CSS.highlights.set("pen", h); }
+    sel.removeAllRanges();
+    $("#aiPanel").style.display = "flex";
+    if (aiBusy) return;
+    $("#aiIn").value = "اشرحلي الجزء ده ببساطة شديدة (معنى + مثال + ترجمة): «" + text.slice(0, 700) + "»";
+    askTutor();
+  }, 30);
+};
+document.addEventListener("mouseup", penDone);
+document.addEventListener("touchend", penDone);
 </script>
 </body>
 </html>
