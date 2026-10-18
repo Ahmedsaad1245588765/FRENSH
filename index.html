@@ -730,6 +730,12 @@ async function organizeText(text, progress) {
   }
   return { title, blocks: out };
 }
+function sane(x) {
+  const t = String(x ?? "").trim();
+  if (!t || /[\u0600-\u06FF]/.test(t)) return t;
+  const letters = (t.match(/\p{L}/gu) || []).length, odd = (t.match(/[\u00C0-\u024F]/g) || []).length;
+  return letters >= 10 && odd / letters > 0.22 ? "" : t;
+}
 const explCache = new Map();
 async function explainAnswer(q, chosen, lessonText) {
   const key = q.id + "|" + chosen;
@@ -884,6 +890,7 @@ async function generateExam(l, c) {
 /* ---------- النطق الصوتي ---------- */
 let ttsRun = 0, ttsState = "idle", ttsQueue = [], ttsIdx = 0, ttsBtn = null;
 const TTS_LABEL = "🔊 تشغيل الدرس";
+const ttsNote = m => { const e = document.querySelector("#ttsStatus"); if (e) e.textContent = m || ""; };
 function ttsChunks(text) {
   const clean = String(text || "").replace(/<[^>]*>/g, " ").replace(/^\s*(?:[-•*]|\d+[.)])\s+/gm, "").replace(/[ \t]+/g, " ");
   const parts = clean.split(/(?<=[.!?…:;])\s+|\n+/).map(x => x.trim()).filter(Boolean), out = [];
@@ -904,6 +911,7 @@ function stopLessonSpeech() {
   ttsRun++; ttsState = "idle"; ttsIdx = 0; ttsQueue = [];
   if ("speechSynthesis" in window) speechSynthesis.cancel();
   if (ttsBtn) ttsBtn.textContent = TTS_LABEL;
+  ttsNote("");
 }
 function ttsPlay(run) {
   if (run !== ttsRun) return;
@@ -911,8 +919,12 @@ function ttsPlay(run) {
   const u = new SpeechSynthesisUtterance(ttsQueue[ttsIdx]);
   u.lang = "fr-FR"; u.rate = 0.9;
   const v = frVoice(); if (v) u.voice = v;
-  u.onend = () => { if (run === ttsRun) { ttsIdx++; ttsPlay(run); } };
-  u.onerror = e => { if (run !== ttsRun || (e && (e.error === "interrupted" || e.error === "canceled"))) return; ttsIdx++; ttsPlay(run); };
+  const vn = v ? `🔊 الصوت: ${v.name} ${v.localService ? "(محلي)" : "(أونلاين — ممكن يتأخر)"}` : "⚠ مفيش صوت فرنسي على المتصفح ده، هيتنطق بالصوت الافتراضي وممكن يطلع غلط";
+  ttsNote(vn);
+  const dog = setTimeout(() => { if (run === ttsRun) ttsNote("⏳ الصوت بيتأخر. غالبًا صوت المتصفح الفرنسي أونلاين أو مش متاح. جرّب Edge، أو نزّل صوت فرنسي من إعدادات الويندوز (Time & Language ← Speech)"); }, 3000);
+  u.onstart = () => { clearTimeout(dog); ttsNote(vn); };
+  u.onend = () => { clearTimeout(dog); if (run === ttsRun) { ttsIdx++; ttsPlay(run); } };
+  u.onerror = e => { clearTimeout(dog); if (run !== ttsRun || (e && (e.error === "interrupted" || e.error === "canceled"))) return; ttsNote("⚠ تعذر تشغيل الصوت" + (e && e.error ? " (" + e.error + ")" : "")); ttsIdx++; ttsPlay(run); };
   speechSynthesis.speak(u);
 }
 function speakLesson(text, button) {
@@ -942,7 +954,7 @@ async function lesson(l, sub, startKey) {
   app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2>${editor ? `<button id="examSetup">📊 لوحة الاختبار</button>` : ""}</div>
     <div class="stepper" id="stepper">${steps.map((s, i) => `<button type="button" class="stp" data-step="${i}"><b>${i + 1}</b> ${s.i} ${s.t}</button>`).join("")}</div>
     ${hasVideo ? `<section class="pane" id="p_video"><div class="vsw">${yt ? `<button type="button" class="vbtn on" data-v="fr" title="الفيديو بالفرنسية"><span class="vi">FR</span> فرنسي</button>` : ""}${ytA ? `<button type="button" class="vbtn${yt ? "" : " on"}" data-v="ar" title="الفيديو بالعربي"><span class="vi">ع</span> عربي</button>` : ""}</div><iframe id="vid" src="about:blank" allowfullscreen></iframe><div class="row"><button type="button" data-next="1">التالي: الدرس ←</button></div></section>` : ""}
-    <section class="pane" id="p_lesson"><div class="row"><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button><span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div><div class="text fr" id="txt"></div><div class="row"><button class="sec" id="completeLesson">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: الاختبار ←</button></div></section>
+    <section class="pane" id="p_lesson"><div class="row"><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button><span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div><div id="ttsStatus" class="mut" style="margin:-4px 0 10px;font-size:.88rem"></div><div class="text fr" id="txt"></div><div class="row"><button class="sec" id="completeLesson">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: الاختبار ←</button></div></section>
     <section class="pane" id="p_exam"><h3>الاختبار</h3><div class="q" id="quizBar"><span id="quizStatus">${qs.length ? `الاختبار: ${qs.length} سؤال — الدرجة الكلية ${totalPts} — المدة ${Math.round(examSecs / 60)} دقيقة — النجاح من ${passPct}%` : "مفيش اختبار للدرس ده لسه."}</span><span id="quizTimer" class="score" style="display:none"></span><div class="question-progress" style="flex:1;min-width:120px"><div class="progress-track"><div id="quizFill" class="progress-fill" style="width:0%"></div></div></div><button id="startQuiz">ابدأ الاختبار</button><button id="finishQuiz" class="sec" style="display:none">إنهاء الاختبار</button></div><div id="quizResult"></div><div id="qs" style="display:none"></div></section>`;
   $("#back").onclick = () => { stopLessonSpeech(); window.lessonCtx = null; clearInterval(quizTimer); lessons(sub); };
   $("#speakLesson").onclick = () => speakLesson(l.text || "", $("#speakLesson"));
@@ -1145,11 +1157,11 @@ async function translate(w, sent) {
     let fromAI = false;
     const cloud = withTimeout(getDoc(ref), 2500).then(s => { if (!s.exists()) throw new Error("miss"); return s.data(); });
     const ai = (async () => {
-      const prompt = `ترجم الكلمة الفرنسية حسب السياق إلى العربية. الجملة: "${sent}"\nالكلمة: "${w}"\nالمرادفات (synonyms) تكون كلمات فرنسية فقط وليست عربية، من 0 إلى 3 كلمات. المعنى والملاحظة بالعربية.\nأعد JSON فقط: {"base":"الشكل الأصلي بالفرنسية","ar":"المعنى المختصر بالعربية","note":"ملاحظة قصيرة بالعربية","pos":"نوع الكلمة","synonyms":["synonyme français"],"level":"A1"}`;
+      const prompt = `ترجم الكلمة الفرنسية حسب السياق إلى العربية. الجملة: "${sent}"\nالكلمة: "${w}"\nالمرادفات (synonyms) تكون كلمات فرنسية فقط وليست عربية، من 0 إلى 3 كلمات. المعنى والملاحظة بالعربية (الملاحظة اختيارية، اتركها فارغة إن لم تلزم، ولا تكتب أي رموز غريبة).\nأعد JSON فقط: {"base":"الشكل الأصلي بالفرنسية","ar":"المعنى المختصر بالعربية","note":"ملاحظة قصيرة بالعربية","pos":"نوع الكلمة","synonyms":["synonyme français"],"level":"A1"}`;
       const j = JSON.parse((await gem.generateContent(prompt)).response.text());
       if (!j.ar) throw new Error("empty");
       fromAI = true;
-      return { ar: j.ar, base: j.base || w, note: j.note || "", pos: j.pos || "", synonyms: Array.isArray(j.synonyms) ? j.synonyms.slice(0, 3) : [], level: j.level || "" };
+      return { ar: j.ar, base: j.base || w, note: sane(j.note), pos: sane(j.pos), synonyms: Array.isArray(j.synonyms) ? j.synonyms.slice(0, 3) : [], level: j.level || "" };
     })();
     ai.catch(() => {}); cloud.catch(() => {});
     let out;
@@ -1208,7 +1220,7 @@ async function openWord(w, sent) {
   $("#sheet .f").style.fontSize = ""; $("#sheet .a").style.fontSize = ""; $("#sv").style.display = "";
   $("#sheet .f").textContent = w; $("#sheet .a").textContent = "..."; $("#sheet .b").textContent = ""; $("#sv").textContent = "➕ أضف للكاردز"; $("#sheet").style.display = "block";
   speak(w);
-  try { const t = await translate(cur.fr, cur.ex); cur.ar = t.ar; cur.fr = t.base || cur.fr; $("#sheet .a").textContent = t.ar; $("#sheet .b").textContent = [t.base.toLowerCase() !== w.toLowerCase() ? t.base : "", t.note, t.pos, t.level, t.synonyms?.length ? "مرادفات: " + t.synonyms.join(", ") : ""].filter(Boolean).join(" — "); } catch (e) { console.error(e); $("#sheet .a").textContent = "الترجمة مش متاحة دلوقتي"; $("#sheet .b").textContent = (e.message || e.code || "").slice(0, 160); }
+  try { const t = await translate(cur.fr, cur.ex); cur.ar = t.ar; cur.fr = t.base || cur.fr; $("#sheet .a").textContent = t.ar; $("#sheet .b").textContent = [t.base.toLowerCase() !== w.toLowerCase() ? t.base : "", sane(t.note), sane(t.pos), t.level, (t.synonyms || []).filter(x => sane(x)).length ? "مرادفات: " + t.synonyms.filter(x => sane(x)).join(", ") : ""].filter(Boolean).join(" — "); } catch (e) { console.error(e); $("#sheet .a").textContent = "الترجمة مش متاحة دلوقتي"; $("#sheet .b").textContent = (e.message || e.code || "").slice(0, 160); }
 }
 $("#sp").onclick = () => speak(cur.word || cur.fr);
 $("#cl").onclick = () => $("#sheet").style.display = "none";
