@@ -278,12 +278,56 @@ body.night .fb.bad{background:#40202a;color:#ffd1d8;border-color:#7a3446}
 #penFab.on{background:linear-gradient(135deg,#e0444d,#b91f48)}
 ::highlight(pen){background-color:#ffe58a;color:#111}
 body.pen-on #app,body.pen-on #app *{user-select:text}
+
+/* ===== Mobile compact layout ===== */
+@media(max-width:760px){
+html{font-size:14px}
+body{line-height:1.6}
+.top{font-size:.66rem;padding:4px 8px}
+header{padding:8px 10px}
+.brand svg{width:28px;height:34px}
+.brand b{font-size:.88rem}.brand small{font-size:.64rem}
+#menuToggle{font-size:1.05rem;padding:5px 9px}
+#auth{font-size:.72rem;padding:6px 9px}#themeToggle{font-size:.85rem;padding:6px 8px}
+header nav.open a{padding:7px 10px;font-size:.85rem}
+main{padding:14px 10px 100px}
+button{padding:7px 13px;font-size:.88rem;border-radius:10px}
+h2{font-size:1.15rem}h3{font-size:1rem}.sh{font-size:1.05rem;margin:4px 0 12px}
+.row{margin:8px 0;gap:6px}
+.welcome-bar{min-height:48px;padding:10px 14px;margin-bottom:10px}.welcome-bar #hero{font-size:1.1rem}
+.home-actions{margin:0 0 14px}
+.add-subject{width:36px;height:36px;font-size:1.25rem;border-radius:10px}
+.subject-only{min-height:90px;padding:13px}.subject-name{font-size:.98rem}.subject-footer{margin-top:12px;padding-top:8px}
+.lesson-count{font-size:.78rem}
+.item:not(.tile){font-size:.92rem;padding:10px 12px;gap:10px;margin:8px 0}
+.n{width:28px;height:28px;font-size:.78rem}
+.badge{font-size:.66rem;padding:2px 8px}
+.stepper{gap:6px;margin:10px 0}.stp{min-width:0;font-size:.8rem;padding:7px 4px;gap:4px;border-radius:10px}.stp b{width:20px;height:20px;font-size:.68rem}
+.vbtn{font-size:.82rem;padding:4px 12px 4px 6px}.vbtn .vi{width:26px;height:26px;font-size:.72rem}
+.text{font-size:1rem;padding:14px 10px;line-height:1.9}
+.lh1{font-size:1.3rem}.lh2{font-size:1.1rem}
+.lp{padding:9px 11px;margin-bottom:10px}.ll{padding:8px 11px 8px 28px}
+.q{padding:12px;font-size:.95rem;margin:10px 0}.opt{padding:8px 12px;font-size:.9rem}
+.metric{padding:12px}.metric b{font-size:1.3rem}.dashboard{gap:8px;margin:10px 0}
+.notice{padding:11px 13px}
+.fb{font-size:.9rem;padding:9px 11px}
+#aiFab{width:44px;height:44px;font-size:1.2rem;bottom:14px;left:14px}
+#penFab{width:36px;height:36px;font-size:.95rem;left:8px}
+#aiPanel{bottom:66px;left:8px;width:calc(100vw - 16px);height:68vh}
+#aiHead{padding:9px 12px}.aim{font-size:.88rem;padding:7px 10px}
+#sheet{padding:12px;bottom:10px}#sheet .f{font-size:1.3rem}#sheet .a{font-size:1.1rem}#sheet .b{font-size:.8rem}
+dialog{padding:14px}
+input,textarea,select{padding:8px 10px;font-size:16px}
+.login-shell{padding:24px 14px}.login-copy h1{font-size:2.1rem}.login-copy p{font-size:.92rem}.login-card{padding:22px 16px}.login-card h2{font-size:1.5rem}.login-logo-ring{width:60px;height:60px;font-size:1.9rem}
+.mini-stat{padding:7px 10px}.mini-stat b{font-size:.95rem}
+iframe{border-radius:10px;margin:8px 0}
+}
 </style>
 </head>
 <body>
 <div class="top">Faculté · Département de français — قسم اللغة الفرنسية</div>
 <header><div class="brand" id="home"><svg viewBox="0 0 44 52"><path d="M22 2 L42 9 V26 C42 38 33 46 22 50 C11 46 2 38 2 26 V9Z" fill="#14264f" stroke="#c19a4b" stroke-width="2.5"/><text x="22" y="34" text-anchor="middle" font-family="Fraunces,serif" font-size="26" font-style="italic" fill="#c19a4b">F</text></svg><div><b>Département de français</b><small>قسم اللغة الفرنسية</small></div></div>
-<nav><button id="menuToggle" aria-label="فتح القائمة" aria-expanded="false">☰</button><a id="n1">المواد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n4">مركز الأسئلة</a><a id="n5" style="display:none">المستخدمين</a><a id="n6" style="display:none">الدرجات</a><a id="n7">لوحتي</a><a id="n8">الإعلانات</a><a id="n9">الإشعارات</a><span id="who"></span><button id="themeToggle" title="الوضع الليلي">☾</button><button id="auth">تسجيل الدخول</button></nav></header>
+<nav><button id="menuToggle" aria-label="فتح القائمة" aria-expanded="false">☰</button><a id="n1">المواد</a><a id="n10">قواعد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n4">مركز الأسئلة</a><a id="n5" style="display:none">المستخدمين</a><a id="n6" style="display:none">الدرجات</a><a id="n7">لوحتي</a><a id="n8">الإعلانات</a><a id="n9">الإشعارات</a><span id="who"></span><button id="themeToggle" title="الوضع الليلي">☾</button><button id="auth">تسجيل الدخول</button></nav></header>
 <main id="app"></main>
 <footer>© قسم اللغة الفرنسية — Département de français</footer>
 <div id="sheet"><div class="f fr"></div><div class="a"></div><div class="b"></div>
@@ -1325,6 +1369,226 @@ const penDone = () => {
 };
 document.addEventListener("mouseup", penDone);
 document.addEventListener("touchend", penDone);
+
+/* ---------- قواعد الفرنسية A1 → B1 ---------- */
+const GR = {
+  A1: [
+    ["Les pronoms sujets et le verbe être", "الضمائر والفعل être"],
+    ["Le verbe avoir", "الفعل avoir"],
+    ["Les articles définis et indéfinis", "أدوات التعريف والتنكير"],
+    ["Le genre et le nombre", "المذكر والمؤنث والجمع"],
+    ["Le présent des verbes en -er", "المضارع للأفعال المنتهية بـ er"],
+    ["La négation ne… pas", "النفي"],
+    ["Les questions : est-ce que et l'inversion", "الأسئلة"],
+    ["Les adjectifs possessifs", "صفات الملكية"],
+    ["Les adjectifs démonstratifs", "صفات الإشارة"],
+    ["Les prépositions de lieu et à / de + article", "حروف الجر للمكان وau / du"]
+  ],
+  A2: [
+    ["Les verbes irréguliers : aller, faire, prendre, venir", "الأفعال الشاذة في المضارع"],
+    ["Le futur proche", "المستقبل القريب"],
+    ["Le passé composé", "الماضي المركب"],
+    ["L'imparfait", "الماضي الناقص"],
+    ["Les pronoms COD : le, la, les", "ضمائر المفعول المباشر"],
+    ["Les pronoms COI : lui, leur", "ضمائر المفعول غير المباشر"],
+    ["Le comparatif et le superlatif", "المقارنة والتفضيل"],
+    ["Les verbes pronominaux", "الأفعال الانعكاسية"],
+    ["L'impératif", "الأمر"]
+  ],
+  B1: [
+    ["Passé composé ou imparfait ?", "الفرق بين الماضي المركب والناقص"],
+    ["Le futur simple", "المستقبل البسيط"],
+    ["Les pronoms y et en", "الضميران y و en"],
+    ["Le plus-que-parfait", "الماضي البعيد"],
+    ["Le conditionnel présent", "الشرطي"],
+    ["Le subjonctif présent", "صيغة الsubjonctif"],
+    ["Les pronoms relatifs : qui, que, dont, où", "الضمائر الموصولة"],
+    ["L'hypothèse avec si", "جمل الشرط بـ si"],
+    ["Le discours rapporté", "الكلام المنقول"]
+  ]
+};
+const gkey = (lv, i) => lv.toLowerCase() + "-" + String(i + 1).padStart(2, "0");
+const searchModel = getGenerativeModel(getAI(fb, { backend: new GoogleAIBackend() }), { model: "gemini-3.5-flash-lite", tools: [{ googleSearch: {} }], generationConfig: { temperature: 0.2 } });
+const askAI = t => { $("#aiPanel").style.display = "flex"; if (aiBusy) return; $("#aiIn").value = t; askTutor(); };
+async function ytInfo(id) {
+  try {
+    const r = await fetch("https://www.youtube.com/oembed?url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + id) + "&format=json");
+    if (r.ok) { const j = await r.json(); return { title: j.title || "", channel: j.author_name || "", verified: true }; }
+    if ([401, 403, 404].includes(r.status)) return null;
+  } catch {}
+  return { title: "", channel: "", verified: false };
+}
+async function findGrammarVideo(g, level) {
+  const prompt = `ابحث في الإنترنت عن أفضل فيديو يوتيوب يشرح درس القواعد الفرنسي التالي لمستوى ${level} (CEFR): "${g[0]}" (${g[1]}). الأفضل فيديو بشرح عربي واضح، وإن لم يوجد فبالفرنسية البسيطة للمبتدئين، ومدته بين 3 و20 دقيقة، من قناة تعليمية معروفة. اكتب 3 روابط كاملة فقط بصيغة https://www.youtube.com/watch?v=XXXXXXXXXXX، كل رابط في سطر مع عنوان الفيديو. لا تخترع روابط.`;
+  const txt = (await searchModel.generateContent(prompt)).response.text();
+  const ids = [...new Set([...txt.matchAll(/(?:v=|youtu\.be\/)([\w-]{11})/g)].map(m => m[1]))];
+  for (const id of ids.slice(0, 4)) { const info = await ytInfo(id); if (info) return { id, ...info }; }
+  throw new Error("لم أجد فيديو صالح للتضمين");
+}
+const saveGrVideo = (key, v) => setDoc(doc(db, "grammarVideos", key), { id: v.id, title: v.title || "", channel: v.channel || "", verified: v.verified !== false, by: user.email, updated: serverTimestamp() });
+
+async function grammarPage(level = "A1") {
+  if (!user) return needLogin();
+  document.body.classList.remove("login-screen"); window.lessonCtx = null;
+  const vids = {}, cont = {}; (await list("grammarVideos")).forEach(x => vids[x.id] = x); (await list("grammarContent")).forEach(x => cont[x.id] = x);
+  const items = GR[level];
+  app.innerHTML = `<div class="row"><h2 style="flex:1;margin:0">📘 قواعد الفرنسية</h2>${editor ? `<button id="grAuto" class="sec">🤖 فيديوهات ${level}</button><button id="grGen" class="sec">🤖 دروس وأسئلة ${level}</button>` : ""}</div>
+    <p class="mut">دروس مترتبة من A1 إلى B1. ابدأ من الأول واحد ورا التاني.</p>
+    <div class="stepper">${Object.keys(GR).map(l => `<button type="button" class="stp${l === level ? " on" : ""}" data-lv="${l}"><b>${GR[l].length}</b> ${l}</button>`).join("")}</div>
+    <div id="grMsg" class="mut"></div>
+    <div>${items.map((g, i) => `<div class="item" data-i="${i}"><b class="n">${i + 1}</b><div style="flex:1;min-width:0"><div class="fr" style="font-weight:800">${esc(g[0])}</div><small class="mut">${esc(g[1])}</small></div>${vids[gkey(level, i)] ? `<small class="badge">🎬</small>` : ""}${cont[gkey(level, i)] ? `<small class="badge">📖</small>` : ""}</div>`).join("")}</div>`;
+  app.querySelectorAll("[data-lv]").forEach(b => b.onclick = () => grammarPage(b.dataset.lv));
+  app.querySelectorAll(".item[data-i]").forEach(el => el.onclick = () => grammarLesson(level, +el.dataset.i));
+  if (editor) $("#grGen").onclick = async () => {
+    const msg = $("#grMsg"), btn = $("#grGen"); btn.disabled = true; let ok = 0, fail = 0, last = "";
+    for (let i = 0; i < items.length; i++) {
+      const key = gkey(level, i); if (cont[key]) continue;
+      msg.textContent = `⏳ ${i + 1}/${items.length}: ${items[i][0]} (تم ${ok}، فشل ${fail})`;
+      try { await saveGrContent(key, await generateGrammar(items[i], level)); ok++; } catch (e) { console.warn(e); fail++; last = (e.message || e.code || "").slice(0, 120); }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    msg.textContent = `انتهى: ${ok} درس اتولّد${fail ? "، و" + fail + " فشل (" + last + ")" : ""}`;
+    if (ok) setTimeout(() => grammarPage(level), 1500); else btn.disabled = false;
+  };
+  if (editor) $("#grAuto").onclick = async () => {
+    const msg = $("#grMsg"), btn = $("#grAuto"); btn.disabled = true; let ok = 0, fail = 0, last = "";
+    for (let i = 0; i < items.length; i++) {
+      const key = gkey(level, i); if (vids[key]) continue;
+      msg.textContent = `🔎 ${i + 1}/${items.length}: ${items[i][0]} (تم ${ok}، فشل ${fail})`;
+      try { await saveGrVideo(key, await findGrammarVideo(items[i], level)); ok++; } catch (e) { console.warn(e); fail++; last = (e.message || e.code || "").slice(0, 120); }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    msg.textContent = `انتهى: ${ok} فيديو اتضاف${fail ? "، و" + fail + " فشل (" + last + ")" : ""}`;
+    if (ok) setTimeout(() => grammarPage(level), 1500); else btn.disabled = false;
+  };
+}
+const saveGrContent = (key, c) => setDoc(doc(db, "grammarContent", key), { blocks: c.blocks, questions: c.questions, by: user.email, updated: serverTimestamp() });
+async function generateGrammar(g, level) {
+  const prompt = `أنت أستاذ لغة فرنسية لطلاب مصريين مبتدئين. اكتب درس قواعد مبسط ومنظم لمستوى ${level} (CEFR) عن: "${g[0]}" (${g[1]}).
+الشرح بالعامية المصرية البسيطة، والأمثلة بالفرنسية مع ترجمتها للعربية.
+قسّم الدرس بالترتيب إلى أقسام، كل قسم عنوان فرعي (t:"h2") يليه فقرة (t:"p"):
+1) "إيه هو الدرس ده؟" مقدمة قصيرة في جملتين.
+2) "القاعدة" الشرح خطوة خطوة، واستخدم أسطرًا تبدأ بـ "- " للنقاط، وجداول التصريف كنقاط (مثال: - je suis = أنا).
+3) "أمثلة" من 6 إلى 8 جمل فرنسية بسيطة، كل جملة في سطر يبدأ بـ "- " ثم الجملة ثم " = " ثم الترجمة العربية.
+4) "أخطاء شائعة" من 2 إلى 3 أخطاء يقع فيها المصريون مع الصحيح.
+5) "نصيحة للحفظ" جملة أو جملتان.
+ثم ضع 8 أسئلة عن الدرس نفسه: 6 اختيار من متعدد (type "mcq" و4 اختيارات و"answer" رقم الصحيح ويبدأ من 0) و2 صح/غلط (type "tf" و"options" فارغة و"answer" 0 للعبارة الصحيحة و1 للخاطئة). الأسئلة بالفرنسية البسيطة، ولكل سؤال "explanation" بالعربية المبسطة في جملتين تشرح الإجابة الصحيحة. لا تكرر الأسئلة. تأكد أن كل الأمثلة والإجابات الصحيحة سليمة لغويًا.
+أعد JSON فقط: {"blocks":[{"t":"h2","v":"..."},{"t":"p","v":"..."}],"questions":[{"type":"mcq","q":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."}]}`;
+  const j = await askJSON(prompt);
+  const blocks = (j.blocks || []).map(b => ({ t: b.t === "h2" ? "h2" : "p", v: String(b.v ?? b.text ?? "").trim() })).filter(b => b.v);
+  const questions = [];
+  for (const x of (j.questions || [])) {
+    const q = String(x.q || x.question || "").trim(); if (!q) continue;
+    const explanation = String(x.explanation || "").trim(), a = Number(x.answer);
+    if (!Number.isInteger(a)) continue;
+    if (/tf|true|false|صح/i.test(String(x.type || ""))) { if (a < 0 || a > 1) continue; questions.push({ type: "tf", q, options: ["صح", "غلط"], answer: a, explanation }); }
+    else { const options = (x.options || []).map(o => String(o).trim()).filter(Boolean); if (options.length < 2 || a < 0 || a >= options.length) continue; questions.push({ type: "mcq", q, options, answer: a, explanation }); }
+  }
+  if (blocks.length < 3 || questions.length < 3) throw new Error("رد الذكاء الاصطناعي ناقص، جرّب تاني");
+  return { blocks, questions };
+}
+function renderGrText(el, blocks) {
+  el.textContent = "";
+  const bold = t => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  let sec = null;
+  blocks.forEach(b => {
+    if (b.t === "h2" || !sec) { sec = document.createElement("section"); sec.className = "lsec"; el.appendChild(sec); }
+    if (b.t === "h2") { const h = document.createElement("h4"); h.className = "lh2"; h.dir = "auto"; h.textContent = b.v; sec.appendChild(h); return; }
+    let ul = null, buf = [];
+    const flush = () => { if (buf.length) { const d = document.createElement("div"); d.className = "lp"; d.dir = "auto"; d.innerHTML = bold(buf.join("\n")); sec.appendChild(d); buf = []; } };
+    for (const line of String(b.v).split("\n")) {
+      const m = line.match(/^\s*[-•*]\s+(.*)$/);
+      if (m) { flush(); if (!ul) { ul = document.createElement("ul"); ul.className = "ll"; sec.appendChild(ul); } const li = document.createElement("li"); li.dir = "auto"; li.innerHTML = bold(m[1]); ul.appendChild(li); }
+      else if (!line.trim()) { flush(); ul = null; }
+      else { ul = null; buf.push(line); }
+    }
+    flush();
+  });
+}
+function grQuiz(box, questions) {
+  const sh = a => [...a].sort(() => Math.random() - .5);
+  const qs = sh(questions).map(q => { if (q.type !== "mcq") return q; const o = sh(q.options.map((t, i) => ({ t, i }))); return { ...q, options: o.map(x => x.t), answer: o.findIndex(x => x.i === q.answer) }; });
+  let done = 0, score = 0;
+  box.innerHTML = qs.map((q, i) => `<div class="q" data-i="${i}"><div class="fr"><b>${i + 1}.</b> ${esc(q.q)}</div>${q.options.map((o, j) => `<button class="opt ${q.type === "mcq" ? "fr" : ""}" data-j="${j}">${esc(o)}</button>`).join("")}</div>`).join("") + `<div id="grRes"></div>`;
+  box.onclick = e => {
+    const t = e.target.closest(".opt"); if (!t) return;
+    const qEl = t.closest(".q"); if (qEl.dataset.done) return; qEl.dataset.done = 1;
+    const q = qs[+qEl.dataset.i], ok = +t.dataset.j === q.answer;
+    qEl.querySelectorAll(".opt")[q.answer].classList.add("right"); if (!ok) t.classList.add("wrong");
+    const fb = document.createElement("div"); fb.className = "fb " + (ok ? "ok" : "bad"); fb.dir = "auto";
+    fb.innerHTML = (ok ? "✅ إجابة صحيحة" : "❌ إجابة غلط — الصح: <b>" + esc(q.options[q.answer]) + "</b>") + (q.explanation ? `<div class="fbx">${esc(q.explanation)}</div>` : "");
+    qEl.appendChild(fb);
+    done++; if (ok) score++;
+    if (done === qs.length) {
+      const res = box.querySelector("#grRes");
+      res.innerHTML = `<div class="q"><b>نتيجتك:</b> <span class="score">${score}/${qs.length}</span> — ${Math.round(score / qs.length * 100)}%<div class="row"><button id="grRetry">🔁 أعد الأسئلة</button></div></div>`;
+      res.scrollIntoView({ block: "nearest" }); box.querySelector("#grRetry").onclick = () => grQuiz(box, questions);
+    }
+  };
+}
+async function grammarLesson(level, i) {
+  const g = GR[level][i], key = gkey(level, i), prev = GR[level][i - 1], next = GR[level][i + 1];
+  let v = null, c = null;
+  try { const s = await getDoc(doc(db, "grammarVideos", key)); if (s.exists()) v = s.data(); } catch (e) { console.warn(e); }
+  try { const s = await getDoc(doc(db, "grammarContent", key)); if (s.exists()) c = s.data(); } catch (e) { console.warn(e); }
+  window.lessonCtx = { title: `${g[0]} (${level})`, text: c ? (c.blocks || []).map(b => b.v).join("\n").slice(0, 3000) : g[1] };
+  const yq = "https://www.youtube.com/results?search_query=" + encodeURIComponent("شرح " + g[1] + " " + g[0] + " فرنسي");
+  const hasQ = !!(c && (c.questions || []).length);
+  const steps = [["🎬", "الفيديو"], ["📖", "الدرس"], ["📝", "الأسئلة"]];
+  app.innerHTML = `<div class="row"><button class="sec" id="grBack">← قواعد ${level}</button><h2 class="fr" style="flex:1;margin:0">${i + 1}. ${esc(g[0])}</h2></div>
+    <p class="mut">${esc(g[1])} · ${level}</p>
+    <div class="stepper" id="grSt">${steps.map((s, k) => `<button type="button" class="stp" data-k="${k}"><b>${k + 1}</b> ${s[0]} ${s[1]}</button>`).join("")}</div>
+    <section class="pane" id="p_gv">
+      ${v ? `<iframe id="grVid" src="about:blank" allowfullscreen></iframe><p class="mut">🎬 ${esc(v.title || "")}${v.channel ? " — " + esc(v.channel) : ""}${v.verified === false ? " ⚠ مش متحقق منه" : ""}</p>` : `<div class="q mut">لسه مفيش فيديو للدرس ده.</div>`}
+      <div class="row"><button class="sec" id="grYt">🔎 ابحث في يوتيوب</button>${editor ? `<button class="sec" id="grFind">🤖 دوّر على أفضل شرح</button><button class="sec" id="grSet">✏ ضع رابط</button>${v ? `<button class="del" id="grDel">حذف الفيديو</button>` : ""}` : ""}<button type="button" id="grToLesson">التالي: الدرس ←</button></div>
+    </section>
+    <section class="pane" id="p_gl">
+      ${c ? `<div class="row"><button class="sec" id="grAsk">🎓 اشرحلي أكتر بالذكاء الاصطناعي</button><span class="mut" style="flex:1">علّم بالقلم ✏️ على أي جزء مش فاهمه.</span></div><div class="text" id="grTxt"></div>` : `<div class="q mut">الدرس المكتوب لسه ماتعملش.</div><div class="row"><button id="grAsk">🎓 اشرحلي الدرس بالذكاء الاصطناعي</button></div>`}
+      <div class="row">${hasQ ? `<button type="button" id="grToQuiz">التالي: الأسئلة ←</button>` : ""}</div>
+    </section>
+    <section class="pane" id="p_gq">${hasQ ? `<div id="grQz"></div>` : `<div class="q mut">مفيش أسئلة للدرس ده لسه.</div>`}</section>
+    ${editor ? `<div class="row"><button class="sec" id="grGen">${c ? "🔄 أعد توليد الدرس والأسئلة" : "🤖 ولّد الدرس والأسئلة"}</button></div>` : ""}
+    <div id="grMsg" class="mut"></div>
+    <div class="row">${prev ? `<button class="sec" id="grPrev">→ السابق</button>` : ""}${next ? `<button id="grNext">التالي ←</button>` : ""}</div>`;
+  const panes = ["p_gv", "p_gl", "p_gq"].map(id => $("#" + id)), btns = [...app.querySelectorAll("#grSt .stp")], vid = $("#grVid");
+  const go = (n, quiet) => {
+    panes.forEach((p, k) => p.classList.toggle("show", k === n)); btns.forEach((b, k) => b.classList.toggle("on", k === n));
+    if (vid) vid.src = n === 0 ? `https://www.youtube.com/embed/${v.id}` : "about:blank";
+    if (!quiet) $("#grSt").scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+  btns.forEach((b, k) => b.onclick = () => go(k));
+  if (c) renderGrText($("#grTxt"), c.blocks || []);
+  if (hasQ) grQuiz($("#grQz"), c.questions);
+  go(v ? 0 : 1, true);
+  $("#grToLesson").onclick = () => go(1);
+  if ($("#grToQuiz")) $("#grToQuiz").onclick = () => go(2);
+  $("#grBack").onclick = () => { window.lessonCtx = null; grammarPage(level); };
+  $("#grYt").onclick = () => window.open(yq, "_blank", "noopener");
+  $("#grAsk").onclick = () => askAI(`اشرحلي درس القواعد الفرنسي "${g[0]}" (${g[1]}) لمستوى ${level} ببساطة شديدة: القاعدة، 5 أمثلة مترجمة، وأهم الأخطاء الشائعة.`);
+  if ($("#grPrev")) $("#grPrev").onclick = () => grammarLesson(level, i - 1);
+  if ($("#grNext")) $("#grNext").onclick = () => grammarLesson(level, i + 1);
+  if (editor) {
+    $("#grFind").onclick = async () => {
+      const msg = $("#grMsg"); $("#grFind").disabled = true; msg.className = "mut"; msg.textContent = "🔎 الذكاء الاصطناعي بيدوّر على أفضل شرح...";
+      try { await saveGrVideo(key, await findGrammarVideo(g, level)); grammarLesson(level, i); }
+      catch (e) { console.warn(e); msg.className = "danger"; msg.textContent = "تعذر البحث: " + (e.message || e.code || "").slice(0, 160) + " — تقدر تحط الرابط بإيدك."; $("#grFind").disabled = false; }
+    };
+    $("#grSet").onclick = () => form("رابط فيديو الشرح", [{ n: "u", l: "رابط يوتيوب" }], async f => {
+      const id = ytId(f.u); if (!id) return alert("الرابط مش صحيح");
+      const info = await ytInfo(id);
+      if (info === null && !confirm("الفيديو ده غالبًا مش متاح للتضمين. تحفظه برضه؟")) return;
+      await saveGrVideo(key, { id, ...(info || {}) }); grammarLesson(level, i);
+    });
+    if (v) $("#grDel").onclick = async () => { if (confirm("حذف الفيديو؟")) { await deleteDoc(doc(db, "grammarVideos", key)); grammarLesson(level, i); } };
+    $("#grGen").onclick = async () => {
+      if (c && !confirm("الدرس والأسئلة الحاليين هيتمسحوا ويتعمل جديد. تكمل؟")) return;
+      const msg = $("#grMsg"); $("#grGen").disabled = true; msg.className = "mut"; msg.textContent = "⏳ الذكاء الاصطناعي بيكتب الدرس والأسئلة... ممكن ياخد نص دقيقة";
+      try { await saveGrContent(key, await generateGrammar(g, level)); grammarLesson(level, i); }
+      catch (e) { console.warn(e); msg.className = "danger"; msg.textContent = "تعذر التوليد: " + (e.message || e.code || "").slice(0, 200); $("#grGen").disabled = false; }
+    };
+  }
+}
+$("#n10").onclick = () => grammarPage();
 </script>
 </body>
 </html>
