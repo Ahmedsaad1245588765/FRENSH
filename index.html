@@ -882,18 +882,49 @@ async function generateExam(l, c) {
 }
 
 /* ---------- النطق الصوتي ---------- */
-let lessonSpeech = null;
+let ttsRun = 0, ttsState = "idle", ttsQueue = [], ttsIdx = 0, ttsBtn = null;
+const TTS_LABEL = "🔊 تشغيل الدرس";
+function ttsChunks(text) {
+  const clean = String(text || "").replace(/<[^>]*>/g, " ").replace(/^\s*(?:[-•*]|\d+[.)])\s+/gm, "").replace(/[ \t]+/g, " ");
+  const parts = clean.split(/(?<=[.!?…:;])\s+|\n+/).map(x => x.trim()).filter(Boolean), out = [];
+  let cur = "";
+  for (const p of parts) {
+    if (p.length > 170) {
+      if (cur) { out.push(cur); cur = ""; }
+      let w = ""; for (const x of p.split(" ")) { if (w && (w + " " + x).length > 170) { out.push(w); w = x; } else w = w ? w + " " + x : x; }
+      if (w) out.push(w);
+    } else if (cur && (cur + " " + p).length > 170) { out.push(cur); cur = p; }
+    else cur = cur ? cur + " " + p : p;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+function frVoice() { const vs = speechSynthesis.getVoices().filter(v => /^fr(-|_)/i.test(v.lang)); return vs.find(v => v.localService) || vs[0] || null; }
+function stopLessonSpeech() {
+  ttsRun++; ttsState = "idle"; ttsIdx = 0; ttsQueue = [];
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+  if (ttsBtn) ttsBtn.textContent = TTS_LABEL;
+}
+function ttsPlay(run) {
+  if (run !== ttsRun) return;
+  if (ttsIdx >= ttsQueue.length) { ttsState = "idle"; ttsIdx = 0; if (ttsBtn) ttsBtn.textContent = TTS_LABEL; return; }
+  const u = new SpeechSynthesisUtterance(ttsQueue[ttsIdx]);
+  u.lang = "fr-FR"; u.rate = 0.9;
+  const v = frVoice(); if (v) u.voice = v;
+  u.onend = () => { if (run === ttsRun) { ttsIdx++; ttsPlay(run); } };
+  u.onerror = e => { if (run !== ttsRun || (e && (e.error === "interrupted" || e.error === "canceled"))) return; ttsIdx++; ttsPlay(run); };
+  speechSynthesis.speak(u);
+}
 function speakLesson(text, button) {
   if (!("speechSynthesis" in window)) return alert("النطق الصوتي غير مدعوم في هذا المتصفح");
-  if (speechSynthesis.speaking && !speechSynthesis.paused) { speechSynthesis.pause(); button.textContent="▶ استكمال الدرس"; return; }
-  if (speechSynthesis.paused) { speechSynthesis.resume(); button.textContent="⏸ إيقاف مؤقت"; return; }
-  speechSynthesis.cancel();
-  lessonSpeech = new SpeechSynthesisUtterance(String(text || "").replace(/<[^>]*>/g, " "));
-  lessonSpeech.lang = "fr-FR"; lessonSpeech.rate = 0.88; lessonSpeech.pitch = 1;
-  const voice = speechSynthesis.getVoices().find(v => /^fr(-|_)/i.test(v.lang));
-  if (voice) lessonSpeech.voice = voice;
-  lessonSpeech.onend = lessonSpeech.onerror = () => { button.textContent="🔊 تشغيل الدرس"; lessonSpeech=null; };
-  button.textContent="⏸ إيقاف مؤقت"; speechSynthesis.speak(lessonSpeech);
+  ttsBtn = button;
+  if (ttsState === "playing") { ttsRun++; speechSynthesis.cancel(); ttsState = "paused"; button.textContent = "▶ استكمال الدرس"; return; }
+  if (ttsState === "paused") { ttsState = "playing"; button.textContent = "⏸ إيقاف مؤقت"; ttsPlay(++ttsRun); return; }
+  ttsQueue = ttsChunks(text); if (!ttsQueue.length) return;
+  ttsIdx = 0; speechSynthesis.cancel(); ttsState = "playing"; button.textContent = "⏸ إيقاف مؤقت";
+  const run = ++ttsRun;
+  if (speechSynthesis.getVoices().length) setTimeout(() => ttsPlay(run), 80);
+  else { let done = false; const go = () => { if (!done) { done = true; ttsPlay(run); } }; speechSynthesis.addEventListener("voiceschanged", go, { once: true }); setTimeout(go, 600); }
 }
 
 /* ---------- الدرس ---------- */
@@ -913,7 +944,7 @@ async function lesson(l, sub, startKey) {
     ${hasVideo ? `<section class="pane" id="p_video"><div class="vsw">${yt ? `<button type="button" class="vbtn on" data-v="fr" title="الفيديو بالفرنسية"><span class="vi">FR</span> فرنسي</button>` : ""}${ytA ? `<button type="button" class="vbtn${yt ? "" : " on"}" data-v="ar" title="الفيديو بالعربي"><span class="vi">ع</span> عربي</button>` : ""}</div><iframe id="vid" src="about:blank" allowfullscreen></iframe><div class="row"><button type="button" data-next="1">التالي: الدرس ←</button></div></section>` : ""}
     <section class="pane" id="p_lesson"><div class="row"><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button><span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div><div class="text fr" id="txt"></div><div class="row"><button class="sec" id="completeLesson">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: الاختبار ←</button></div></section>
     <section class="pane" id="p_exam"><h3>الاختبار</h3><div class="q" id="quizBar"><span id="quizStatus">${qs.length ? `الاختبار: ${qs.length} سؤال — الدرجة الكلية ${totalPts} — المدة ${Math.round(examSecs / 60)} دقيقة — النجاح من ${passPct}%` : "مفيش اختبار للدرس ده لسه."}</span><span id="quizTimer" class="score" style="display:none"></span><div class="question-progress" style="flex:1;min-width:120px"><div class="progress-track"><div id="quizFill" class="progress-fill" style="width:0%"></div></div></div><button id="startQuiz">ابدأ الاختبار</button><button id="finishQuiz" class="sec" style="display:none">إنهاء الاختبار</button></div><div id="quizResult"></div><div id="qs" style="display:none"></div></section>`;
-  $("#back").onclick = () => { speechSynthesis.cancel(); window.lessonCtx = null; clearInterval(quizTimer); lessons(sub); };
+  $("#back").onclick = () => { stopLessonSpeech(); window.lessonCtx = null; clearInterval(quizTimer); lessons(sub); };
   $("#speakLesson").onclick = () => speakLesson(l.text || "", $("#speakLesson"));
   if (user) await setDoc(doc(db, "progress", `${user.uid}_${l.id}`), { uid:user.uid, lessonId:l.id, subjectId:sub.id, lastOpened:serverTimestamp() }, {merge:true});
   $("#completeLesson").onclick = async () => { if(user){ await setDoc(doc(db,"progress",`${user.uid}_${l.id}`), {uid:user.uid, lessonId:l.id, subjectId:sub.id, completed:true, completedAt:serverTimestamp()}, {merge:true}); $("#completeLesson").textContent="✓ تم إتمام الدرس"; } };
@@ -926,6 +957,7 @@ async function lesson(l, sub, startKey) {
   let maxStep = (editor || myAtts.length) ? steps.length - 1 : startI, curStep = -1;
   const go = i => {
     if (curStep >= 0 && steps[curStep].k === "video" && vid) vid.src = "about:blank";
+    if (curStep >= 0 && steps[curStep].k === "lesson") stopLessonSpeech();
     curStep = i; maxStep = Math.max(maxStep, i);
     stepEls.forEach((e, j) => e.classList.toggle("show", j === i));
     stpBtns.forEach((b, j) => { b.classList.toggle("on", j === i); b.disabled = j > maxStep; b.title = j > maxStep ? "كمّل الخطوة اللي قبلها الأول" : ""; });
@@ -1096,8 +1128,8 @@ async function askPage() {
 /* ---------- النطق والترجمة والكاردز ---------- */
 function speak(t) {
   if (!("speechSynthesis" in window)) return;
-  speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = "fr-FR"; u.rate = .85;
-  const v = speechSynthesis.getVoices().find(v => v.lang.startsWith("fr")); if (v) u.voice = v; speechSynthesis.speak(u);
+  stopLessonSpeech(); const u = new SpeechSynthesisUtterance(t); u.lang = "fr-FR"; u.rate = .85;
+  const v = frVoice(); if (v) u.voice = v; speechSynthesis.speak(u);
 }
 const hash = t => { let h = 0; for (const c of t) h = (h * 31 + c.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
 const translationPending = new Map();
