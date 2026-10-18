@@ -52,7 +52,7 @@ h2,h3{margin:0}
 .n{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--navy);color:var(--gold);font-family:Fraunces,serif}
 .text{background:#fff;border-radius:12px;padding:28px;font-size:1.4rem;line-height:2;white-space:pre-wrap;box-shadow:0 1px 3px rgba(20,38,79,.12)}
 .tts-sentence{border-radius:7px;transition:background .2s ease,box-shadow .2s ease;color:inherit}
-.tts-sentence.reading{background:rgba(255,209,102,.28);box-shadow:0 0 0 3px rgba(255,209,102,.12);color:#fff1bd}
+.tts-sentence.reading{background:rgba(255,209,102,.28);box-shadow:0 0 0 3px rgba(255,209,102,.12);color:inherit!important;text-shadow:none}
 .w{cursor:pointer;border-radius:4px}.w:hover{background:#f3e3b8}
 iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:12px;margin:12px 0}
 .q{background:#fff;border-radius:12px;padding:20px;margin:14px 0;font-size:1.1rem;box-shadow:0 1px 3px rgba(20,38,79,.12)}
@@ -254,12 +254,30 @@ body.night .drop{background:#0d1833;color:#dbe6ff;border-color:#3a5aa0}
 .lh1::after{content:"";display:block;width:72px;height:4px;border-radius:4px;margin-top:12px;background:linear-gradient(90deg,#1f4da8,#e0444d)}
 .lp{margin:0 0 14px;padding:14px 20px;background:#f6f9ff;border:1px solid #e3ebf8;border-radius:14px;line-height:2.1;text-align:start}
 .lp:last-child{margin-bottom:0}
+.lesson-nav-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0;padding:10px 0}
+.lesson-nav-actions.lesson-top{border-bottom:1px solid rgba(31,77,168,.14)}
+.lesson-nav-actions.bottom{border-top:1px solid rgba(31,77,168,.14);margin-top:18px}
+body.night .lesson-nav-actions.lesson-top,body.night .lesson-nav-actions.bottom{border-color:rgba(255,255,255,.14)}
+.paragraph-tools{display:flex;justify-content:flex-start;margin-bottom:5px;direction:ltr}
+.pti{border:0;background:transparent!important;box-shadow:none!important;color:#8a96ad;padding:2px 6px;font-size:.82rem;cursor:pointer;opacity:.6}
+.pti:hover{color:#1f4da8;opacity:1;transform:none;filter:none}
+.bilingual-pair{display:grid;grid-template-columns:1fr 1fr;gap:14px;direction:ltr}
+.bilingual-side{min-width:0;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.5);line-height:2.1}
+.bilingual-side.ar{direction:rtl;text-align:right;border-inline-start:2px solid #e0444d}
+.bilingual-side.fr{direction:ltr;text-align:left;border-inline-start:2px solid #1f4da8}
+.pair-word{border-radius:5px;cursor:pointer;transition:background .15s ease,box-shadow .15s ease}
+.pair-word.pair-active{background:rgba(255,209,102,.42);box-shadow:0 0 0 2px rgba(255,180,60,.16)}
+.bilingual-loading{color:#8a96ad;font-size:.9rem}
 .ll{margin:0 0 14px;padding:12px 22px 12px 42px;background:#f6f9ff;border:1px solid #e3ebf8;border-radius:14px;line-height:2.1}
 .ll li{margin:4px 0;padding-inline-start:4px}
 .ll li::marker{color:#e0444d;font-weight:800}
 .lh2+.lp,.lh2+.ll{margin-top:4px}
 body.night .lp,body.night .ll{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
+body.night .bilingual-side{background:rgba(0,0,0,.16)}
+body.night .pti{color:#9fb3da}
+body.night .pti:hover{color:#dbe6ff}
 @media(max-width:600px){.text{padding:18px 12px}.lp{padding:11px 14px}.ll{padding:10px 14px 10px 34px}}
+@media(max-width:600px){.bilingual-pair{grid-template-columns:1fr;gap:8px}.bilingual-side{padding:8px 10px}.bilingual-side.ar{border-inline-start:0;border-top:2px solid #e0444d}.bilingual-side.fr{border-inline-start:0;border-top:2px solid #1f4da8}}
 .lh1{font-size:1.9rem;font-weight:800;margin:6px 0 10px;line-height:1.4}
 .lh2{font-size:1.4rem;font-weight:800;margin:18px 0 6px;line-height:1.5;color:#1f4da8}
 body.night .lh2{color:#8fb4ff}
@@ -325,6 +343,15 @@ input,textarea,select{padding:8px 10px;font-size:16px}
 .login-shell{padding:24px 14px}.login-copy h1{font-size:2.1rem}.login-copy p{font-size:.92rem}.login-card{padding:22px 16px}.login-card h2{font-size:1.5rem}.login-logo-ring{width:60px;height:60px;font-size:1.9rem}
 .mini-stat{padding:7px 10px}.mini-stat b{font-size:.95rem}
 iframe{border-radius:10px;margin:8px 0}
+}
+/* floating lesson controls */
+#speakLesson{position:fixed;right:20px;bottom:20px;z-index:39;display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:10px 16px;box-shadow:0 10px 26px rgba(33,77,173,.3)}
+#aiFab{bottom:20px;left:20px}
+#penFab{top:auto;bottom:88px;left:25px;transform:none}
+@media(max-width:600px){
+  #speakLesson{right:14px;bottom:14px;padding:9px 13px;font-size:.86rem}
+  #aiFab{bottom:14px;left:14px}
+  #penFab{bottom:68px;left:18px}
 }
 </style>
 </head>
@@ -549,9 +576,47 @@ async function compressImage(file) {
   }
   throw new Error("الصورة كبيرة جدًا، جرّب صورة أصغر");
 }
+async function paragraphTranslation(text) {
+  const prompt = `ترجم الفقرة الفرنسية التالية إلى العربية ترجمة طبيعية وواضحة مع الحفاظ على ترتيب المعنى. لا تضف شرحًا خارج JSON. أعد JSON فقط بالشكل: {"ar":"الترجمة العربية"}\nالفقرة الفرنسية:\n${text}`;
+  const j = await askJSON(prompt);
+  if (!j || !String(j.ar || "").trim()) throw new Error("لم تصل ترجمة صالحة");
+  return String(j.ar).trim();
+}
+function renderBilingualParagraph(box, french, arabic) {
+  box.classList.add("bilingual-pair"); box.innerHTML = "";
+  const makeSide = (value, lang) => {
+    const side = document.createElement("div"); side.className = `bilingual-side ${lang}`; side.lang = lang === "ar" ? "ar" : "fr";
+    let index = 0;
+    String(value).split(/(\p{L}[\p{L}\p{M}'’\-]*)/gu).forEach(part => {
+      if (/^\p{L}/u.test(part)) { const w = document.createElement("span"); w.className = "pair-word"; w.dataset.pair = index++; w.textContent = part; side.appendChild(w); }
+      else if (part) side.appendChild(document.createTextNode(part));
+    });
+    side.onclick = e => { const word = e.target.closest(".pair-word"); if (!word) return; const pair = word.dataset.pair; box.querySelectorAll(".pair-word").forEach(x => x.classList.remove("pair-active")); box.querySelectorAll(`.pair-word[data-pair="${pair}"]`).forEach(x => x.classList.add("pair-active")); };
+    return side;
+  };
+  box.append(makeSide(french, "fr"), makeSide(arabic, "ar"));
+}
 function renderParas(sec, text) {
   let buf = [], list = null;
-  const flushP = () => { const t = buf.join("\n").trim(); buf = []; if (t) { const n = document.createElement("div"); n.className = "lp"; sec.appendChild(n); clickable(n, t, true); } };
+  const flushP = () => {
+    const t = buf.join("\n").trim(); buf = [];
+    if (!t) return;
+    const n = document.createElement("div"); n.className = "lp"; sec.appendChild(n);
+    const tools = document.createElement("div"); tools.className = "paragraph-tools";
+    const btn = document.createElement("button"); btn.type = "button"; btn.className = "pti"; btn.title = "ترجمة الفقرة"; btn.textContent = "🌐 ترجمة الفقرة";
+    tools.appendChild(btn); n.appendChild(tools);
+    const body = document.createElement("div"); n.appendChild(body); clickable(body, t, true);
+    const translateClick = async e => {
+      e.stopPropagation(); if (n.classList.contains("bilingual-pair")) return;
+      btn.disabled = true; btn.textContent = "⏳ جاري الترجمة...";
+      try {
+        const ar = await paragraphTranslation(t); renderBilingualParagraph(body, t, ar); btn.textContent = "↩ النص الأصلي"; btn.disabled = false;
+        btn.onclick = ev => { ev.stopPropagation(); body.className = ""; body.innerHTML = ""; clickable(body, t, true); btn.textContent = "🌐 ترجمة الفقرة"; btn.onclick = translateClick; };
+      }
+      catch (err) { btn.disabled = false; btn.textContent = "🌐 ترجمة الفقرة"; alert("تعذر ترجمة الفقرة الآن، حاول مرة أخرى."); }
+    };
+    btn.onclick = translateClick;
+  };
   for (const raw of String(text).split("\n")) {
     const line = raw.trimEnd(), m = line.match(/^\s*(?:([-•*])|(\d+)[.)])\s+(.*)$/);
     if (m) {
@@ -1024,12 +1089,12 @@ async function lesson(l, sub, startKey) {
   app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2>${editor ? `<button id="examSetup">📊 لوحة الاختبار</button>` : ""}</div>
     <div class="stepper" id="stepper">${steps.map((s, i) => `<button type="button" class="stp" data-step="${i}"><b>${i + 1}</b> ${s.i} ${s.t}</button>`).join("")}</div>
     ${hasVideo ? `<section class="pane" id="p_video"><div class="vsw">${yt ? `<button type="button" class="vbtn on" data-v="fr" title="الفيديو بالفرنسية"><span class="vi">FR</span> فرنسي</button>` : ""}${ytA ? `<button type="button" class="vbtn${yt ? "" : " on"}" data-v="ar" title="الفيديو بالعربي"><span class="vi">ع</span> عربي</button>` : ""}</div><iframe id="vid" src="about:blank" allowfullscreen></iframe><div class="row"><button type="button" data-next="1">التالي: الدرس ←</button></div></section>` : ""}
-    <section class="pane" id="p_lesson"><div class="row"><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button><span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div><div id="ttsStatus" class="mut" style="margin:-4px 0 10px;font-size:.88rem"></div><div class="text fr" id="txt"></div><div class="row"><button class="sec" id="completeLesson">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: الاختبار ←</button></div></section>
+    <section class="pane" id="p_lesson"><div class="row"><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button><span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div><div id="ttsStatus" class="mut" style="margin:-4px 0 10px;font-size:.88rem"></div><div class="lesson-nav-actions lesson-top"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: الاختبار ←</button></div><div class="text fr" id="txt"></div><div class="lesson-nav-actions bottom"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: الاختبار ←</button></div></section>
     <section class="pane" id="p_exam"><h3>الاختبار</h3><div class="q" id="quizBar"><span id="quizStatus">${qs.length ? `الاختبار: ${qs.length} سؤال — الدرجة الكلية ${totalPts} — المدة ${Math.round(examSecs / 60)} دقيقة — النجاح من ${passPct}%` : "مفيش اختبار للدرس ده لسه."}</span><span id="quizTimer" class="score" style="display:none"></span><div class="question-progress" style="flex:1;min-width:120px"><div class="progress-track"><div id="quizFill" class="progress-fill" style="width:0%"></div></div></div><button id="startQuiz">ابدأ الاختبار</button><button id="finishQuiz" class="sec" style="display:none">إنهاء الاختبار</button></div><div id="quizResult"></div><div id="qs" style="display:none"></div></section>`;
   $("#back").onclick = () => { stopLessonSpeech(); window.lessonCtx = null; clearInterval(quizTimer); lessons(sub); };
   $("#speakLesson").onclick = () => speakLesson(l.text || "", $("#speakLesson"));
   if (user) await setDoc(doc(db, "progress", `${user.uid}_${l.id}`), { uid:user.uid, lessonId:l.id, subjectId:sub.id, lastOpened:serverTimestamp() }, {merge:true});
-  $("#completeLesson").onclick = async () => { if(user){ await setDoc(doc(db,"progress",`${user.uid}_${l.id}`), {uid:user.uid, lessonId:l.id, subjectId:sub.id, completed:true, completedAt:serverTimestamp()}, {merge:true}); $("#completeLesson").textContent="✓ تم إتمام الدرس"; } };
+  app.querySelectorAll(".completeLessonBtn").forEach(btn => btn.onclick = async () => { if(user){ await setDoc(doc(db,"progress",`${user.uid}_${l.id}`), {uid:user.uid, lessonId:l.id, subjectId:sub.id, completed:true, completedAt:serverTimestamp()}, {merge:true}); app.querySelectorAll(".completeLessonBtn").forEach(x => x.textContent="✓ تم إتمام الدرس"); } });
   renderLessonBody($("#txt"), l, imgMap);
   window.lessonCtx = { title: l.title, text: (l.text || "").slice(0, 3000) };
   /* ---- stepper: video -> lesson -> exam ---- */
