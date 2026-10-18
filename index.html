@@ -264,7 +264,7 @@ body.night .lesson-nav-actions.lesson-top,body.night .lesson-nav-actions.bottom{
 .pti{border:0;background:transparent!important;box-shadow:none!important;color:#8a96ad;padding:2px 6px;font-size:.82rem;cursor:pointer;opacity:.6}
 .pti:hover{color:#1f4da8;opacity:1;transform:none;filter:none}
 .bilingual-pair{display:grid;grid-template-columns:1fr 1fr;gap:14px;direction:ltr}
-.bilingual-side{min-width:0;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.5);line-height:2.1}
+.bilingual-side{min-width:0;max-width:100%;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.5);line-height:2.1;font-size:clamp(.78rem,1.45vw,1.15rem);overflow-wrap:anywhere;word-break:break-word;hyphens:auto}
 .bilingual-side.ar{direction:rtl;text-align:right;border-inline-start:2px solid #e0444d}
 .bilingual-side.fr{direction:ltr;text-align:left;border-inline-start:2px solid #1f4da8}
 .pair-word{border-radius:5px;cursor:pointer;transition:background .15s ease,box-shadow .15s ease}
@@ -614,12 +614,15 @@ async function translateAllParagraphs(root, button) {
   }
   button.disabled = true; button.textContent = "⏳ جاري ترجمة الدرس...";
   const pending = bodies.filter(body => !body.classList.contains("bilingual-pair")); let failed = 0;
-  for (let i = 0; i < pending.length; i += 4) {
-    const batch = pending.slice(i, i + 4), texts = batch.map(body => body.dataset.french || body.textContent.trim());
-    let arabic;
-    try { arabic = await paragraphTranslations(texts); }
-    catch (e) { console.warn("batch translation failed", e); arabic = await Promise.all(texts.map(t => paragraphTranslation(t).catch(err => { console.warn("paragraph translation failed", err); failed++; return ""; }))); }
-    batch.forEach((body, j) => { if (arabic[j]) renderBilingualParagraph(body, texts[j], arabic[j]); });
+  for (let i = 0; i < pending.length; i++) {
+    const body = pending[i], french = body.dataset.french || body.textContent.trim();
+    button.textContent = `⏳ ترجمة البلوك ${i + 1} من ${pending.length}`;
+    let arabic = "";
+    for (let attempt = 0; attempt < 2 && !arabic; attempt++) {
+      try { arabic = await paragraphTranslation(french); }
+      catch (e) { console.warn(`paragraph ${i + 1} translation failed`, e); if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 1200)); }
+    }
+    if (arabic) renderBilingualParagraph(body, french, arabic); else failed++;
   }
   root.classList.add("all-bilingual"); button.textContent = bodies.every(body => body.classList.contains("bilingual-pair")) ? "↩ إظهار الفرنسي فقط" : "🌐 إعادة ترجمة الفقرات غير المكتملة";
   if (failed) alert(`تمت ترجمة معظم الفقرات، وتعذر ترجمة ${failed} فقرة. اضغط الزر مرة أخرى لإعادة المحاولة.`);
