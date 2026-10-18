@@ -368,7 +368,7 @@ async function askJSON(prompt, tries = 2, parts = null) {
     try {
       const t = (await examModel.generateContent(parts ? [prompt, ...parts] : prompt)).response.text();
       try { return JSON.parse(t); } catch { const a = t.indexOf("{"), b = t.lastIndexOf("}"); if (a >= 0 && b > a) return JSON.parse(t.slice(a, b + 1)); throw new Error("رد غير مفهوم من الذكاء الاصطناعي"); }
-    } catch (e) { last = e; console.warn("askJSON try", i + 1, e); }
+    } catch (e) { last = e; console.warn("askJSON try", i + 1, e); if (i < tries - 1 && /429|quota|exceeded|resource/i.test(String(e.message || e))) await new Promise(r => setTimeout(r, 8000 * (i + 1))); }
   }
   throw last;
 }
@@ -1420,7 +1420,8 @@ async function ytInfo(id) {
 }
 async function findGrammarVideo(g, level) {
   const prompt = `ابحث في الإنترنت عن أفضل فيديو يوتيوب يشرح درس القواعد الفرنسي التالي لمستوى ${level} (CEFR): "${g[0]}" (${g[1]}). الأفضل فيديو بشرح عربي واضح، وإن لم يوجد فبالفرنسية البسيطة للمبتدئين، ومدته بين 3 و20 دقيقة، من قناة تعليمية معروفة. اكتب 3 روابط كاملة فقط بصيغة https://www.youtube.com/watch?v=XXXXXXXXXXX، كل رابط في سطر مع عنوان الفيديو. لا تخترع روابط.`;
-  const txt = (await searchModel.generateContent(prompt)).response.text();
+  let txt = "";
+  for (let k = 0; k < 3; k++) { try { txt = (await searchModel.generateContent(prompt)).response.text(); break; } catch (e) { if (k === 2 || !/429|quota|exceeded/i.test(String(e.message || e))) throw e; await new Promise(r => setTimeout(r, 8000 * (k + 1))); } }
   const ids = [...new Set([...txt.matchAll(/(?:v=|youtu\.be\/)([\w-]{11})/g)].map(m => m[1]))];
   for (const id of ids.slice(0, 4)) { const info = await ytInfo(id); if (info) return { id, ...info }; }
   throw new Error("لم أجد فيديو صالح للتضمين");
@@ -1445,7 +1446,7 @@ async function grammarPage(level = "A1") {
       const key = gkey(level, i); if (cont[key]) continue;
       msg.textContent = `⏳ ${i + 1}/${items.length}: ${items[i][0]} (تم ${ok}، فشل ${fail})`;
       try { await saveGrContent(key, await generateGrammar(items[i], level)); ok++; } catch (e) { console.warn(e); fail++; last = (e.message || e.code || "").slice(0, 120); }
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 6000));
     }
     msg.textContent = `انتهى: ${ok} درس اتولّد${fail ? "، و" + fail + " فشل (" + last + ")" : ""}`;
     if (ok) setTimeout(() => grammarPage(level), 1500); else btn.disabled = false;
@@ -1456,7 +1457,7 @@ async function grammarPage(level = "A1") {
       const key = gkey(level, i); if (vids[key]) continue;
       msg.textContent = `🔎 ${i + 1}/${items.length}: ${items[i][0]} (تم ${ok}، فشل ${fail})`;
       try { await saveGrVideo(key, await findGrammarVideo(items[i], level)); ok++; } catch (e) { console.warn(e); fail++; last = (e.message || e.code || "").slice(0, 120); }
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 6000));
     }
     msg.textContent = `انتهى: ${ok} فيديو اتضاف${fail ? "، و" + fail + " فشل (" + last + ")" : ""}`;
     if (ok) setTimeout(() => grammarPage(level), 1500); else btn.disabled = false;
@@ -1474,7 +1475,7 @@ async function generateGrammar(g, level) {
 5) "نصيحة للحفظ" جملة أو جملتان.
 ثم ضع 8 أسئلة عن الدرس نفسه: 6 اختيار من متعدد (type "mcq" و4 اختيارات و"answer" رقم الصحيح ويبدأ من 0) و2 صح/غلط (type "tf" و"options" فارغة و"answer" 0 للعبارة الصحيحة و1 للخاطئة). الأسئلة بالفرنسية البسيطة، ولكل سؤال "explanation" بالعربية المبسطة في جملتين تشرح الإجابة الصحيحة. لا تكرر الأسئلة. تأكد أن كل الأمثلة والإجابات الصحيحة سليمة لغويًا.
 أعد JSON فقط: {"blocks":[{"t":"h2","v":"..."},{"t":"p","v":"..."}],"questions":[{"type":"mcq","q":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."}]}`;
-  const j = await askJSON(prompt);
+  const j = await askJSON(prompt, 3);
   const blocks = (j.blocks || []).map(b => ({ t: b.t === "h2" ? "h2" : "p", v: String(b.v ?? b.text ?? "").trim() })).filter(b => b.v);
   const questions = [];
   for (const x of (j.questions || [])) {
