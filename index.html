@@ -695,7 +695,7 @@ async function lessonEditor(x, sub, done) {
       <div class="row"><button type="button" id="aiRun">✨ نظّم الدرس</button><span id="aiMsg" class="mut"></span></div>
     </div>
     <div id="lbBlocks"></div>
-    <div class="row"><button type="button" class="sec" data-add="h1">+ عنوان رئيسي</button><button type="button" class="sec" data-add="h2">+ عنوان فرعي</button><button type="button" class="sec" data-add="p">+ فقرة</button><button type="button" class="sec" data-add="img">+ صورة</button><button type="button" id="makeTranslations">🌐 أضف ترجمة البلوكات</button></div>
+    <div class="row"><button type="button" class="sec" data-add="h1">+ عنوان رئيسي</button><button type="button" class="sec" data-add="h2">+ عنوان فرعي</button><button type="button" class="sec" data-add="p">+ فقرة</button><button type="button" class="sec" data-add="img">+ صورة</button><button type="button" id="makeTranslations">🌐 ترجم كل البلوكات</button></div>
     <input type="file" accept="image/*" id="lbFile" style="display:none">
     <p class="danger" id="lbErr"></p>
     <div class="row"><button id="lbSave">حفظ</button><button type="button" class="sec" id="lbCancel">إلغاء</button></div></form>`;
@@ -730,7 +730,7 @@ async function lessonEditor(x, sub, done) {
       try { const tr = await paragraphTranslation(textBlocks[i].v.trim()); textBlocks[i].a = tr.ar; textBlocks[i].pairs = tr.pairs; }
       catch (ex) { failed++; console.warn("editor translation failed", ex); }
     }
-    draw(); const fresh = d.querySelector("#makeTranslations"); fresh.disabled = false; fresh.textContent = "🌐 أضف ترجمة البلوكات"; err(failed ? `تعذر ترجمة ${failed} بلوك — اضغط الزر لإعادة المحاولة` : "✅ تمت إضافة ترجمة البلوكات");
+    draw(); const fresh = d.querySelector("#makeTranslations"); fresh.disabled = false; fresh.textContent = "🌐 ترجم كل البلوكات"; err(failed ? `تعذر ترجمة ${failed} بلوك — اضغط الزر لإعادة المحاولة` : "✅ تمت ترجمة كل البلوكات — اضغط حفظ لحفظها مع الدرس");
   };
   box.onclick = e => {
     const w = e.target.closest(".q"); if (!w || w.parentElement !== box) return;
@@ -1131,11 +1131,10 @@ async function lesson(l, sub, startKey) {
   app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2>${editor ? `<button id="examSetup">📊 لوحة الاختبار</button>` : ""}</div>
     <div class="stepper" id="stepper">${steps.map((s, i) => `<button type="button" class="stp" data-step="${i}"><b>${i + 1}</b> ${s.i} ${s.t}</button>`).join("")}</div>
     ${hasVideo ? `<section class="pane" id="p_video"><div class="vsw">${yt ? `<button type="button" class="vbtn on" data-v="fr" title="الفيديو بالفرنسية"><span class="vi">FR</span> فرنسي</button>` : ""}${ytA ? `<button type="button" class="vbtn${yt ? "" : " on"}" data-v="ar" title="الفيديو بالعربي"><span class="vi">ع</span> عربي</button>` : ""}</div><iframe id="vid" src="about:blank" allowfullscreen></iframe><div class="row"><button type="button" data-next="1">التالي: الدرس ←</button></div></section>` : ""}
-    <section class="pane" id="p_lesson"><div class="row"><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button><span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div><div id="ttsStatus" class="mut" style="margin:-4px 0 10px;font-size:.88rem"></div><div class="translate-all-row"><button type="button" class="sec" id="translateAll">🌐 ترجمة كل الفقرات</button></div><div class="lesson-nav-actions lesson-top"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: الاختبار ←</button></div><div class="text fr" id="txt"></div><div class="lesson-nav-actions bottom"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: الاختبار ←</button></div></section>
+    <section class="pane" id="p_lesson"><div class="row"><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button><span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div><div id="ttsStatus" class="mut" style="margin:-4px 0 10px;font-size:.88rem"></div><div class="lesson-nav-actions lesson-top"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: الاختبار ←</button></div><div class="text fr" id="txt"></div><div class="lesson-nav-actions bottom"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: الاختبار ←</button></div></section>
     <section class="pane" id="p_exam"><h3>الاختبار</h3><div class="q" id="quizBar"><span id="quizStatus">${qs.length ? `الاختبار: ${qs.length} سؤال — الدرجة الكلية ${totalPts} — المدة ${Math.round(examSecs / 60)} دقيقة — النجاح من ${passPct}%` : "مفيش اختبار للدرس ده لسه."}</span><span id="quizTimer" class="score" style="display:none"></span><div class="question-progress" style="flex:1;min-width:120px"><div class="progress-track"><div id="quizFill" class="progress-fill" style="width:0%"></div></div></div><button id="startQuiz">ابدأ الاختبار</button><button id="finishQuiz" class="sec" style="display:none">إنهاء الاختبار</button></div><div id="quizResult"></div><div id="qs" style="display:none"></div></section>`;
   $("#back").onclick = () => { stopLessonSpeech(); window.lessonCtx = null; clearInterval(quizTimer); lessons(sub); };
   $("#speakLesson").onclick = () => speakLesson(l.text || "", $("#speakLesson"));
-  $("#translateAll").onclick = () => translateAllParagraphs($("#txt"), $("#translateAll"));
   if (user) await setDoc(doc(db, "progress", `${user.uid}_${l.id}`), { uid:user.uid, lessonId:l.id, subjectId:sub.id, lastOpened:serverTimestamp() }, {merge:true});
   app.querySelectorAll(".completeLessonBtn").forEach(btn => btn.onclick = async () => { if(user){ await setDoc(doc(db,"progress",`${user.uid}_${l.id}`), {uid:user.uid, lessonId:l.id, subjectId:sub.id, completed:true, completedAt:serverTimestamp()}, {merge:true}); app.querySelectorAll(".completeLessonBtn").forEach(x => x.textContent="✓ تم إتمام الدرس"); } });
   renderLessonBody($("#txt"), l, imgMap);
