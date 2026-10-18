@@ -579,10 +579,10 @@ async function compressImage(file) {
   throw new Error("الصورة كبيرة جدًا، جرّب صورة أصغر");
 }
 async function paragraphTranslation(text) {
-  const prompt = `ترجم الفقرة الفرنسية التالية إلى العربية ترجمة طبيعية وواضحة مع الحفاظ على ترتيب المعنى. لا تضف شرحًا خارج JSON. أعد JSON فقط بالشكل: {"ar":"الترجمة العربية"}\nالفقرة الفرنسية:\n${text}`;
+  const prompt = `ترجم الفقرة الفرنسية التالية إلى العربية ترجمة طبيعية وواضحة. أعد JSON فقط بالشكل: {"ar":"الترجمة العربية","pairs":[{"fr":"mot français","ar":"كلمة أو عبارة عربية مقابلة"}]}. اجعل pairs خريطة تقريبية للكلمات المهمة بالترتيب، ولا تضع كلمة عربية غير موجودة في الترجمة. لا تضف شرحًا خارج JSON.\nالفقرة الفرنسية:\n${text}`;
   const j = await askJSON(prompt);
   if (!j || !String(j.ar || "").trim()) throw new Error("لم تصل ترجمة صالحة");
-  return String(j.ar).trim();
+  return { ar: String(j.ar).trim(), pairs: Array.isArray(j.pairs) ? j.pairs.filter(x => x && String(x.fr || "").trim() && String(x.ar || "").trim()).map(x => ({ fr: String(x.fr).trim(), ar: String(x.ar).trim() })) : [] };
 }
 async function paragraphTranslations(texts) {
   const prompt = `ترجم الفقرات الفرنسية التالية إلى العربية ترجمة طبيعية وواضحة. حافظ على ترتيب الفقرات وأعد نفس العدد بالضبط. لا تضف أي شرح خارج JSON. أعد JSON فقط بالشكل: {"translations":["ترجمة الفقرة الأولى","ترجمة الفقرة الثانية"]}\n\n${texts.map((t, i) => `الفقرة ${i + 1}:\n${t}`).join("\n\n")}`;
@@ -591,16 +591,25 @@ async function paragraphTranslations(texts) {
   if (!Array.isArray(out) || out.length !== texts.length || out.some(x => !String(x || "").trim())) throw new Error("ترجمة الفقرات غير مكتملة");
   return out.map(x => String(x).trim());
 }
-function renderBilingualParagraph(box, french, arabic) {
+function renderBilingualParagraph(box, french, arabic, pairs = []) {
   box.classList.add("bilingual-pair"); box.innerHTML = "";
+  const wordKey = x => String(x || "").toLowerCase().replace(/[^\p{L}\p{M}]/gu, "");
   const makeSide = (value, lang) => {
     const side = document.createElement("div"); side.className = `bilingual-side ${lang}`; side.lang = lang === "ar" ? "ar" : "fr";
-    let index = 0;
+    if (lang === "fr") { side.classList.add("tts-sentence"); side.dataset.sentence = String(value).trim(); }
+    let index = 0, usedPairs = new Set();
     String(value).split(/(\p{L}[\p{L}\p{M}'’\-]*)/gu).forEach(part => {
-      if (/^\p{L}/u.test(part)) { const w = document.createElement("span"); w.className = "pair-word"; w.dataset.pair = index++; w.textContent = part; side.appendChild(w); }
+      if (/^\p{L}/u.test(part)) {
+        const key = wordKey(part); let pair = pairs.length ? pairs.length + index : index; index++;
+        if (pairs.length) {
+          const found = pairs.findIndex((x, i) => (lang === "ar" || !usedPairs.has(i)) && (lang === "fr" ? x.fr.split(/\s+/).some(y => wordKey(y) === key) : x.ar.split(/\s+/).some(y => wordKey(y) === key)));
+          if (found >= 0) { pair = found; if (lang === "fr") usedPairs.add(found); }
+        }
+        const w = document.createElement("span"); w.className = "pair-word"; w.dataset.pair = pair; w.textContent = part; side.appendChild(w);
+      }
       else if (part) side.appendChild(document.createTextNode(part));
     });
-    side.onclick = e => { const word = e.target.closest(".pair-word"); if (!word) return; const pair = word.dataset.pair; box.querySelectorAll(".pair-word").forEach(x => x.classList.remove("pair-active")); box.querySelectorAll(`.pair-word[data-pair="${pair}"]`).forEach(x => x.classList.add("pair-active")); const frWord = box.querySelector(`.bilingual-side.fr .pair-word[data-pair="${pair}"]`); if (lang === "fr" && frWord) openWord(frWord.textContent, french); };
+    side.onclick = e => { const word = e.target.closest(".pair-word"); if (!word) return; e.preventDefault(); e.stopPropagation(); const pair = word.dataset.pair; box.querySelectorAll(".pair-word").forEach(x => x.classList.remove("pair-active")); box.querySelectorAll(`.pair-word[data-pair="${pair}"]`).forEach(x => x.classList.add("pair-active")); const frWord = box.querySelector(`.bilingual-side.fr .pair-word[data-pair="${pair}"]`); if (lang === "fr" && frWord) { const selected = frWord.textContent.trim(); openWord(selected, french); } };
     return side;
   };
   box.append(makeSide(french, "fr"), makeSide(arabic, "ar"));
@@ -617,12 +626,12 @@ async function translateAllParagraphs(root, button) {
   for (let i = 0; i < pending.length; i++) {
     const body = pending[i], french = body.dataset.french || body.textContent.trim();
     button.textContent = `⏳ ترجمة البلوك ${i + 1} من ${pending.length}`;
-    let arabic = "";
-    for (let attempt = 0; attempt < 2 && !arabic; attempt++) {
-      try { arabic = await paragraphTranslation(french); }
+    let translated = null;
+    for (let attempt = 0; attempt < 2 && !translated; attempt++) {
+      try { translated = await paragraphTranslation(french); }
       catch (e) { console.warn(`paragraph ${i + 1} translation failed`, e); if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 1200)); }
     }
-    if (arabic) renderBilingualParagraph(body, french, arabic); else failed++;
+    if (translated) renderBilingualParagraph(body, french, translated.ar, translated.pairs); else failed++;
   }
   root.classList.add("all-bilingual"); button.textContent = bodies.every(body => body.classList.contains("bilingual-pair")) ? "↩ إظهار الفرنسي فقط" : "🌐 إعادة ترجمة الفقرات غير المكتملة";
   if (failed) alert(`تمت ترجمة معظم الفقرات، وتعذر ترجمة ${failed} فقرة. اضغط الزر مرة أخرى لإعادة المحاولة.`);
@@ -642,7 +651,7 @@ function renderParas(sec, text) {
       flushP();
       const tag = m[1] ? "ul" : "ol";
       if (!list || list.tagName.toLowerCase() !== tag) { list = document.createElement(tag); list.className = "ll"; if (tag === "ol") list.start = parseInt(m[2]) || 1; sec.appendChild(list); }
-      const li = document.createElement("li"); list.appendChild(li); clickable(li, m[3], false);
+      const li = document.createElement("li"); li.classList.add("paragraph-body"); li.dataset.french = m[3]; list.appendChild(li); clickable(li, m[3], false);
     } else if (!line.trim()) { flushP(); list = null; }
     else { list = null; buf.push(line); }
   }
@@ -661,7 +670,7 @@ function renderLessonBody(el, l, imgMap) {
       sec.appendChild(fig); solid = true; return;
     }
     if (b.t === "p") { renderParas(sec, b.v); solid = true; return; }
-    const n = document.createElement(b.t === "h1" ? "h3" : "h4");
+    const n = document.createElement(b.t === "h1" ? "h3" : "h4"); n.classList.add("paragraph-body"); n.dataset.french = b.v;
     n.className = b.t === "h1" ? "lh1" : "lh2";
     sec.appendChild(n); clickable(n, b.v, false);
   });
