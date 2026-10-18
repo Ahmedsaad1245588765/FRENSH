@@ -47,6 +47,8 @@ h2,h3{margin:0}
 .item:not(.tile){display:flex;align-items:center;gap:14px;background:#fff;border-radius:10px;border-inline-start:5px solid var(--gold);padding:14px 18px;margin:10px 0;font-size:1.1rem;font-weight:600;box-shadow:0 1px 3px rgba(20,38,79,.1)}
 .item:not(.tile):hover{box-shadow:0 6px 18px rgba(20,38,79,.2)}
 .item span{flex:1}
+.lesson-stars{display:inline-flex;gap:1px;color:var(--gold);font-size:1.05rem;letter-spacing:1px;white-space:nowrap;text-shadow:0 0 12px rgba(255,209,102,.35)}
+.lesson-stars .empty{color:rgba(255,255,255,.22);text-shadow:none}
 .n{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--navy);color:var(--gold);font-family:Fraunces,serif}
 .text{background:#fff;border-radius:12px;padding:28px;font-size:1.4rem;line-height:2;white-space:pre-wrap;box-shadow:0 1px 3px rgba(20,38,79,.12)}
 .w{cursor:pointer;border-radius:4px}.w:hover{background:#f3e3b8}
@@ -478,9 +480,12 @@ async function lessons(sub) {
   const [ls, atts, passRows] = await Promise.all([list("lessons", "subjectId", sub.id), user ? list("attempts", "uid", user.uid) : [], user ? list("passes", "uid", user.uid) : []]);
   const passedIds = new Set(passRows.map(p => p.lessonId));
   const best = {}; atts.forEach(a => best[a.lessonId] = Math.max(best[a.lessonId] ?? -1, Number(a.percent) || 0));
+  const starsFor = pct => pct >= 90 ? 3 : pct >= 75 ? 2 : pct >= 50 ? 1 : 0;
+  const bestStars = {}; atts.forEach(a => { const s = Number.isFinite(Number(a.stars)) ? Number(a.stars) : starsFor(Number(a.percent) || 0); bestStars[a.lessonId] = Math.max(bestStars[a.lessonId] ?? 0, s); });
+  const starsHtml = n => n ? `<span class="lesson-stars" title="${n} من 3 نجوم">${"★".repeat(n)}${`<span class="empty">${"★".repeat(3 - n)}</span>`}</span>` : "";
   const need = x => x.examPass ?? 50, passed = x => passedIds.has(x.id), locked = ls.map(l => !editor && !!l.prevId && !passedIds.has(l.prevId));
   app.innerHTML = `<div class="row"><button class="sec" id="back">← المواد</button><h2 style="flex:1;margin:0">${esc(sub.name)}</h2>${editor ? `<button id="add">+ درس</button>` : ""}</div><input id="lessonSearch" placeholder="ابحث داخل دروس ${esc(sub.name)}..." style="margin:10px 0 18px">
-    <div id="lessonList">${ls.map((l, i) => `<div class="item fr${locked[i] ? " locked" : ""}" data-id="${l.id}"><b class="n">${locked[i] ? "🔒" : i + 1}</b><span>${esc(l.title)}</span>${(l.examCount || 0) ? (passed(l) ? `<small class="badge">✓ نجحت${best[l.id] !== undefined ? " — " + best[l.id] + "%" : ""}</small>` : best[l.id] !== undefined ? `<small class="badge">آخر نتيجة ${best[l.id]}% — المطلوب ${need(l)}%</small>` : `<small class="badge">اختبار — المطلوب ${need(l)}%</small>`) : ""}${editor ? `<button class="sec" data-edit-lesson="${l.id}">تعديل</button><button class="del" data-del="${l.id}">حذف</button>` : ""}</div>`).join("") || `<p class="mut">مفيش دروس لسه.</p>`}</div>`;
+    <div id="lessonList">${ls.map((l, i) => `<div class="item fr${locked[i] ? " locked" : ""}" data-id="${l.id}"><b class="n">${locked[i] ? "🔒" : i + 1}</b><span>${esc(l.title)}</span>${bestStars[l.id] ? starsHtml(bestStars[l.id]) : ""}${(l.examCount || 0) ? (passed(l) ? `<small class="badge">✓ نجحت${best[l.id] !== undefined ? " — " + best[l.id] + "%" : ""}</small>` : best[l.id] !== undefined ? `<small class="badge">آخر نتيجة ${best[l.id]}% — المطلوب ${need(l)}%</small>` : `<small class="badge">اختبار — المطلوب ${need(l)}%</small>`) : ""}${editor ? `<button class="sec" data-edit-lesson="${l.id}">تعديل</button><button class="del" data-del="${l.id}">حذف</button>` : ""}</div>`).join("") || `<p class="mut">مفيش دروس لسه.</p>`}</div>`;
   $("#back").onclick = subjects;
   $("#lessonSearch").oninput = e => app.querySelectorAll("#lessonList .item").forEach(x => x.style.display = x.innerText.toLowerCase().includes(e.target.value.toLowerCase()) ? "" : "none");
   if (editor) $("#add").onclick = () => lessonEditor(null, sub, () => lessons(sub));
@@ -1044,13 +1049,14 @@ async function lesson(l, sub, startKey) {
     qs.forEach(q => { max += q.points || (q.type === "essay" ? 10 : 1); score += q.type === "essay" ? (essayScores[q.id] || 0) : (mcqScores[q.id] || 0); });
     score = Math.round(score * 100) / 100; max = Math.round(max * 100) / 100;
     const percent = max ? Math.round(score / max * 100) : 0;
+    const stars = percent >= 90 ? 3 : percent >= 75 ? 2 : percent >= 50 ? 1 : 0;
     $("#finishQuiz").disabled = true; $("#quizStatus").textContent = "⏳ جاري حفظ نتيجتك...";
     box.querySelectorAll(".opt,textarea,.submitEssay").forEach(b => b.disabled = true);
-    if (user) { try { await addDoc(collection(db, "attempts"), { uid: user.uid, lessonId: l.id, score, max, percent, created: serverTimestamp() }); } catch (e) { console.error(e); } }
+    if (user) { try { await addDoc(collection(db, "attempts"), { uid: user.uid, lessonId: l.id, score, max, percent, stars, created: serverTimestamp() }); } catch (e) { console.error(e); } }
     const passed = percent >= passPct;
-    if (user && passed) { try { await setDoc(doc(db, "passes", `${user.uid}_${l.id}`), { uid: user.uid, lessonId: l.id, percent, created: serverTimestamp() }); } catch (e) { console.error("pass write", e); } }
+    if (user && passed) { try { await setDoc(doc(db, "passes", `${user.uid}_${l.id}`), { uid: user.uid, lessonId: l.id, percent, stars, created: serverTimestamp() }); } catch (e) { console.error("pass write", e); } }
     $("#quizStatus").textContent = "تم إنهاء الاختبار وحفظ الإجابات.";
-    $("#quizResult").innerHTML = `<div class="q"><b>نتيجة الاختبار:</b> <span class="score">${score}/${max}</span> — ${percent}%<br>${passed ? `<b style="color:var(--ok)">🎉 نجحت! الدرس التالي اتفتح.</b>` : `<b class="danger">محتاج ${passPct}% على الأقل عشان تفتح الدرس التالي.</b>`}<div class="row">${passed ? `<button id="toNext">← للدروس</button>` : `<button id="retake">🔁 إعادة الاختبار</button>`}</div></div>`;
+    $("#quizResult").innerHTML = `<div class="q"><b>نتيجة الاختبار:</b> <span class="score">${score}/${max}</span> — ${percent}%<div style="font-size:2rem;line-height:1.35;margin:8px 0" title="${stars} من 3 نجوم"><span class="lesson-stars">${stars ? "★".repeat(stars) : ""}<span class="empty">${"★".repeat(3 - stars)}</span></span></div>${passed ? `<b style="color:var(--ok)">🎉 نجحت! الدرس التالي اتفتح.</b>` : `<b class="danger">محتاج ${passPct}% على الأقل عشان تفتح الدرس التالي.</b>`}<div class="row">${passed ? `<button id="toNext">← للدروس</button>` : `<button id="retake">🔁 إعادة الاختبار</button>`}</div></div>`;
     const tn = $("#toNext"); if (tn) tn.onclick = () => { window.lessonCtx = null; lessons(sub); };
     const rt = $("#retake"); if (rt) rt.onclick = () => lesson(l, sub, "exam");
   };
