@@ -268,7 +268,7 @@ body.night .lesson-nav-actions.lesson-top,body.night .lesson-nav-actions.bottom{
 .bilingual-side.ar{direction:rtl;text-align:right;border-inline-start:2px solid #e0444d}
 .bilingual-side.fr{direction:ltr;text-align:left;border-inline-start:2px solid #1f4da8}
 .pair-word{border-radius:5px;cursor:pointer;transition:background .15s ease,box-shadow .15s ease}
-.pair-word.pair-active{background:rgba(255,209,102,.42);box-shadow:0 0 0 2px rgba(255,180,60,.16)}
+.pair-word.pair-active,.bilingual-side.fr .pair-word.pair-active,.bilingual-side.ar .pair-word.pair-active{background:#ffd166!important;color:#111827!important;box-shadow:0 0 0 2px rgba(255,180,60,.5),0 3px 12px rgba(255,180,60,.22);font-weight:700}
 .bilingual-loading{color:#8a96ad;font-size:.9rem}
 .ll{margin:0 0 14px;padding:12px 22px 12px 42px;background:#f6f9ff;border:1px solid #e3ebf8;border-radius:14px;line-height:2.1}
 .ll li{margin:4px 0;padding-inline-start:4px}
@@ -584,6 +584,13 @@ async function paragraphTranslation(text) {
   if (!j || !String(j.ar || "").trim()) throw new Error("لم تصل ترجمة صالحة");
   return String(j.ar).trim();
 }
+async function paragraphTranslations(texts) {
+  const prompt = `ترجم الفقرات الفرنسية التالية إلى العربية ترجمة طبيعية وواضحة. حافظ على ترتيب الفقرات وأعد نفس العدد بالضبط. لا تضف أي شرح خارج JSON. أعد JSON فقط بالشكل: {"translations":["ترجمة الفقرة الأولى","ترجمة الفقرة الثانية"]}\n\n${texts.map((t, i) => `الفقرة ${i + 1}:\n${t}`).join("\n\n")}`;
+  const j = await askJSON(prompt);
+  const out = Array.isArray(j) ? j : j?.translations;
+  if (!Array.isArray(out) || out.length !== texts.length || out.some(x => !String(x || "").trim())) throw new Error("ترجمة الفقرات غير مكتملة");
+  return out.map(x => String(x).trim());
+}
 function renderBilingualParagraph(box, french, arabic) {
   box.classList.add("bilingual-pair"); box.innerHTML = "";
   const makeSide = (value, lang) => {
@@ -606,15 +613,16 @@ async function translateAllParagraphs(root, button) {
     button.textContent = "🌐 ترجمة كل الفقرات"; return;
   }
   button.disabled = true; button.textContent = "⏳ جاري ترجمة الدرس...";
-  try {
-    for (const body of bodies) {
-      if (body.classList.contains("bilingual-pair")) continue;
-      const french = body.dataset.french || body.textContent.trim();
-      const arabic = await paragraphTranslation(french);
-      renderBilingualParagraph(body, french, arabic);
-    }
-    root.classList.add("all-bilingual"); button.textContent = "↩ إظهار الفرنسي فقط";
-  } catch (e) { console.error(e); alert("تعذر ترجمة أحد أجزاء الدرس الآن، حاول مرة أخرى."); button.textContent = "🌐 ترجمة كل الفقرات"; }
+  const pending = bodies.filter(body => !body.classList.contains("bilingual-pair")); let failed = 0;
+  for (let i = 0; i < pending.length; i += 4) {
+    const batch = pending.slice(i, i + 4), texts = batch.map(body => body.dataset.french || body.textContent.trim());
+    let arabic;
+    try { arabic = await paragraphTranslations(texts); }
+    catch (e) { console.warn("batch translation failed", e); arabic = await Promise.all(texts.map(t => paragraphTranslation(t).catch(err => { console.warn("paragraph translation failed", err); failed++; return ""; }))); }
+    batch.forEach((body, j) => { if (arabic[j]) renderBilingualParagraph(body, texts[j], arabic[j]); });
+  }
+  root.classList.add("all-bilingual"); button.textContent = bodies.every(body => body.classList.contains("bilingual-pair")) ? "↩ إظهار الفرنسي فقط" : "🌐 إعادة ترجمة الفقرات غير المكتملة";
+  if (failed) alert(`تمت ترجمة معظم الفقرات، وتعذر ترجمة ${failed} فقرة. اضغط الزر مرة أخرى لإعادة المحاولة.`);
   button.disabled = false;
 }
 function renderParas(sec, text) {
