@@ -270,6 +270,7 @@ body.night .lesson-nav-actions.lesson-top,body.night .lesson-nav-actions.bottom{
 .pair-word{border-radius:5px;cursor:pointer;transition:background .15s ease,box-shadow .15s ease}
 .pair-word.pair-active,.bilingual-side.fr .pair-word.pair-active,.bilingual-side.ar .pair-word.pair-active{background:#ffd166!important;color:#111827!important;box-shadow:0 0 0 2px rgba(255,180,60,.5),0 3px 12px rgba(255,180,60,.22);font-weight:700}
 .bilingual-loading{color:#8a96ad;font-size:.9rem}
+.block-ar{margin-top:8px;border-color:rgba(224,68,77,.35)!important;background:rgba(224,68,77,.04)!important}
 .ll{margin:0 0 14px;padding:12px 22px 12px 42px;background:#f6f9ff;border:1px solid #e3ebf8;border-radius:14px;line-height:2.1}
 .ll li{margin:4px 0;padding-inline-start:4px}
 .ll li::marker{color:#e0444d;font-weight:800}
@@ -637,7 +638,8 @@ async function translateAllParagraphs(root, button) {
   if (failed) alert(`تمت ترجمة معظم الفقرات، وتعذر ترجمة ${failed} فقرة. اضغط الزر مرة أخرى لإعادة المحاولة.`);
   button.disabled = false;
 }
-function renderParas(sec, text) {
+function renderParas(sec, text, arabic = "", pairs = []) {
+  if (arabic) { const n = document.createElement("div"); n.className = "lp"; sec.appendChild(n); const body = document.createElement("div"); body.className = "paragraph-body"; body.dataset.french = text; n.appendChild(body); renderBilingualParagraph(body, text, arabic, pairs); return; }
   let buf = [], list = null;
   const flushP = () => {
     const t = buf.join("\n").trim(); buf = [];
@@ -669,17 +671,16 @@ function renderLessonBody(el, l, imgMap) {
       if (imgMap[b.v]) { const im = document.createElement("img"); im.src = imgMap[b.v]; im.alt = ""; fig.appendChild(im); } else fig.textContent = "🖼 الصورة مش متاحة";
       sec.appendChild(fig); solid = true; return;
     }
-    if (b.t === "p") { renderParas(sec, b.v); solid = true; return; }
-    const n = document.createElement(b.t === "h1" ? "h3" : "h4"); n.classList.add("paragraph-body"); n.dataset.french = b.v;
-    n.className = b.t === "h1" ? "lh1" : "lh2";
-    sec.appendChild(n); clickable(n, b.v, false);
+    if (b.t === "p") { renderParas(sec, b.v, b.ar || "", b.pairs || []); solid = true; return; }
+    const n = document.createElement(b.t === "h1" ? "h3" : "h4"); n.className = b.t === "h1" ? "lh1 paragraph-body" : "lh2 paragraph-body"; n.dataset.french = b.v;
+    sec.appendChild(n); if (b.ar) renderBilingualParagraph(n, b.v, b.ar, b.pairs || []); else clickable(n, b.v, false);
   });
 }
 async function lessonEditor(x, sub, done) {
   x = x || {};
   const c = x.id ? await getContent(x) : {};
   const imgMap = {}; if (x.id) (await list(`lessons/${x.id}/images`)).forEach(i => imgMap[i.id] = i.data);
-  const blocks = (c.blocks && c.blocks.length) ? c.blocks.map(b => ({ t: b.t, v: b.v, d: b.t === "img" ? (imgMap[b.v] || "") : "" })) : [{ t: "p", v: c.text || "", d: "" }];
+  const blocks = (c.blocks && c.blocks.length) ? c.blocks.map(b => ({ t: b.t, v: b.v, a: b.ar || "", pairs: b.pairs || [], d: b.t === "img" ? (imgMap[b.v] || "") : "" })) : [{ t: "p", v: c.text || "", a: "", pairs: [], d: "" }];
   const removed = []; let pending = null;
   const d = document.createElement("dialog"); d.style.width = "min(96vw,720px)"; d.style.maxHeight = "92vh"; d.style.overflow = "auto";
   d.innerHTML = `<form><h3>${x.id ? "تعديل الدرس" : "درس جديد"}</h3>
@@ -694,7 +695,7 @@ async function lessonEditor(x, sub, done) {
       <div class="row"><button type="button" id="aiRun">✨ نظّم الدرس</button><span id="aiMsg" class="mut"></span></div>
     </div>
     <div id="lbBlocks"></div>
-    <div class="row"><button type="button" class="sec" data-add="h1">+ عنوان رئيسي</button><button type="button" class="sec" data-add="h2">+ عنوان فرعي</button><button type="button" class="sec" data-add="p">+ فقرة</button><button type="button" class="sec" data-add="img">+ صورة</button></div>
+    <div class="row"><button type="button" class="sec" data-add="h1">+ عنوان رئيسي</button><button type="button" class="sec" data-add="h2">+ عنوان فرعي</button><button type="button" class="sec" data-add="p">+ فقرة</button><button type="button" class="sec" data-add="img">+ صورة</button><button type="button" id="makeTranslations">🌐 أضف ترجمة البلوكات</button></div>
     <input type="file" accept="image/*" id="lbFile" style="display:none">
     <p class="danger" id="lbErr"></p>
     <div class="row"><button id="lbSave">حفظ</button><button type="button" class="sec" id="lbCancel">إلغاء</button></div></form>`;
@@ -712,12 +713,25 @@ async function lessonEditor(x, sub, done) {
       else {
         const el = document.createElement(b.t === "p" ? "textarea" : "input"); el.dir = "ltr"; el.value = b.v; el.oninput = () => b.v = el.value;
         if (b.t === "p") { el.rows = 5; el.placeholder = "اكتب الفقرة هنا. سطر فاضي = فقرة جديدة، وسطر يبدأ بـ - يتحول لنقطة، وبـ 1. لقائمة مرقمة"; } else { el.placeholder = b.t === "h1" ? "العنوان الرئيسي" : "العنوان الفرعي"; el.style.fontWeight = "800"; }
-        body.appendChild(el);
+        const ar = document.createElement(b.t === "p" ? "textarea" : "input"); ar.dir = "rtl"; ar.value = b.a || ""; ar.placeholder = "الترجمة العربية (اختياري — استخدم زر إضافة ترجمة البلوكات)"; ar.className = "block-ar"; ar.oninput = () => { b.a = ar.value; b.pairs = []; };
+        if (b.t === "p") ar.rows = 5;
+        body.append(el, ar);
       }
       box.appendChild(w);
     });
   };
   draw();
+  d.querySelector("#makeTranslations").onclick = async e => {
+    const btn = e.currentTarget, textBlocks = blocks.filter(b => b.t !== "img" && String(b.v || "").trim());
+    if (!textBlocks.length) return err("أضف بلوكات نصية أولًا");
+    btn.disabled = true; let failed = 0;
+    for (let i = 0; i < textBlocks.length; i++) {
+      btn.textContent = `⏳ ترجمة البلوك ${i + 1} من ${textBlocks.length}`;
+      try { const tr = await paragraphTranslation(textBlocks[i].v.trim()); textBlocks[i].a = tr.ar; textBlocks[i].pairs = tr.pairs; }
+      catch (ex) { failed++; console.warn("editor translation failed", ex); }
+    }
+    draw(); const fresh = d.querySelector("#makeTranslations"); fresh.disabled = false; fresh.textContent = "🌐 أضف ترجمة البلوكات"; err(failed ? `تعذر ترجمة ${failed} بلوك — اضغط الزر لإعادة المحاولة` : "✅ تمت إضافة ترجمة البلوكات");
+  };
   box.onclick = e => {
     const w = e.target.closest(".q"); if (!w || w.parentElement !== box) return;
     const i = [...box.children].indexOf(w), t = e.target;
@@ -758,7 +772,7 @@ async function lessonEditor(x, sub, done) {
     try {
       const res = picked ? await organizePdf(picked) : await organizeText(text, m => aiMsg.textContent = m);
       blocks.forEach(b => { if (b.t === "img" && b.v) removed.push(b.v); });
-      blocks.length = 0; res.blocks.forEach(b => blocks.push({ t: b.t, v: b.v, d: "" }));
+      blocks.length = 0; res.blocks.forEach(b => blocks.push({ t: b.t, v: b.v, a: "", pairs: [], d: "" }));
       const ti = f.querySelector('[name="title"]'); if (!ti.value.trim() && res.title) ti.value = res.title;
       draw(); aiMsg.textContent = `✅ تم تنظيم الدرس (${res.blocks.length} جزء) — راجعه وعدّل لو حبيت`;
     } catch (e) { console.error(e); aiMsg.className = "danger"; aiMsg.textContent = "تعذر التنظيم: " + (e.message || "").slice(0, 160); }
@@ -776,7 +790,7 @@ async function lessonEditor(x, sub, done) {
       const ref = x.id ? doc(db, "lessons", x.id) : doc(collection(db, "lessons"));
       for (const b of kept) if (b.t === "img" && b.d && !b.v) b.v = (await addDoc(collection(db, `lessons/${ref.id}/images`), { data: b.d, created: serverTimestamp() })).id;
       for (const id of removed) { try { await deleteDoc(doc(db, `lessons/${ref.id}/images`, id)); } catch {} }
-      const out = kept.map(b => ({ t: b.t, v: b.t === "img" ? b.v : b.v.trim() }));
+      const out = kept.map(b => b.t === "img" ? ({ t: b.t, v: b.v }) : ({ t: b.t, v: b.v.trim(), ...(b.a && b.a.trim() ? { ar: b.a.trim(), pairs: Array.isArray(b.pairs) ? b.pairs : [] } : {}) }));
       const content = { text: out.filter(b => b.t !== "img").map(b => b.v).join("\n"), blocks: out, youtube: f.querySelector('[name="yt"]').value.trim(), youtubeAr: f.querySelector('[name="ytAr"]').value.trim() };
       await setDoc(doc(db, "lessonContent", ref.id), content);
       if (x.id) { await updateDoc(ref, { title, v2: true, text: deleteField(), blocks: deleteField(), youtube: deleteField(), youtubeAr: deleteField() }); x.title = title; }
@@ -1323,7 +1337,7 @@ async function translate(w, sent) {
     const cloud = withTimeout(getDoc(ref), 2500).then(s => { if (!s.exists()) throw new Error("miss"); return s.data(); });
     const ai = (async () => {
       const prompt = `ترجم الكلمة الفرنسية حسب السياق إلى العربية. الجملة: "${sent}"\nالكلمة: "${w}"\nالمرادفات (synonyms) تكون كلمات فرنسية فقط وليست عربية، من 0 إلى 3 كلمات. المعنى والملاحظة بالعربية (الملاحظة اختيارية، اتركها فارغة إن لم تلزم، ولا تكتب أي رموز غريبة).\nأعد JSON فقط: {"base":"الشكل الأصلي بالفرنسية","ar":"المعنى المختصر بالعربية","note":"ملاحظة قصيرة بالعربية","pos":"نوع الكلمة","synonyms":["synonyme français"],"level":"A1"}`;
-      const j = JSON.parse((await gem.generateContent(prompt)).response.text());
+      const j = await askJSON(prompt, 2);
       if (!j.ar) throw new Error("empty");
       fromAI = true;
       return { ar: j.ar, base: j.base || w, note: sane(j.note), pos: sane(j.pos), synonyms: Array.isArray(j.synonyms) ? j.synonyms.slice(0, 3) : [], level: j.level || "" };
