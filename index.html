@@ -1465,7 +1465,12 @@ async function lesson(l, sub, startKey) {
 /* ---------- المستخدمين والجروبات ---------- */
 async function myGroups() {
   if(!user)return [];
-  const groups=admin?await list("groups"):await listArrayContains("groups","members",user.uid);
+  let groups;
+  if(admin)groups=await list("groups");
+  else{
+    const [members,admins,created]=await Promise.all([listArrayContains("groups","members",user.uid),listArrayContains("groups","admins",user.uid),list("groups","createdBy",user.uid)]);
+    groups=[...new Map([...members,...admins,...created].map(g=>[g.id,g])).values()];
+  }
   return groups.filter(g => !g.deleted).sort((a,b) => String(a.name||"").localeCompare(String(b.name||""), "ar"));
 }
 async function groupCreatorSlotState(){
@@ -1546,7 +1551,7 @@ async function groupsPage() {
   const mayCreateGroup=groupAdmin&&(admin||creatorSlotState==="available");
   const readAt = new Map(), unread = new Map(), requestStates = new Map(), lastTexts = new Map(), hiddenPostsByGroup=new Map(), postDocsByGroup=new Map();
   for (const g of gs) {
-    const member = admin || (g.members || []).includes(user.uid);
+    const member = admin || (g.members || []).includes(user.uid) || groupManager(g);
     if (member) {
       const rr = doc(db, "users", user.uid, "groupReads", g.id), rs = await getDoc(rr);
       if (!rs.exists()) { await setDoc(rr, { lastReadAt: serverTimestamp() }); readAt.set(g.id, Date.now()); }
@@ -1563,7 +1568,7 @@ async function groupsPage() {
     }
   }
   app.innerHTML = `<div class="wa-groups-head"><div><small>مساحة التواصل</small><h2 class="sh">جروبات الطلاب</h2><p class="mut">استعرض الجروبات واطلب الانضمام. المحادثة تظهر بعد الموافقة.</p></div><div class="row"><button class="sec" id="refreshGroups">تحديث</button>${mayCreateGroup ? `<button id="addg">＋ إنشاء جروب</button>` : groupAdmin&&!admin?`<small class="mut">${creatorSlotState==="used"?"استخدمت بالفعل رصيد إنشاء جروب واحد.":"تعذر التحقق من صلاحية إنشاء الجروب؛ راجع الاتصال أو القواعد."}</small>`:""}</div></div><div class="wa-search"><input id="groupFilter" placeholder="ابحث عن جروب..."></div><div class="wa-group-list">` +
-    (gs.length ? gs.map(g => { const member=admin||(g.members||[]).includes(user.uid), state=requestStates.get(g.id)||"none", badge=member?(unread.get(g.id)||0):state==="pending"?"قيد المراجعة":""; return `<article class="wa-group-card" data-group-card="${g.id}" data-search="${esc((g.name||"").toLowerCase())}"><div class="wa-avatar">${esc((g.name||"G").trim().slice(0,1).toUpperCase())}</div><div class="wa-group-copy" ${member?`data-open-group="${g.id}"`:`data-preview="${g.id}"`}><b>${esc(g.name||"جروب")}</b><small>${member?esc(lastTexts.get(g.id)||"لا توجد رسائل بعد"):esc(g.description||"جروب طلاب — انضم للمشاركة")}</small></div><div class="wa-group-side"><small>${member?`${(g.members||[]).length} عضو`:`جروب خاص`}</small>${member?`<span class="unread-badge" data-unread="${g.id}" style="${badge?"":"display:none"}">${badge||0}</span>`:badge?`<span class="request-badge">${badge}</span>`:""}${member?"":`<button class="sec wa-join-btn" data-preview="${g.id}">${state==="pending"?"عرض الطلب":"عرض الجروب"}</button>`}</div></article>`; }).join("") : `<p class="mut">لا توجد جروبات متاحة حاليًا.</p>`) + `</div>`;
+    (gs.length ? gs.map(g => { const member=admin||(g.members||[]).includes(user.uid)||groupManager(g), state=requestStates.get(g.id)||"none", badge=member?(unread.get(g.id)||0):state==="pending"?"قيد المراجعة":""; return `<article class="wa-group-card" data-group-card="${g.id}" data-search="${esc((g.name||"").toLowerCase())}"><div class="wa-avatar">${esc((g.name||"G").trim().slice(0,1).toUpperCase())}</div><div class="wa-group-copy" ${member?`data-open-group="${g.id}"`:`data-preview="${g.id}"`}><b>${esc(g.name||"جروب")}</b><small>${member?esc(lastTexts.get(g.id)||"لا توجد رسائل بعد"):esc(g.description||"جروب طلاب — انضم للمشاركة")}</small></div><div class="wa-group-side"><small>${member?`${(g.members||[]).length} عضو`:`جروب خاص`}</small>${member?`<span class="unread-badge" data-unread="${g.id}" style="${badge?"":"display:none"}">${badge||0}</span>`:badge?`<span class="request-badge">${badge}</span>`:""}${member?"":`<button class="sec wa-join-btn" data-preview="${g.id}">${state==="pending"?"عرض الطلب":"عرض الجروب"}</button>`}</div></article>`; }).join("") : `<p class="mut">لا توجد جروبات متاحة حاليًا.</p>`) + `</div>`;
   if (mayCreateGroup) $("#addg").onclick = async () => {
     const directory = (await groupStudents()).filter(x => x.id !== user.uid);
     form("إنشاء جروب", [{ n: "name", l: "اسم الجروب" }, { n: "description", l: "وصف مختصر", t: "area" }, { n: "m", l: "إضافة طلاب", t: "chk", o: directory.map(x => [x.id, x.name || "طالب"]) }],
@@ -1587,12 +1592,12 @@ async function groupsPage() {
   $("#refreshGroups").onclick=groupsPage;
   $("#groupFilter").oninput=e=>app.querySelectorAll("[data-group-card]").forEach(card=>card.style.display=card.dataset.search.includes(e.target.value.trim().toLowerCase())?"":"none");
   const updateGroupCard=gid=>{const hidden=hiddenPostsByGroup.get(gid)||new Set(),docs=postDocsByGroup.get(gid)||[],visible=docs.filter(d=>!hidden.has(d.id)),n=visible.filter(d=>d.data().uid!==user.uid&&(d.data().created?.toMillis?.()||0)>readAt.get(gid)).length;unread.set(gid,n);const badge=[...app.querySelectorAll("[data-unread]")].find(x=>x.dataset.unread===gid);if(badge){badge.textContent=n;badge.style.display=n?"inline-grid":"none";}const latest=visible.map(d=>d.data()).sort((a,b)=>(b.created?.seconds||0)-(a.created?.seconds||0))[0],text=latest?.attachment?(latest.kind==="voice"?"🎙 رسالة صوتية":`📎 ${latest.attachment.name||"ملف مرفق"}`):(latest?.text||"لا توجد رسائل بعد");lastTexts.set(gid,text);const card=[...app.querySelectorAll("[data-group-card]")].find(x=>x.dataset.groupCard===gid),preview=card?.querySelector(".wa-group-copy small");if(preview&&(admin||gs.find(x=>x.id===gid)?.members?.includes(user.uid)))preview.textContent=text;};
-  gs.filter(g=>admin||(g.members||[]).includes(user.uid)).forEach(g=>{groupListUnsubs.push(onSnapshot(collection(db,"groups",g.id,"posts"),snap=>{postDocsByGroup.set(g.id,snap.docs);updateGroupCard(g.id);}));groupListUnsubs.push(onSnapshot(collection(db,"users",user.uid,"hiddenGroupMessages",g.id,"posts"),snap=>{hiddenPostsByGroup.set(g.id,new Set(snap.docs.map(d=>d.id)));updateGroupCard(g.id);}));});
+  gs.filter(g=>admin||groupManager(g)||(g.members||[]).includes(user.uid)).forEach(g=>{groupListUnsubs.push(onSnapshot(collection(db,"groups",g.id,"posts"),snap=>{postDocsByGroup.set(g.id,snap.docs);updateGroupCard(g.id);}));groupListUnsubs.push(onSnapshot(collection(db,"users",user.uid,"hiddenGroupMessages",g.id,"posts"),snap=>{hiddenPostsByGroup.set(g.id,new Set(snap.docs.map(d=>d.id)));updateGroupCard(g.id);}));});
 }
 const post = (g, text) => addDoc(collection(db, "groups", g.id, "posts"), { text, uid: user.uid, by: currentStudentName || user.displayName || user.email, created: serverTimestamp() });
 const groupManager = g => admin || g?.createdBy===user?.uid || (g?.admins||[]).includes(user?.uid);
 const groupOwner = g => admin || g?.createdBy===user?.uid;
-const groupMember = g => admin || (g?.members||[]).includes(user?.uid);
+const groupMember = g => admin || (g?.members||[]).includes(user?.uid) || groupManager(g);
 function safeGraduationPdfUrl(value){if(!String(value||"").trim())return "";try{const u=new URL(String(value).trim());return u.protocol==="https:"?u.href:null;}catch{return null;}}
 let pdfJsModulePromise=null;
 async function extractLocalGraduationPdf(file){
@@ -1842,7 +1847,12 @@ async function groupView(g) {
   $("#back").onclick = groupsPage;
   groupChatUnsubs.push(onSnapshot(doc(db,"groups",g.id),snap=>{if(!snap.exists()||snap.data().deleted){if(voiceSession?.g?.id===g.id)leaveVoiceCall();groupsPage();return;}const fresh={id:g.id,...snap.data()};if(!admin&&!(fresh.members||[]).includes(user.uid)){if(voiceSession?.g?.id===g.id)leaveVoiceCall();showGroupPreview(fresh,"approved");return;}if(groupManager(fresh)!==mgr||fresh.name!==g.name)groupView(fresh);}));
   const menu=$("#groupMenu"),menuToggle=$("#groupMenuToggle");
-  if(menu&&menuToggle){menuToggle.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;};const closeMenu=e=>{if(!menu.contains(e.target)&&!menuToggle.contains(e.target))menu.hidden=true;};document.addEventListener("click",closeMenu);groupChatUnsubs.push(()=>document.removeEventListener("click",closeMenu));
+  if(menu&&menuToggle){
+    const placeGroupMenu=()=>{if(menu.hidden)return;const rect=menuToggle.getBoundingClientRect(),margin=12,width=Math.min(250,window.innerWidth-margin*2);menu.style.position="fixed";menu.style.zIndex="10000";menu.style.width=`${width}px`;menu.style.minWidth="0";menu.style.maxWidth=`calc(100vw - ${margin*2}px)`;menu.style.maxHeight=`calc(100dvh - ${margin*2}px)`;menu.style.overflowY="auto";const size=menu.getBoundingClientRect(),left=Math.max(margin,Math.min(rect.right-size.width,window.innerWidth-size.width-margin));let top=rect.bottom+6;if(top+size.height>window.innerHeight-margin)top=Math.max(margin,rect.top-size.height-6);menu.style.left=`${left}px`;menu.style.right="auto";menu.style.top=`${top}px`;menu.style.insetInlineEnd="auto";};
+    menuToggle.onclick=e=>{e.stopPropagation();if(menu.hidden){menu.hidden=false;requestAnimationFrame(placeGroupMenu);}else menu.hidden=true;};
+    const closeMenu=e=>{if(!menu.contains(e.target)&&!menuToggle.contains(e.target))menu.hidden=true;};
+    document.addEventListener("click",closeMenu);window.addEventListener("resize",placeGroupMenu);window.addEventListener("scroll",placeGroupMenu,true);
+    groupChatUnsubs.push(()=>{document.removeEventListener("click",closeMenu);window.removeEventListener("resize",placeGroupMenu);window.removeEventListener("scroll",placeGroupMenu,true);});
     app.querySelectorAll("[data-group-action]").forEach(button=>button.onclick=()=>{menu.hidden=true;const action=button.dataset.groupAction,panel=$("#groupManagePanel");if(action==="manage"){panel.style.display=panel.style.display==="none"?"block":"none";if(panel.style.display==="block")panel.scrollIntoView({behavior:"smooth",block:"start"});}else if(action==="requests"){panel.style.display="block";panel.scrollIntoView({behavior:"smooth",block:"start"});setTimeout(()=>$("#groupRequestsSection")?.scrollIntoView({behavior:"smooth",block:"center"}),180);}else if(action==="members"){panel.style.display="block";setTimeout(()=>$("#groupMembersSection")?.scrollIntoView({behavior:"smooth",block:"center"}),100);}else if(action==="add")addGroupMembers(g);else if(action==="admins")appointGroupAdmin(g);else if(action==="edit")editGroupSettings(g);else if(action==="delete")deleteGroup(g);});
   }
   $("#waForm").onsubmit = async e => { e.preventDefault(); const box = $("#waText"), text = box.value.trim(); if (!text) return; box.value = ""; try { await post(g, text); } catch (err) { alert("تعذر إرسال الرسالة: " + (err.code || err.message)); box.value = text; } };
