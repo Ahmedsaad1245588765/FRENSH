@@ -644,11 +644,57 @@ async function compressImage(file) {
   }
   throw new Error("الصورة كبيرة جدًا، جرّب صورة أصغر");
 }
-async function paragraphTranslation(text) {
-  const prompt = `ترجم البلوك الفرنسي التالي إلى العربية ترجمة طبيعية وواضحة، وحافظ على نفس فواصل الفقرات والأسطر الفارغة (استخدم \\n\\n في نفس المواضع). أعد JSON فقط بالشكل: {"ar":"الترجمة العربية","pairs":[{"fr":"mot français","ar":"كلمة أو عبارة عربية مقابلة"}]}. اجعل pairs خريطة تقريبية للكلمات المهمة بالترتيب، ولا تضع كلمة عربية غير موجودة في الترجمة. لا تضف شرحًا خارج JSON.\nالبلوك الفرنسي:\n${text}`;
-  const j = await askJSON(prompt);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const aiReason = e => {
+  const m = String(e?.message || e?.code || e || "");
+  if (/429|quota|exceeded|resource/i.test(m)) return "تجاوز حد الطلبات للذكاء الاصطناعي";
+  if (/503|overload|unavailable/i.test(m)) return "الخدمة مشغولة";
+  if (/app.?check|permission|403|401/i.test(m)) return "مشكلة صلاحيات أو App Check";
+  if (/json|غير مفهوم|ترجمة|Unexpected|position/i.test(m)) return "رد غير صالح من الذكاء الاصطناعي";
+  return m.slice(0, 80) || "سبب غير معروف";
+};
+function translationUnits(text, max = 1800) {
+  const paras = String(text || "").split(/\n\s*\n+/).map(x => x.trim()).filter(Boolean), units = [];
+  let cur = "";
+  const flush = () => { if (cur) { units.push({ t: cur, sep: "\n\n" }); cur = ""; } };
+  for (const p of paras) {
+    if (p.length > max) {
+      flush();
+      let w = "", first = true;
+      const emit = () => { if (w) { units.push({ t: w, sep: first ? "\n\n" : " " }); first = false; w = ""; } };
+      for (const s of p.split(/(?<=[.!?…؟])\s+/)) { if (w && (w + " " + s).length > max) emit(); w = w ? w + " " + s : s; }
+      emit(); continue;
+    }
+    if (cur && (cur + "\n\n" + p).length > max) flush();
+    cur = cur ? cur + "\n\n" + p : p;
+  }
+  flush();
+  return units;
+}
+async function translateUnit(text, withPairs) {
+  const prompt = withPairs
+    ? `ترجم البلوك الفرنسي التالي إلى العربية ترجمة طبيعية وواضحة، وحافظ على نفس فواصل الفقرات والأسطر الفارغة (استخدم \\n\\n في نفس المواضع). أعد JSON فقط بالشكل: {"ar":"الترجمة العربية","pairs":[{"fr":"mot français","ar":"كلمة أو عبارة عربية مقابلة"}]}. اجعل pairs خريطة تقريبية للكلمات المهمة بالترتيب، ولا تضع كلمة عربية غير موجودة في الترجمة. لا تضف شرحًا خارج JSON.\nالبلوك الفرنسي:\n${text}`
+    : `ترجم النص الفرنسي التالي إلى العربية ترجمة طبيعية وواضحة، وحافظ على نفس فواصل الفقرات والأسطر الفارغة (استخدم \\n\\n في نفس المواضع). أعد JSON فقط بالشكل: {"ar":"الترجمة العربية"}. لا تضف شرحًا خارج JSON.\nالنص الفرنسي:\n${text}`;
+  const j = await askJSON(prompt, 1);
   if (!j || !String(j.ar || "").trim()) throw new Error("لم تصل ترجمة صالحة");
   return { ar: String(j.ar).trim(), pairs: Array.isArray(j.pairs) ? j.pairs.filter(x => x && String(x.fr || "").trim() && String(x.ar || "").trim()).map(x => ({ fr: String(x.fr).trim(), ar: String(x.ar).trim() })) : [] };
+}
+async function paragraphTranslation(text) {
+  const units = translationUnits(text), parts = [], pairs = [];
+  let lastErr;
+  for (let i = 0; i < units.length; i++) {
+    let res = null;
+    for (let attempt = 0; attempt < 3 && !res; attempt++) {
+      try { res = await translateUnit(units[i].t, attempt === 0); }
+      catch (e) {
+        lastErr = e; console.warn("translate unit failed", attempt + 1, e);
+        await sleep(/429|quota|exceeded|resource|503|overload|unavailable/i.test(String(e?.message || e)) ? 6000 * (attempt + 1) : 1200 * (attempt + 1));
+      }
+    }
+    if (!res) throw lastErr || new Error("فشلت الترجمة");
+    parts.push(i ? units[i].sep + res.ar : res.ar); pairs.push(...res.pairs);
+  }
+  return { ar: parts.join(""), pairs };
 }
 async function paragraphTranslations(texts) {
   const prompt = `ترجم الفقرات الفرنسية التالية إلى العربية ترجمة طبيعية وواضحة. حافظ على ترتيب الفقرات وأعد نفس العدد بالضبط. لا تضف أي شرح خارج JSON. أعد JSON فقط بالشكل: {"translations":["ترجمة الفقرة الأولى","ترجمة الفقرة الثانية"]}\n\n${texts.map((t, i) => `الفقرة ${i + 1}:\n${t}`).join("\n\n")}`;
@@ -808,14 +854,19 @@ async function lessonEditor(x, sub, done) {
   d.querySelector("#makeTranslations").onclick = async e => {
     const btn = e.currentTarget, textBlocks = blocks.filter(b => b.t !== "img" && String(b.v || "").trim());
     if (!textBlocks.length) return err("أضف بلوكات نصية أولًا");
-    btn.disabled = true; let failed = 0;
-    for (let i = 0; i < textBlocks.length; i++) {
-      btn.textContent = `⏳ ترجمة البلوك ${i + 1} من ${textBlocks.length}`;
-      try { const tr = await paragraphTranslation(textBlocks[i].v.trim()); textBlocks[i].a = tr.ar; textBlocks[i].pairs = tr.pairs; }
-      catch (ex) { failed++; console.warn("editor translation failed", ex); }
+    let todo = textBlocks.filter(b => !String(b.a || "").trim());
+    if (!todo.length) { if (!confirm("كل البلوكات مترجمة بالفعل. تعيد ترجمتها كلها؟")) return; todo = textBlocks; }
+    btn.disabled = true; let failed = 0, lastReason = "";
+    for (let i = 0; i < todo.length; i++) {
+      btn.textContent = `⏳ ترجمة البلوك ${i + 1} من ${todo.length}`;
+      try { const tr = await paragraphTranslation(todo[i].v.trim()); todo[i].a = tr.ar; todo[i].pairs = tr.pairs; }
+      catch (ex) { failed++; lastReason = aiReason(ex); console.warn("editor translation failed", ex); }
+      if (i < todo.length - 1) await sleep(500);
     }
-    draw(); const fresh = d.querySelector("#makeTranslations"); fresh.disabled = false; fresh.textContent = "🌐 ترجم كل البلوكات"; err(failed ? `تعذر ترجمة ${failed} بلوك — اضغط الزر لإعادة المحاولة` : "✅ تمت ترجمة كل البلوكات — اضغط حفظ لحفظها مع الدرس");
+    draw(); const fresh = d.querySelector("#makeTranslations"); fresh.disabled = false; fresh.textContent = "🌐 ترجم كل البلوكات";
+    err(failed ? `تعذر ترجمة ${failed} بلوك (السبب: ${lastReason}) — اضغط الزر وهيعيد اللي فشل بس` : `✅ تمت ترجمة ${todo.length} بلوك — اضغط حفظ لحفظها مع الدرس`);
   };
+  
   d.querySelector("#makeWords").onclick = async e => {
     const btn = e.currentTarget, source = blocks.filter(b => b.t !== "img" && String(b.v || "").trim()).map(b => b.v.trim()).join("\n\n");
     if (!source) return err("أضف محتوى الدرس أولًا");
