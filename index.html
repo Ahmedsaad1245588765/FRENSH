@@ -145,6 +145,7 @@ body.login-screen{background:#f9fbff;overflow-x:hidden}body.login-screen #app{ma
 #themeToggle{padding:7px 11px;background:#fff;color:#214a9b;border:1px solid #d8e2f3;box-shadow:none;font-size:1rem}body.night{background:#091126;color:#eaf0ff;background-image:radial-gradient(circle at 8% 8%,rgba(62,83,190,.2),transparent 28%),radial-gradient(circle at 92% 18%,rgba(0,175,200,.12),transparent 25%)}body.night header{background:rgba(9,17,38,.82);border-image:linear-gradient(90deg,#3672e0,#18264b,#e23e4d) 1}body.night .brand b,body.night nav a,body.night .sh,body.night .hero h2{color:#eef3ff}body.night .tile,body.night .item,body.night .q,body.night .text,body.night .login-card{background:rgba(18,29,59,.94);color:#edf2ff;border-color:rgba(255,255,255,.12)}body.night input,body.night textarea,body.night select{background:#0d1833;color:#fff;border-color:#304570}body.night .hero{background:linear-gradient(120deg,#111d42,#211942)}
 .dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:18px 0}.metric{padding:19px;border:1px solid #dce6f4;background:linear-gradient(145deg,#fff,#f3f7ff);border-radius:18px;box-shadow:0 10px 24px rgba(36,68,126,.1)}.metric b{display:block;font-size:2rem;color:#1d4da7;line-height:1.1}.metric small{color:#72809d}.progress-track{height:10px;background:#e7edf7;border-radius:99px;overflow:hidden}.progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#1d54b6,#e0444d,#edbd44);transition:width .8s ease}.notice{border-inline-start:4px solid #e0444d;background:linear-gradient(90deg,#fff8f5,#fff);padding:16px 18px;border-radius:14px;margin:10px 0;box-shadow:0 8px 20px rgba(49,69,120,.08)}.notice h4{margin:0 0 4px;color:#1e438d}.notice time{font-size:.8rem;color:#8a96ad}.question-progress{margin:10px 0 18px}.question-progress .progress-track{height:7px}.group-tools{display:flex;gap:8px;align-items:center;margin:10px 0}.group-tools input{margin:0;max-width:310px}.badge{display:inline-block;border-radius:99px;padding:3px 10px;font-size:.78rem;background:#eaf1ff;color:#2452a4;font-weight:700}
 @media(max-width:600px){.dashboard{grid-template-columns:1fr 1fr}.metric b{font-size:1.55rem}}
+.group-entry{cursor:pointer;gap:12px}.group-members{display:block;font-size:.78rem}.unread-badge{display:inline-grid;place-items:center;min-width:25px;height:25px;padding:0 7px;border-radius:99px;background:#25a66a;color:#fff;font-size:.78rem;font-weight:800}.wa-messages{height:min(62vh,620px);min-height:260px;overflow:auto;padding:16px;border-radius:16px;background:linear-gradient(135deg,#edf4ed,#e5edf6);display:flex;flex-direction:column;gap:9px}.wa-bubble{max-width:min(78%,680px);align-self:flex-start;padding:9px 13px;border-radius:14px 14px 14px 4px;background:#fff;box-shadow:0 2px 7px rgba(20,38,79,.1);white-space:pre-wrap;overflow-wrap:anywhere}.wa-bubble.mine{align-self:flex-end;background:#d9fdd3;border-radius:14px 14px 4px 14px}.wa-bubble small,.wa-bubble time{display:block;color:#68758f;font-size:.75rem}.wa-bubble time{text-align:end;margin-top:4px}.wa-compose{display:flex;gap:8px;align-items:end;margin-top:10px}.wa-compose textarea{flex:1;resize:vertical;margin:0}.call-notice{display:flex;align-items:center;justify-content:space-between;gap:10px}#voiceBar{position:fixed;z-index:80;left:50%;bottom:18px;transform:translateX(-50%);width:min(94vw,640px);display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;border-radius:18px;background:#14264f;color:#fff;box-shadow:0 14px 44px rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2)}#voiceBar button{white-space:nowrap}
 
 /* Responsive navigation */
 #menuToggle{display:none;background:#fff;color:#214a9b;border:1px solid #d7e2f3;box-shadow:0 5px 14px rgba(35,67,126,.1);font-size:1.35rem;line-height:1;padding:8px 11px}header nav{margin-inline-start:auto;justify-content:flex-end;max-width:75%}header nav a{white-space:nowrap}#auth{white-space:nowrap}
@@ -432,7 +433,7 @@ iframe{border-radius:10px;margin:8px 0}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp, deleteField } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp, deleteField, arrayUnion, onSnapshot } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app-check.js";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-ai.js";
 
@@ -467,7 +468,8 @@ async function askJSON(prompt, tries = 2, parts = null) {
 }
 const $ = s => document.querySelector(s), app = $("#app");
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let user = null, admin = false, editor = false;
+let user = null, admin = false, editor = false, groupAdmin = false;
+let groupListUnsubs = [], groupChatUnsubs = [];
 
 /* ---------- Auth ---------- */
 function authDialog() {
@@ -494,7 +496,7 @@ $("#themeToggle").onclick = () => { document.body.classList.toggle("night"); loc
 if (localStorage.getItem("fr-theme") === "night") { document.body.classList.add("night"); $("#themeToggle").textContent="☀"; }
 const withTimeout = (promise, ms=4500) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error("FIRESTORE_TIMEOUT")), ms))]);
 onAuthStateChanged(auth, async u => {
-  user = u; admin = !!u && u.email === ADMIN_EMAIL;
+  user = u; admin = !!u && u.email === ADMIN_EMAIL; groupAdmin = admin;
   $("#who").textContent = u ? (u.displayName || u.email) : "";
   $("#n6").style.display = admin ? "" : "none";
   $("#aiFab").style.display = u ? "grid" : "none"; $("#penFab").style.display = u ? "grid" : "none"; if (!u && penOn) $("#penFab").click(); if (!u) { $("#aiPanel").style.display = "none"; tutorChat = null; $("#aiMsgs").innerHTML = ""; }
@@ -509,6 +511,8 @@ onAuthStateChanged(auth, async u => {
     if(existing.data()?.disabled){ alert("هذا الحساب متوقف من الإدارة"); await signOut(auth); return; }
     await withTimeout(setDoc(doc(db,"users",u.uid),{name:u.displayName||u.email.split("@")[0],email:u.email,photo:u.photoURL||"",last:serverTimestamp()},{merge:true}));
     editor=admin || existing.data()?.role === "assistant";
+    groupAdmin=admin || existing.data()?.groupsAdmin === true;
+    await withTimeout(setDoc(doc(db,"studentDirectory",u.uid),{name:u.displayName||u.email.split("@")[0],email:u.email,updatedAt:serverTimestamp()},{merge:true}));
     if(admin) await withTimeout(setDoc(doc(db,"groups","general"),{name:"الجروب العام",public:true,members:[]},{merge:true}));
   } catch(e){ console.warn("Background Firebase sync skipped:",e.message); } })();
 });
@@ -1412,8 +1416,10 @@ async function gradesPage() {
 async function usersPage() {
   if (!admin) return;
   const us = await list("users");
-  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">المستخدمين</h3></div>` + us.map(u => `<div class="item"><span>${esc(u.name)} <small class="mut">${esc(u.email)}</small></span>${u.email === ADMIN_EMAIL ? "<b>أدمن</b>" : `<button data-u="${u.id}" class="${u.role === "assistant" ? "del" : ""}">${u.role === "assistant" ? "إلغاء المساعد" : "اجعله مساعد"}</button><button class="sec" data-ban="${u.id}">${u.disabled ? "تفعيل" : "تعطيل"}</button>`}</div>`).join("");
+  await Promise.all(us.map(u => setDoc(doc(db, "studentDirectory", u.id), { name: u.name || u.email || "طالب", email: u.email || "", disabled: u.disabled === true, updatedAt: serverTimestamp() }, { merge: true }).catch(e => console.warn("directory sync", e))));
+  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">المستخدمين</h3></div>` + us.map(u => `<div class="item"><span>${esc(u.name)} <small class="mut">${esc(u.email)}</small></span>${u.email === ADMIN_EMAIL ? "<b>أدمن</b>" : `<button data-u="${u.id}" class="${u.role === "assistant" ? "del" : ""}">${u.role === "assistant" ? "إلغاء المساعد" : "اجعله مساعد"}</button><button class="sec" data-gadmin="${u.id}">${u.groupsAdmin ? "إلغاء مدير الجروبات" : "اجعله مدير جروبات"}</button><button class="sec" data-ban="${u.id}">${u.disabled ? "تفعيل" : "تعطيل"}</button>`}</div>`).join("");
   app.querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => { const x=us.find(x=>x.id===b.dataset.ban); await updateDoc(doc(db,"users",x.id),{disabled:!x.disabled}); usersPage(); });
+  app.querySelectorAll("[data-gadmin]").forEach(b => b.onclick = async () => { const x=us.find(x=>x.id===b.dataset.gadmin); await updateDoc(doc(db,"users",x.id),{groupsAdmin:!x.groupsAdmin}); if (x.id === user.uid) groupAdmin = !x.groupsAdmin; usersPage(); });
   app.querySelectorAll("[data-u]").forEach(b => b.onclick = async () => {
     const u = us.find(x => x.id === b.dataset.u);
     await updateDoc(doc(db, "users", u.id), { role: u.role === "assistant" ? "" : "assistant" }); usersPage();
@@ -1421,37 +1427,138 @@ async function usersPage() {
 }
 async function groupsPage() {
   if (!user) return needLogin();
+  groupListUnsubs.forEach(fn => fn()); groupListUnsubs = [];
+  groupChatUnsubs.forEach(fn => fn()); groupChatUnsubs = [];
   const gs = await myGroups();
-  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">الجروبات</h3>${admin ? `<button id="addg">+ جروب</button>` : ""}</div>` +
-    gs.map(g => `<div class="item" data-id="${g.id}"><span>${esc(g.name)}</span><small class="mut">${g.public ? "للجميع" : (g.members || []).length + " عضو"}</small>${admin && !g.public ? `<button class="del" data-del="${g.id}">حذف</button>` : ""}</div>`).join("");
-  if (admin) $("#addg").onclick = async () => {
-    const us = (await list("users")).filter(u => u.email !== ADMIN_EMAIL);
-    form("جروب جديد", [{ n: "name", l: "اسم الجروب" }, { n: "m", l: "الأعضاء", t: "chk", o: us.map(u => [u.id, `${u.name} — ${u.email}`]) }],
-      async v => { await addDoc(collection(db, "groups"), { name: v.name, public: false, members: v.m, created: serverTimestamp() }); groupsPage(); });
+  const readAt = new Map(), unread = new Map();
+  for (const g of gs) {
+    const rr = doc(db, "users", user.uid, "groupReads", g.id);
+    let rs = await getDoc(rr);
+    if (!rs.exists()) { await setDoc(rr, { lastReadAt: serverTimestamp() }); readAt.set(g.id, Date.now()); unread.set(g.id, 0); }
+    else readAt.set(g.id, rs.data().lastReadAt?.toMillis?.() || 0);
+    const ps = await getDocs(collection(db, "groups", g.id, "posts"));
+    unread.set(g.id, ps.docs.filter(d => d.data().uid !== user.uid && (d.data().created?.toMillis?.() || 0) > readAt.get(g.id)).length);
+  }
+  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">الجروبات</h3>${groupAdmin ? `<button id="addg">+ إنشاء جروب</button>` : ""}</div>` +
+    (gs.length ? gs.map(g => `<div class="item group-entry" data-id="${g.id}"><span>${esc(g.name)}<small class="mut group-members">${(g.members || []).length} عضو</small></span><small class="unread-badge" data-unread="${g.id}" style="${unread.get(g.id) ? "" : "display:none"}">${unread.get(g.id) || 0}</small></div>`).join("") : `<p class="mut">لسه مفيش جروبات.</p>`);
+  if (groupAdmin) $("#addg").onclick = async () => {
+    const directory = (await list("studentDirectory")).filter(x => x.id !== user.uid && !x.disabled);
+    form("إنشاء جروب", [{ n: "name", l: "اسم الجروب" }, { n: "m", l: "إضافة طلاب", t: "chk", o: directory.map(x => [x.id, `${x.name || "طالب"} — ${x.email || ""}`]) }],
+      async v => { const members = [...new Set([user.uid, ...(v.m || [])])]; const ref = await addDoc(collection(db, "groups"), { name: v.name.trim(), public: false, members, admins: [user.uid], createdBy: user.uid, created: serverTimestamp() }); await setDoc(doc(db, "users", user.uid, "groupReads", ref.id), { lastReadAt: serverTimestamp() }); groupsPage(); });
   };
-  app.querySelectorAll(".item").forEach(el => el.onclick = async e => {
-    if (e.target.dataset.del) { if (confirm("حذف الجروب؟")) { await deleteDoc(doc(db, "groups", e.target.dataset.del)); groupsPage(); } return; }
-    groupView(gs.find(g => g.id === el.dataset.id));
+  app.querySelectorAll(".group-entry").forEach(el => el.onclick = () => groupView(gs.find(g => g.id === el.dataset.id)));
+  gs.forEach(g => groupListUnsubs.push(onSnapshot(collection(db, "groups", g.id, "posts"), snap => {
+    const n = snap.docs.filter(d => d.data().uid !== user.uid && (d.data().created?.toMillis?.() || 0) > readAt.get(g.id)).length;
+    const badge = app.querySelector(`[data-unread="${g.id}"]`); if (badge) { badge.textContent = n; badge.style.display = n ? "inline-grid" : "none"; }
+  })));
+}
+const post = (g, text) => addDoc(collection(db, "groups", g.id, "posts"), { text, uid: user.uid, by: user.displayName || user.email, created: serverTimestamp() });
+const groupManager = g => admin || (g.admins || []).includes(user?.uid);
+async function addGroupMembers(g) {
+  const current = new Set(g.members || []), directory = (await list("studentDirectory")).filter(x => !current.has(x.id) && !x.disabled);
+  if (!directory.length) return alert("مفيش طلاب جدد متاحين للإضافة.");
+  form("إضافة أعضاء للجروب", [{ n: "m", l: "اختار الطلاب", t: "chk", o: directory.map(x => [x.id, `${x.name || "طالب"} — ${x.email || ""}`]) }], async v => {
+    if (v.m?.length) await updateDoc(doc(db, "groups", g.id), { members: arrayUnion(...v.m) }); groupView({ ...g, members: [...current, ...(v.m || [])] });
   });
 }
-const post = (g, text, parent) => addDoc(collection(db, "groups", g.id, "posts"), { text, uid: user.uid, by: user.displayName, parent: parent || null, created: serverTimestamp() });
 async function groupView(g) {
-  const ps = await list(`groups/${g.id}/posts`), qs = ps.filter(p => !p.parent), can = p => admin || p.uid === user.uid;
-  app.innerHTML = `<div class="row"><button class="sec" id="back">← الجروبات</button><h2 style="flex:1;margin:0">${esc(g.name)}</h2><button id="np">+ سؤال</button></div><div class="group-tools"><input id="postSearch" placeholder="ابحث داخل الجروب..."></div>` +
-    (qs.map(q => `<div class="q" data-post-text="${esc(q.text).toLowerCase()}"><small class="mut">${q.pinned ? "📌 " : ""}${esc(q.by)}</small><div>${esc(q.text)}</div>` +
-      ps.filter(r => r.parent === q.id).map(r => `<div class="opt"><small class="mut">${esc(r.by)}</small><br>${esc(r.text)} ${can(r) ? `<button class="del" data-dp="${r.id}">حذف</button>` : ""}</div>`).join("") +
-      `<div class="row"><button class="sec" data-r="${q.id}">رد</button>${can(q) ? `<button class="sec" data-edit-post="${q.id}">تعديل</button><button class="del" data-dp="${q.id}">حذف</button>` : ""}${admin ? `<button class="sec" data-pin="${q.id}">${q.pinned ? "إلغاء التثبيت" : "تثبيت"}</button>` : ""}</div></div>`).join("") || `<p class="mut">مفيش أسئلة لسه.</p>`);
+  groupListUnsubs.forEach(fn => fn()); groupListUnsubs = []; groupChatUnsubs.forEach(fn => fn()); groupChatUnsubs = [];
+  await setDoc(doc(db, "users", user.uid, "groupReads", g.id), { lastReadAt: serverTimestamp() }, { merge: true });
+  const mgr = groupManager(g);
+  app.innerHTML = `<div class="row"><button class="sec" id="back">← الجروبات</button><h2 style="flex:1;margin:0">${esc(g.name)}</h2>${mgr ? `<button class="sec" id="addMembers">+ أعضاء</button>` : ""}<button id="voiceCall">☎ مكالمة صوتية</button></div><div id="callNotice"></div><div id="waMessages" class="wa-messages"></div><form id="waForm" class="wa-compose"><textarea id="waText" rows="2" placeholder="اكتب رسالة للجروب..."></textarea><button type="submit">إرسال</button></form>`;
   $("#back").onclick = groupsPage;
-  $("#postSearch").oninput = e => app.querySelectorAll("[data-post-text]").forEach(x => x.style.display=x.dataset.postText.includes(e.target.value.toLowerCase())?"":"none");
-  $("#np").onclick = () => form("سؤال جديد", [{ n: "t", l: "السؤال", t: "area" }], async v => { if (v.t.trim()) await post(g, v.t.trim()); groupView(g); });
-  app.querySelectorAll("[data-edit-post]").forEach(b => b.onclick=()=>{const x=ps.find(x=>x.id===b.dataset.editPost); form("تعديل المنشور",[{n:"t",l:"النص",t:"area",v:x.text}],async v=>{await updateDoc(doc(db,"groups",g.id,"posts",x.id),{text:v.t}); groupView(g);});});
-  app.querySelectorAll("[data-pin]").forEach(b => b.onclick=async()=>{const x=ps.find(x=>x.id===b.dataset.pin); await updateDoc(doc(db,"groups",g.id,"posts",x.id),{pinned:!x.pinned}); groupView(g);});
-  app.querySelectorAll("[data-r]").forEach(b => b.onclick = () => form("رد", [{ n: "t", l: "ردك", t: "area" }], async v => { if (v.t.trim()) await post(g, v.t.trim(), b.dataset.r); groupView(g); }));
-  app.querySelectorAll("[data-dp]").forEach(b => b.onclick = async () => {
-    if (!confirm("حذف؟")) return;
-    for (const p of ps.filter(p => p.id === b.dataset.dp || p.parent === b.dataset.dp)) if (can(p)) await deleteDoc(doc(db, "groups", g.id, "posts", p.id));
-    groupView(g);
-  });
+  if (mgr) $("#addMembers").onclick = () => addGroupMembers(g);
+  $("#waForm").onsubmit = async e => { e.preventDefault(); const box = $("#waText"), text = box.value.trim(); if (!text) return; box.value = ""; try { await post(g, text); } catch (err) { alert("تعذر إرسال الرسالة: " + (err.code || err.message)); box.value = text; } };
+  const messages = $("#waMessages");
+  groupChatUnsubs.push(onSnapshot(collection(db, "groups", g.id, "posts"), snap => {
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.created?.seconds || 0) - (b.created?.seconds || 0));
+    messages.innerHTML = rows.map(m => `<article class="wa-bubble ${m.uid === user.uid ? "mine" : ""}"><small>${esc(m.by || "عضو")}</small><div>${esc(m.text || "")}</div><time>${m.created?.toDate ? m.created.toDate().toLocaleString("ar-EG", { dateStyle: "short", timeStyle: "short" }) : "الآن"}</time></article>`).join("") || `<p class="mut">ابدأ المحادثة برسالة.</p>`;
+    messages.scrollTop = messages.scrollHeight;
+    setDoc(doc(db, "users", user.uid, "groupReads", g.id), { lastReadAt: serverTimestamp() }, { merge: true }).catch(() => {});
+  }));
+  const callsRef = collection(db, "groups", g.id, "calls");
+  groupChatUnsubs.push(onSnapshot(callsRef, snap => {
+    const active = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.active).sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))[0];
+    const notice = $("#callNotice"); if (!notice) return;
+    notice.innerHTML = active ? `<div class="q call-notice">☎ مكالمة جارية — ${esc(active.by || "عضو")} <button id="joinCall">انضمام</button></div>` : "";
+    if (active) $("#joinCall").onclick = () => joinVoiceCall(g, active.id);
+  }));
+  $("#voiceCall").onclick = () => joinVoiceCall(g, null);
+}
+let voiceSession = null;
+async function joinVoiceCall(g, callId) {
+  if (voiceSession) return alert("أنت بالفعل في مكالمة صوتية.");
+  if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) return alert("المتصفح لا يدعم المكالمات الصوتية. افتح الموقع عبر HTTPS وبمتصفح حديث.");
+  const calls = collection(db, "groups", g.id, "calls");
+  let callCreatedBy = user.uid, newCall = !callId, newCallRef = null;
+  try {
+    if (!callId) {
+      const active = (await getDocs(calls)).docs.find(d => d.data().active);
+      if (active) return joinVoiceCall(g, active.id);
+    }
+    const callRef = callId ? doc(db, "groups", g.id, "calls", callId) : doc(calls);
+    if (!callId) newCallRef = callRef;
+    if (!callId) await setDoc(callRef, { active: true, by: user.displayName || user.email, createdBy: user.uid, createdAt: serverTimestamp() });
+    else { const c = await getDoc(callRef); if (!c.exists() || !c.data().active) return alert("المكالمة انتهت."); callCreatedBy = c.data().createdBy || ""; }
+    const participantsRef = collection(db, "groups", g.id, "calls", callRef.id, "participants");
+    const before = await getDocs(participantsRef), existing = before.docs.map(d => d.id).filter(id => id !== user.uid);
+    if (before.size >= 8 && !before.docs.some(d => d.id === user.uid)) return alert("المكالمة وصلت للحد الحالي وهو 8 مشاركين.");
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    await setDoc(doc(participantsRef, user.uid), { uid: user.uid, name: user.displayName || user.email, joinedAt: serverTimestamp() });
+    const session = voiceSession = { g, callRef, stream, createdBy: callCreatedBy, peers: new Map(), seen: new Set(), queued: new Map(), unsubs: [] };
+    const bar = document.createElement("div"); bar.id = "voiceBar"; bar.innerHTML = `<span>☎ مكالمة ${esc(g.name)} · <b id="voiceCount">1</b> مشارك</span><button id="voiceMute" class="sec">كتم الميكروفون</button><button id="voiceHangup" class="del">إنهاء</button>`; document.body.appendChild(bar);
+    $("#voiceHangup").onclick = () => leaveVoiceCall();
+    $("#voiceMute").onclick = e => { const track = stream.getAudioTracks()[0]; if (track) { track.enabled = !track.enabled; e.currentTarget.textContent = track.enabled ? "كتم الميكروفون" : "إلغاء الكتم"; } };
+    const send = (to, type, value) => addDoc(collection(db, "groups", g.id, "calls", callRef.id, "signals"), { from: user.uid, to, type, ...(type === "candidate" ? { candidate: value } : { sdp: value }), createdAt: serverTimestamp() });
+    const peerFor = peerId => {
+      if (session.peers.has(peerId)) return session.peers.get(peerId);
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+      session.peers.set(peerId, pc); stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      pc.onicecandidate = e => { if (e.candidate && voiceSession === session) send(peerId, "candidate", e.candidate.toJSON()).catch(console.warn); };
+      pc.ontrack = e => { let audio = document.getElementById("remoteAudio_" + peerId); if (!audio) { audio = document.createElement("audio"); audio.id = "remoteAudio_" + peerId; audio.autoplay = true; audio.playsInline = true; audio.style.display = "none"; document.body.appendChild(audio); } audio.srcObject = e.streams[0]; audio.play().catch(() => {}); };
+      return pc;
+    };
+    const flushCandidates = async (peerId, pc) => { const pending = session.queued.get(peerId) || []; session.queued.delete(peerId); for (const c of pending) try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch (e) { console.warn("ICE candidate", e); } };
+    for (const peerId of existing) {
+      const pc = peerFor(peerId), offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+      await send(peerId, "offer", { type: pc.localDescription.type, sdp: pc.localDescription.sdp });
+    }
+    session.unsubs.push(onSnapshot(query(collection(db, "groups", g.id, "calls", callRef.id, "signals"), where("to", "==", user.uid)), snap => {
+      snap.docChanges().forEach(change => {
+        if (change.type !== "added" || session.seen.has(change.doc.id)) return;
+        session.seen.add(change.doc.id); const m = change.doc.data(); if (m.from === user.uid) return;
+        (async () => {
+          const pc = peerFor(m.from);
+          if (m.type === "offer") { await pc.setRemoteDescription(new RTCSessionDescription(m.sdp)); await flushCandidates(m.from, pc); const answer = await pc.createAnswer(); await pc.setLocalDescription(answer); await send(m.from, "answer", { type: pc.localDescription.type, sdp: pc.localDescription.sdp }); }
+          else if (m.type === "answer" && pc.signalingState === "have-local-offer") { await pc.setRemoteDescription(new RTCSessionDescription(m.sdp)); await flushCandidates(m.from, pc); }
+          else if (m.type === "candidate") { if (pc.remoteDescription) await pc.addIceCandidate(new RTCIceCandidate(m.candidate)); else session.queued.set(m.from, [...(session.queued.get(m.from) || []), m.candidate]); }
+        })().catch(e => console.warn("call signal", e));
+      });
+    }));
+    session.unsubs.push(onSnapshot(participantsRef, snap => {
+      const count = $("#voiceCount"); if (count) count.textContent = snap.size;
+      if (!snap.size && voiceSession === session && (user.uid === session.createdBy || groupManager(g))) updateDoc(callRef, { active: false }).catch(() => {});
+    }));
+    session.unsubs.push(onSnapshot(callRef, snap => { if (voiceSession === session && (!snap.exists() || !snap.data().active)) leaveVoiceCall(); }));
+    return;
+  } catch (e) {
+    console.error(e);
+    if (voiceSession?.g?.id === g.id) await leaveVoiceCall();
+    if (newCallRef) updateDoc(newCallRef, { active: false }).catch(() => {});
+    alert("تعذر بدء المكالمة. تأكد من السماح باستخدام الميكروفون وتحديث قواعد Firestore. " + (e.code || e.message || ""));
+  }
+}
+async function leaveVoiceCall() {
+  const s = voiceSession; if (!s) return; voiceSession = null;
+  s.unsubs.forEach(fn => fn()); s.peers.forEach(pc => pc.close()); s.stream.getTracks().forEach(t => t.stop());
+  document.querySelectorAll("audio[id^='remoteAudio_']").forEach(a => { a.pause(); a.srcObject = null; a.remove(); });
+  document.getElementById("voiceBar")?.remove();
+  try {
+    if (s.createdBy === user.uid) await updateDoc(s.callRef, { active: false });
+    await deleteDoc(doc(db, "groups", s.g.id, "calls", s.callRef.id, "participants", user.uid));
+    const left = await getDocs(collection(db, "groups", s.g.id, "calls", s.callRef.id, "participants"));
+    if (!left.size) await updateDoc(s.callRef, { active: false });
+  } catch (e) { console.warn("leave call", e); }
 }
 /* ---------- النطق والترجمة والكاردز ---------- */
 function speak(t) {
