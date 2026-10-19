@@ -1844,7 +1844,7 @@ async function groupView(g) {
   const directory=await groupStudents(), memberNameByUid=new Map(directory.map(x=>[x.id,x.name]));
   const hiddenRef=collection(db,"users",user.uid,"hiddenGroupMessages",g.id,"posts"),initialHidden=await getDocs(hiddenRef).catch(e=>{console.warn("hidden message list",e);return {docs:[]};});let hiddenMessageIds=new Set(initialHidden.docs.map(d=>d.id)),messageRows=[];
   const mgr = groupManager(g);
-  app.innerHTML = `<div class="wa-chat-head"><button class="sec" id="back">‹</button><div class="wa-avatar">${esc((g.name||"G").trim().slice(0,1).toUpperCase())}</div><div class="wa-chat-title"><b>${esc(g.name)}</b><small>${(g.members||[]).length} عضو · ${esc(g.description||"محادثة الجروب")}</small></div><button id="voiceCall">☎ مكالمة صوتية</button>${(mgr||groupOwner(g))?`<div class="wa-menu-wrap"><button class="sec wa-menu-trigger" id="groupMenuToggle" aria-label="خيارات الجروب" title="خيارات الجروب">⋮</button><div class="wa-menu" id="groupMenu" hidden>${mgr?`<button data-group-action="manage">إدارة الجروب</button><button data-group-action="members">الأعضاء وإدارة المدراء</button><button data-group-action="add">إضافة أعضاء</button><button data-group-action="requests">طلبات الانضمام <span class="wa-menu-count" id="joinRequestCount"></span></button><button data-group-action="admins">تعيين مدير</button>`:""}${groupOwner(g)?`<hr><button data-group-action="edit">تعديل الجروب</button><button class="danger-item" data-group-action="delete">حذف الجروب</button>`:""}</div></div>`:""}</div><div id="callNotice"></div>${mgr?`<section id="groupManagePanel" class="wa-manage" style="display:none"></section>`:""}<div id="waMessages" class="wa-messages"></div><form id="waForm" class="wa-compose"><textarea id="waText" rows="2" placeholder="اكتب رسالة للجروب..."></textarea><button type="submit">إرسال</button><small class="mut" style="flex-basis:100%">المحادثة النصية فقط؛ لا يمكن إرسال مرفقات جديدة في الجروبات.</small></form>`;
+  app.innerHTML = `<div class="wa-chat-head"><button class="sec" id="back">‹</button><div class="wa-avatar">${esc((g.name||"G").trim().slice(0,1).toUpperCase())}</div><div class="wa-chat-title"><b>${esc(g.name)}</b><small>${(g.members||[]).length} عضو · ${esc(g.description||"محادثة الجروب")}</small></div><button id="voiceCall" title="متاح لأي عضو مقبول في هذا الجروب">☎ بدء مكالمة جماعية</button>${(mgr||groupOwner(g))?`<div class="wa-menu-wrap"><button class="sec wa-menu-trigger" id="groupMenuToggle" aria-label="خيارات الجروب" title="خيارات الجروب">⋮</button><div class="wa-menu" id="groupMenu" hidden>${mgr?`<button data-group-action="manage">إدارة الجروب</button><button data-group-action="members">الأعضاء وإدارة المدراء</button><button data-group-action="add">إضافة أعضاء</button><button data-group-action="requests">طلبات الانضمام <span class="wa-menu-count" id="joinRequestCount"></span></button><button data-group-action="admins">تعيين مدير</button>`:""}${groupOwner(g)?`<hr><button data-group-action="edit">تعديل الجروب</button><button class="danger-item" data-group-action="delete">حذف الجروب</button>`:""}</div></div>`:""}</div><div id="callNotice"></div>${mgr?`<section id="groupManagePanel" class="wa-manage" style="display:none"></section>`:""}<div id="waMessages" class="wa-messages"></div><form id="waForm" class="wa-compose"><textarea id="waText" rows="2" placeholder="اكتب رسالة للجروب..."></textarea><button type="submit">إرسال</button><small class="mut" style="flex-basis:100%">المحادثة النصية فقط؛ لا يمكن إرسال مرفقات جديدة في الجروبات.</small></form>`;
   $("#back").onclick = groupsPage;
   groupChatUnsubs.push(onSnapshot(doc(db,"groups",g.id),snap=>{if(!snap.exists()||snap.data().deleted){if(voiceSession?.g?.id===g.id)leaveVoiceCall();groupsPage();return;}const fresh={id:g.id,...snap.data()};if(!admin&&!(fresh.members||[]).includes(user.uid)){if(voiceSession?.g?.id===g.id)leaveVoiceCall();showGroupPreview(fresh,"approved");return;}if(groupManager(fresh)!==mgr||fresh.name!==g.name)groupView(fresh);}));
   const menu=$("#groupMenu"),menuToggle=$("#groupMenuToggle");
@@ -1892,29 +1892,29 @@ async function groupView(g) {
   $("#voiceCall").onclick = () => joinVoiceCall(g, null);
 }
 let voiceSession = null;
-async function joinVoiceCall(g, callId) {
+async function joinVoiceCall(g, callId, preAcquiredStream = null) {
   if (voiceSession) return alert("أنت بالفعل في مكالمة صوتية.");
   if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) return alert("المتصفح لا يدعم المكالمات الصوتية. افتح الموقع عبر HTTPS وبمتصفح حديث.");
   const calls = collection(db, "groups", g.id, "calls");
-  let callCreatedBy = user.uid, newCall = !callId, newCallRef = null, newCallCreated = false, requestedStream = null, callStage="بدء المكالمة";
+  let callCreatedBy = user.uid, newCall = !callId, newCallRef = null, newCallCreated = false, requestedStream = preAcquiredStream, callStage="طلب إذن الميكروفون";
   try {
+    // Request media permission directly from the click-triggered call path, before any Firestore await.
+    if(!requestedStream)requestedStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
     if (!callId) {
       callStage="قراءة المكالمات الحالية";
       const active = (await getDocs(calls)).docs.find(d => d.data().active);
-      if (active) { const since=active.data().hostLastSeen?.toMillis?.()||active.data().createdAt?.toMillis?.()||0; if(Date.now()-since<75000)return joinVoiceCall(g,active.id); callStage="إغلاق مكالمة قديمة"; await updateDoc(active.ref,{active:false}); }
+      if (active) { const since=active.data().hostLastSeen?.toMillis?.()||active.data().createdAt?.toMillis?.()||0; if(Date.now()-since<75000)return joinVoiceCall(g,active.id,requestedStream); callStage="إغلاق مكالمة قديمة"; await updateDoc(active.ref,{active:false}); }
     }
     const callRef = callId ? doc(db, "groups", g.id, "calls", callId) : doc(calls);
     if (!callId) newCallRef = callRef;
     if (!callId) callCreatedBy=user.uid;
-    else { callStage="التحقق من المكالمة القائمة"; const c = await getDoc(callRef); if (!c.exists() || !c.data().active) return alert("المكالمة انتهت."); callCreatedBy = c.data().createdBy || ""; }
+    else { callStage="التحقق من المكالمة القائمة"; const c = await getDoc(callRef); if (!c.exists() || !c.data().active) throw new Error("المكالمة انتهت."); callCreatedBy = c.data().createdBy || ""; }
     const participantsRef = collection(db, "groups", g.id, "calls", callRef.id, "participants");
     callStage="قراءة المشاركين";
     const before = await getDocs(participantsRef), fresh=[];
     for(const d of before.docs){const last=d.data().lastSeen?.toMillis?.()||d.data().joinedAt?.toMillis?.()||0;if(Date.now()-last>75000){callStage="تنظيف مشارك غير نشط";await deleteDoc(d.ref).catch(()=>{});}else fresh.push(d);}
     const existing=fresh.map(d=>d.id).filter(id=>id!==user.uid);
-    if (fresh.length >= 8 && !fresh.some(d => d.id === user.uid)) return alert("المكالمة وصلت للحد الحالي وهو 8 مشاركين.");
-    callStage="طلب إذن الميكروفون";
-    requestedStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    if (fresh.length >= 8 && !fresh.some(d => d.id === user.uid)) throw Object.assign(new Error("المكالمة وصلت للحد الحالي وهو 8 مشاركين."),{code:"CALL_FULL"});
     const stream=requestedStream;
     if(!callId){callStage="إنشاء سجل المكالمة";await setDoc(callRef,{active:true,by:currentStudentName||user.displayName||user.email,createdBy:user.uid,createdAt:serverTimestamp(),hostLastSeen:serverTimestamp()});newCallCreated=true;}
     const participantRef=doc(participantsRef,user.uid);
@@ -1967,7 +1967,7 @@ async function joinVoiceCall(g, callId) {
     if (requestedStream && voiceSession?.g?.id !== g.id) requestedStream.getTracks().forEach(track=>track.stop());
     if (newCallCreated && newCallRef) updateDoc(newCallRef, { active: false }).catch(() => {});
     const micDenied=e?.name==="NotAllowedError"||e?.name==="PermissionDeniedError"||e?.name==="SecurityError";
-    const detail=micDenied?"المتصفح رفض إذن الميكروفون؛ هذا ليس خطأ في قواعد Firebase. اسمح للميكروفون من إعدادات الموقع (رمز القفل بجانب العنوان)، وتأكد أن الموقع يعمل عبر HTTPS وافتحه مباشرةً في Chrome أو Safari، ثم أعد تحميل الصفحة.":`المرحلة: ${callStage}. السبب: ${e.code || e.name || e.message || "خطأ غير معروف"}.`;
+    const detail=micDenied?"المتصفح رفض إذن الميكروفون؛ هذا ليس خطأ في قواعد Firebase. اسمح للميكروفون من إعدادات الموقع (رمز القفل بجانب العنوان)، وتأكد أن الموقع يعمل عبر HTTPS وافتحه مباشرةً في Chrome أو Safari، ثم أعد تحميل الصفحة.":e.code==="CALL_FULL"?e.message:`المرحلة: ${callStage}. السبب: ${e.code || e.name || e.message || "خطأ غير معروف"}.`;
     alert(`تعذر بدء المكالمة. ${detail}`);
   }
 }
