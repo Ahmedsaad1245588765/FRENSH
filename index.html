@@ -725,7 +725,12 @@ function renderBilingualParagraph(box, french, arabic, pairs = []) {
     return side;
   };
   const split = value => String(value || "").split(/\n\s*\n+/).map(x => x.trim()).filter(Boolean);
-  const frParts = split(french), arParts = split(arabic), count = Math.max(frParts.length, arParts.length);
+  const bullet = line => /^\s*(?:[-–—•*]|\d+[.)])\s+/.test(line);
+  const units = value => split(value).flatMap(part => {
+    const lines = part.split(/\n+/).map(x => x.trim()).filter(Boolean);
+    return lines.length > 1 && lines.every(bullet) ? lines : [part];
+  });
+  const frParts = units(french), arParts = units(arabic), count = Math.max(frParts.length, arParts.length);
   for (let i = 0; i < count; i++) { const row = document.createElement("div"); row.className = "bilingual-row"; row.append(makeSide(frParts[i] || "", "fr", row), makeSide(arParts[i] || "", "ar", row)); box.appendChild(row); }
 }
 function focusLessonWord(term) {
