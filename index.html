@@ -1574,9 +1574,8 @@ async function openWord(w, sent) {
   speak(w);
   try {
     const t = await translate(mine.fr, mine.ex); if (cur !== mine) return; const base = t.base || w; mine.ar = t.ar; mine.fr = base; $("#sheet .a").textContent = t.ar;
-    const meta = [base.toLowerCase() !== w.toLowerCase() ? base : "", sane(t.note), sane(t.pos), t.level, (t.synonyms || []).filter(x => sane(x)).length ? "مرادفات: " + t.synonyms.filter(x => sane(x)).join(", ") : ""].filter(Boolean).join(" — ");
-    $("#sheet .b").textContent = `الجملة: ${mine.ex}${meta ? " — " + meta : ""}`;
-    try { const sentenceAr = await translateSentence(mine.ex); if (cur === mine) $("#sheet .b").textContent += `\nالترجمة: ${sentenceAr}`; } catch (sentenceError) { console.warn("sentence translation", sentenceError); }
+    const synonyms = (t.synonyms || []).filter(x => sane(x));
+    $("#sheet .b").textContent = synonyms.length ? `مرادفات: ${synonyms.join("، ")}` : "";
   } catch (e) { console.error(e); if (cur !== mine) return; $("#sheet .a").textContent = "الترجمة مش متاحة دلوقتي"; $("#sheet .b").textContent = (e.message || e.code || "").slice(0, 160); }
 }
 $("#sp").onclick = () => speak(cur.word || cur.fr);
