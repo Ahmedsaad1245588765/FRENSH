@@ -418,6 +418,9 @@ iframe{border-radius:10px;margin:8px 0}
 }
 .wa-groups-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:8px 0 16px}.wa-groups-head h2{margin:4px 0}.wa-search{margin:12px 0 18px}.wa-search input{width:100%;border-radius:999px;padding:12px 18px}.wa-group-list{display:grid;gap:8px}.wa-group-card{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid #e1e8f2;border-radius:18px;background:#fff;box-shadow:0 5px 17px rgba(35,63,115,.07);transition:.2s}.wa-group-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(35,63,115,.12)}.wa-avatar,.wa-preview-avatar{width:52px;height:52px;flex:none;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:1.3rem;font-weight:800;background:linear-gradient(135deg,#1f64a7,#31ad85)}.wa-group-copy{min-width:0;flex:1;cursor:pointer}.wa-group-copy b,.wa-group-copy small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wa-group-copy small{margin-top:5px;color:#74819a}.wa-group-side{display:flex;align-items:flex-end;flex-direction:column;gap:5px;color:#77839b;font-size:.78rem}.request-badge{background:#fff0d8;color:#8d5b00;padding:4px 8px;border-radius:99px;font-size:.72rem}.wa-join-btn{font-size:.76rem;padding:6px 10px;white-space:nowrap}.wa-preview{text-align:center;max-width:640px;margin:50px auto;padding:32px;border-radius:24px;background:#fff;border:1px solid #e1e8f2;box-shadow:0 16px 40px rgba(35,63,115,.12)}.wa-preview-avatar{width:88px;height:88px;margin:24px auto 12px;font-size:2rem}.wa-preview-meta{color:#6f7b94;margin:16px}.wa-chat-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:12px;background:#fff;border:1px solid #e1e8f2;border-radius:18px}.wa-chat-title{flex:1;min-width:0}.wa-chat-title b,.wa-chat-title small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wa-chat-title small{font-size:.78rem;color:#72809a;margin-top:4px}.wa-manage{margin:12px 0;padding:16px;border-radius:18px;background:#f4f7fb;border:1px solid #dde5ef}.wa-manage-head,.wa-manage-grid{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.wa-manage-head h3{flex:1}.wa-manage-grid{align-items:flex-start}.wa-manage-grid>div{flex:1;min-width:240px}.wa-member-row{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:9px 4px;border-bottom:1px solid #e4eaf2}.wa-member-row span{flex:1}.wa-admin-tag{font-size:.7rem;color:#147a52;background:#ddf6e8;border-radius:99px;padding:3px 7px}body.night .wa-group-card,body.night .wa-preview,body.night .wa-chat-head{background:#17233d;color:#eef3ff;border-color:#34435f}body.night .wa-group-copy small,body.night .wa-chat-title small{color:#b5c1d7}body.night .wa-manage{background:#111d35;border-color:#34435f}body.night .wa-member-row{border-color:#34435f}@media(max-width:650px){.wa-groups-head{align-items:flex-start}.wa-chat-head{flex-wrap:wrap}.wa-chat-title{min-width:calc(100% - 90px)}.wa-chat-head button{font-size:.72rem;padding:7px 9px}.wa-group-card{padding:11px}.wa-avatar{width:44px;height:44px}.wa-manage-grid{display:block}.wa-preview{margin:24px auto;padding:22px 14px}#voiceBar{gap:4px;padding:8px;font-size:.78rem}#voiceBar button{font-size:.72rem;padding:6px 8px}}
 </style>
+<style>
+.wa-menu-wrap{position:relative;display:flex;align-items:center}.wa-menu-trigger{width:42px;height:42px;padding:0!important;border-radius:50%!important;font-size:1.65rem;line-height:1;box-shadow:none!important}.wa-menu{position:absolute;z-index:120;top:calc(100% + 7px);inset-inline-end:0;min-width:230px;display:flex;flex-direction:column;padding:7px;border:1px solid #e2e8f0;border-radius:13px;background:#fff;box-shadow:0 10px 32px rgba(0,0,0,.2);direction:rtl}.wa-menu[hidden]{display:none!important}.wa-menu button{width:100%;text-align:right;padding:11px 13px;border:0;border-radius:8px;background:transparent;color:#263548;box-shadow:none;font-weight:500;transform:none}.wa-menu button:hover{background:#f0f5f4;color:#075e54;box-shadow:none;transform:none}.wa-menu button:after{display:none}.wa-menu hr{width:100%;border:0;border-top:1px solid #e6e9ed;margin:5px 0}.wa-menu button.danger-item{color:#c0394a}.wa-menu button.danger-item:hover{background:#fff0f1;color:#a61f31}body.night .wa-menu{background:#17233d;border-color:#34435f}body.night .wa-menu button{color:#eef3ff}body.night .wa-menu button:hover{background:#243654;color:#9de2ce}body.night .wa-menu hr{border-color:#34435f}@media(max-width:650px){.wa-menu{min-width:215px;top:calc(100% + 5px)}.wa-menu-trigger{width:38px;height:38px}}
+</style>
 </head>
 <body>
 <div class="top">Faculté · Département de français — قسم اللغة الفرنسية</div>
@@ -469,8 +472,13 @@ async function askJSON(prompt, tries = 2, parts = null) {
 }
 const $ = s => document.querySelector(s), app = $("#app");
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let user = null, admin = false, editor = false, groupAdmin = false;
+let user = null, admin = false, editor = false, groupAdmin = false, currentStudentName = "";
 let groupListUnsubs = [], groupChatUnsubs = [];
+function canonicalStudentName(profile={}, authUser=null) {
+  const candidates=[profile?.name,profile?.fullName,profile?.authName,profile?.displayName,authUser?.displayName,profile?.email?.split("@")[0],authUser?.email?.split("@")[0]]
+    .map(x=>String(x||"").trim().replace(/\s+/g," ")).filter(x=>x&&!x.includes("@")&&!/^طالب$|^student$/i.test(x));
+  return candidates.find(x=>x.split(" ").length>=2)||candidates[0]||"طالب";
+}
 
 /* ---------- Auth ---------- */
 function authDialog() {
@@ -497,7 +505,7 @@ $("#themeToggle").onclick = () => { document.body.classList.toggle("night"); loc
 if (localStorage.getItem("fr-theme") === "night") { document.body.classList.add("night"); $("#themeToggle").textContent="☀"; }
 const withTimeout = (promise, ms=4500) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error("FIRESTORE_TIMEOUT")), ms))]);
 onAuthStateChanged(auth, async u => {
-  user = u; admin = !!u && u.email === ADMIN_EMAIL; groupAdmin = admin;
+  user = u; currentStudentName=u?canonicalStudentName({},u):""; admin = !!u && u.email === ADMIN_EMAIL; groupAdmin = admin;
   $("#who").textContent = u ? (u.displayName || u.email) : "";
   $("#n6").style.display = admin ? "" : "none";
   $("#aiFab").style.display = u ? "grid" : "none"; $("#penFab").style.display = u ? "grid" : "none"; if (!u && penOn) $("#penFab").click(); if (!u) { $("#aiPanel").style.display = "none"; tutorChat = null; $("#aiMsgs").innerHTML = ""; }
@@ -510,10 +518,11 @@ onAuthStateChanged(auth, async u => {
   (async()=>{ try {
     const existing=await withTimeout(getDoc(doc(db,"users",u.uid)));
     if(existing.data()?.disabled){ alert("هذا الحساب متوقف من الإدارة"); await signOut(auth); return; }
-    await withTimeout(setDoc(doc(db,"users",u.uid),{name:u.displayName||u.email.split("@")[0],email:u.email,photo:u.photoURL||"",last:serverTimestamp()},{merge:true}));
+    currentStudentName=canonicalStudentName(existing.data(),u);
+    await withTimeout(setDoc(doc(db,"users",u.uid),{name:currentStudentName,authName:u.displayName||"",email:u.email,photo:u.photoURL||"",last:serverTimestamp()},{merge:true}));
     editor=admin || existing.data()?.role === "assistant";
     groupAdmin=admin || existing.data()?.groupsAdmin === true;
-    await withTimeout(setDoc(doc(db,"groupDirectory",u.uid),{name:u.displayName||u.email.split("@")[0],disabled:false,updatedAt:serverTimestamp()},{merge:true}));
+    await withTimeout(setDoc(doc(db,"groupDirectory",u.uid),{name:currentStudentName,disabled:false,updatedAt:serverTimestamp()},{merge:true}));
     if(admin) await withTimeout(setDoc(doc(db,"groups","general"),{name:"الجروب العام",public:true,members:[]},{merge:true}));
   } catch(e){ console.warn("Background Firebase sync skipped:",e.message); } })();
 });
@@ -530,6 +539,12 @@ const list = async (col, field, val) => {
   try { return (await withTimeout(getDocs(q))).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.created?.seconds || 0) - (b.created?.seconds || 0)); }
   catch(e){ console.warn(`تعذر تحميل ${col}:`,e.message); if (e.code !== "permission-denied") netWarn(); return []; }
 };
+async function groupStudents() {
+  const current=await list("groupDirectory"), merged=new Map();
+  if(groupAdmin) (await list("studentDirectory")).forEach(x=>merged.set(x.id,x));
+  current.forEach(x=>merged.set(x.id,{...merged.get(x.id),...x}));
+  return [...merged.values()].filter(x=>x.name&&!x.disabled).map(x=>({id:x.id,name:x.name,disabled:x.disabled===true}));
+}
 function form(title, fields, cb) {
   const d = document.createElement("dialog");
   d.innerHTML = `<form><h3>${title}</h3>${fields.map(f => `<label>${f.l}${
@@ -1414,10 +1429,11 @@ async function gradesPage() {
 async function usersPage() {
   if (!admin) return;
   const us = await list("users");
-  await Promise.all(us.map(u => setDoc(doc(db, "groupDirectory", u.id), { name: u.name || "طالب", disabled: u.disabled === true, updatedAt: serverTimestamp() }, { merge: true }).catch(e => console.warn("directory sync", e))));
-  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">المستخدمين</h3></div>` + us.map(u => `<div class="item"><span>${esc(u.name)} <small class="mut">${esc(u.email)}</small></span>${u.email === ADMIN_EMAIL ? "<b>أدمن</b>" : `<button data-u="${u.id}" class="${u.role === "assistant" ? "del" : ""}">${u.role === "assistant" ? "إلغاء المساعد" : "اجعله مساعد"}</button><button class="sec" data-group-role="${u.id}">إدارة مديري الجروبات</button><button class="sec" data-gadmin="${u.id}">${u.groupsAdmin ? "إلغاء إنشاء الجروبات" : "اسمح بإنشاء الجروبات"}</button><button class="sec" data-ban="${u.id}">${u.disabled ? "تفعيل" : "تعطيل"}</button>`}</div>`).join("");
+  await Promise.all(us.map(async u => {const name=canonicalStudentName(u),disabled=u.disabled===true;await setDoc(doc(db,"groupDirectory",u.id),{name,disabled,updatedAt:serverTimestamp()},{merge:true}).catch(e=>console.warn("group directory sync",e));await setDoc(doc(db,"studentDirectory",u.id),{name,disabled,updatedAt:serverTimestamp(),email:deleteField()},{merge:true}).catch(e=>console.warn("legacy directory sync",e));}));
+  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">المستخدمين</h3></div>` + us.map(u => `<div class="item"><span>${esc(canonicalStudentName(u))} <small class="mut">${esc(u.email)}</small></span>${u.email === ADMIN_EMAIL ? "<b>أدمن</b>" : `<button class="sec" data-setname="${u.id}">تصحيح الاسم</button><button data-u="${u.id}" class="${u.role === "assistant" ? "del" : ""}">${u.role === "assistant" ? "إلغاء المساعد" : "اجعله مساعد"}</button><button class="sec" data-group-role="${u.id}">إدارة مديري الجروبات</button><button class="sec" data-gadmin="${u.id}">${u.groupsAdmin ? "إلغاء إنشاء الجروبات" : "اسمح بإنشاء الجروبات"}</button><button class="sec" data-ban="${u.id}">${u.disabled ? "تفعيل" : "تعطيل"}</button>`}</div>`).join("");
   app.querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => { const x=us.find(x=>x.id===b.dataset.ban); await updateDoc(doc(db,"users",x.id),{disabled:!x.disabled}); usersPage(); });
   app.querySelectorAll("[data-gadmin]").forEach(b => b.onclick = async () => { const x=us.find(x=>x.id===b.dataset.gadmin); await updateDoc(doc(db,"users",x.id),{groupsAdmin:!x.groupsAdmin}); if (x.id === user.uid) groupAdmin = !x.groupsAdmin; usersPage(); });
+  app.querySelectorAll("[data-setname]").forEach(b=>b.onclick=()=>{const x=us.find(y=>y.id===b.dataset.setname);form("تصحيح اسم العضو",[{n:"name",l:"الاسم الذي سيظهر داخل الجروبات",v:canonicalStudentName(x)}],async v=>{const name=v.name.trim().replace(/\s+/g," ");if(!name)return alert("اكتب اسمًا صحيحًا.");await updateDoc(doc(db,"users",x.id),{name});await setDoc(doc(db,"groupDirectory",x.id),{name,disabled:x.disabled===true,updatedAt:serverTimestamp()},{merge:true});usersPage();});});
   app.querySelectorAll("[data-group-role]").forEach(b=>b.onclick=async()=>{const uid=b.dataset.groupRole,gs=(await list("groups")).filter(g=>!g.deleted);if(!gs.length)return alert("لا توجد جروبات.");form("تعيين مدير جروب لمستخدم",[{n:"gid",l:"الجروب (اختار الموجود عليه مدير لإلغاء صلاحية الإدارة)",t:"sel",o:gs.map(g=>[g.id,`${g.name||"جروب"} — ${(g.admins||[]).includes(uid)?"مدير حالي":"عضو/ليس عضوًا"}`])}],async v=>{const g=gs.find(x=>x.id===v.gid),ref=doc(db,"groups",g.id);if((g.admins||[]).includes(uid))await updateDoc(ref,{admins:arrayRemove(uid)});else await updateDoc(ref,{members:arrayUnion(uid),admins:arrayUnion(uid)});usersPage();});});
   app.querySelectorAll("[data-u]").forEach(b => b.onclick = async () => {
     const u = us.find(x => x.id === b.dataset.u);
@@ -1448,7 +1464,7 @@ async function groupsPage() {
   app.innerHTML = `<div class="wa-groups-head"><div><small>مساحة التواصل</small><h2 class="sh">جروبات الطلاب</h2><p class="mut">استعرض الجروبات واطلب الانضمام. المحادثة تظهر بعد الموافقة.</p></div><div class="row"><button class="sec" id="refreshGroups">تحديث</button>${groupAdmin ? `<button id="addg">＋ إنشاء جروب</button>` : ""}</div></div><div class="wa-search"><input id="groupFilter" placeholder="ابحث عن جروب..."></div><div class="wa-group-list">` +
     (gs.length ? gs.map(g => { const member=admin||(g.members||[]).includes(user.uid), state=requestStates.get(g.id)||"none", badge=member?(unread.get(g.id)||0):state==="pending"?"قيد المراجعة":""; return `<article class="wa-group-card" data-group-card="${g.id}" data-search="${esc((g.name||"").toLowerCase())}"><div class="wa-avatar">${esc((g.name||"G").trim().slice(0,1).toUpperCase())}</div><div class="wa-group-copy" ${member?`data-open-group="${g.id}"`:`data-preview="${g.id}"`}><b>${esc(g.name||"جروب")}</b><small>${member?esc(lastTexts.get(g.id)||"لا توجد رسائل بعد"):esc(g.description||"جروب طلاب — انضم للمشاركة")}</small></div><div class="wa-group-side"><small>${(g.members||[]).length} عضو</small>${member?`<span class="unread-badge" data-unread="${g.id}" style="${badge?"":"display:none"}">${badge||0}</span>`:badge?`<span class="request-badge">${badge}</span>`:""}${member?"":`<button class="sec wa-join-btn" data-preview="${g.id}">${state==="pending"?"عرض الطلب":"عرض الجروب"}</button>`}</div></article>`; }).join("") : `<p class="mut">لا توجد جروبات متاحة حاليًا.</p>`) + `</div>`;
   if (groupAdmin) $("#addg").onclick = async () => {
-    const directory = (await list("groupDirectory")).filter(x => x.id !== user.uid && !x.disabled);
+    const directory = (await groupStudents()).filter(x => x.id !== user.uid);
     form("إنشاء جروب", [{ n: "name", l: "اسم الجروب" }, { n: "description", l: "وصف مختصر", t: "area" }, { n: "m", l: "إضافة طلاب", t: "chk", o: directory.map(x => [x.id, x.name || "طالب"]) }],
       async v => { if (!v.name.trim()) return; const members=[...new Set([user.uid,...(v.m||[])])]; const ref=await addDoc(collection(db,"groups"),{name:v.name.trim(),description:v.description||"",public:false,members,admins:[user.uid],createdBy:user.uid,deleted:false,created:serverTimestamp()}); await setDoc(doc(db,"users",user.uid,"groupReads",ref.id),{lastReadAt:serverTimestamp()}); groupsPage(); });
   };
@@ -1461,7 +1477,7 @@ async function groupsPage() {
     const badge = app.querySelector(`[data-unread="${g.id}"]`); if (badge) { badge.textContent = n; badge.style.display = n ? "inline-grid" : "none"; }
   })));
 }
-const post = (g, text) => addDoc(collection(db, "groups", g.id, "posts"), { text, uid: user.uid, by: user.displayName || user.email, created: serverTimestamp() });
+const post = (g, text) => addDoc(collection(db, "groups", g.id, "posts"), { text, uid: user.uid, by: currentStudentName || user.displayName || user.email, created: serverTimestamp() });
 const groupManager = g => admin || g?.createdBy===user?.uid || (g?.admins||[]).includes(user?.uid);
 const groupOwner = g => admin || g?.createdBy===user?.uid;
 const groupMember = g => admin || (g?.members||[]).includes(user?.uid);
@@ -1472,11 +1488,11 @@ async function showGroupPreview(g,state="none") {
   $("#backGroups").onclick=groupsPage;
   groupChatUnsubs.push(onSnapshot(doc(db,"groups",g.id),snap=>{if(!snap.exists()||snap.data().deleted){groupsPage();return;}const fresh={id:g.id,...snap.data()};if(!admin&&(fresh.members||[]).includes(user.uid))groupView(fresh);}));
   if(state==="pending") $("#cancelJoin").onclick=async()=>{await deleteDoc(doc(db,"groups",g.id,"joinRequests",user.uid));groupsPage();};
-  else $("#requestJoin").onclick=async()=>{const ref=doc(db,"groups",g.id,"joinRequests",user.uid),old=await getDoc(ref),data={uid:user.uid,name:user.displayName||"طالب",status:"pending",requestedAt:serverTimestamp()}; if(old.exists())await updateDoc(ref,{status:"pending",requestedAt:serverTimestamp()}); else await setDoc(ref,data); showGroupPreview(g,"pending");};
+  else $("#requestJoin").onclick=async()=>{const ref=doc(db,"groups",g.id,"joinRequests",user.uid),old=await getDoc(ref),data={uid:user.uid,name:currentStudentName||user.displayName||"طالب",status:"pending",requestedAt:serverTimestamp()}; if(old.exists())await updateDoc(ref,{status:"pending",requestedAt:serverTimestamp()}); else await setDoc(ref,data); showGroupPreview(g,"pending");};
 }
 async function addGroupMembers(g) {
-  const current = new Set(g.members || []), directory = (await list("groupDirectory")).filter(x => !current.has(x.id) && !x.disabled);
-  if (!directory.length) return alert("مفيش طلاب جدد متاحين للإضافة.");
+  const current = new Set(g.members || []), directory = (await groupStudents()).filter(x => !current.has(x.id));
+  if (!directory.length) return alert("لا توجد أسماء متاحة حاليًا. إذا كانت هذه أول مرة، اجعل أدمن الموقع يفتح صفحة «المستخدمين» مرة واحدة لمزامنة أسماء الطلاب القديمة، ثم حدّث الصفحة.");
   form("إضافة أعضاء للجروب", [{ n: "m", l: "اختار الطلاب", t: "chk", o: directory.map(x => [x.id, x.name || "طالب"]) }], async v => {
     if (v.m?.length) await updateDoc(doc(db, "groups", g.id), { members: arrayUnion(...v.m) }); groupView({ ...g, members: [...current, ...(v.m || [])] });
   });
@@ -1491,7 +1507,7 @@ async function resolveJoinRequest(g, uid, status) {
   });
 }
 async function appointGroupAdmin(g) {
-  const directory=await list("groupDirectory"), current=new Set(g.admins||[]);
+  const directory=await groupStudents(), current=new Set(g.admins||[]);
   const choices=(g.members||[]).filter(uid=>uid!==g.createdBy&&!current.has(uid)).map(uid=>{const d=directory.find(x=>x.id===uid);return [uid,esc(d?.name||uid.slice(0,8))];});
   if(!choices.length)return alert("أضف عضوًا للجروب أولًا أو كل الأعضاء الحاليين مديرون.");
   form("تعيين مدير للجروب",[{n:"uid",l:"العضو",t:"sel",o:choices}],async v=>{await updateDoc(doc(db,"groups",g.id),{admins:arrayUnion(v.uid)});groupView({...g,admins:[...(g.admins||[]),v.uid]});});
@@ -1509,32 +1525,34 @@ async function groupView(g) {
   if(!groupMember(g))return showGroupPreview(g);
   groupListUnsubs.forEach(fn => fn()); groupListUnsubs = []; groupChatUnsubs.forEach(fn => fn()); groupChatUnsubs = [];
   await setDoc(doc(db, "users", user.uid, "groupReads", g.id), { lastReadAt: serverTimestamp() }, { merge: true });
+  const directory=await groupStudents(), memberNameByUid=new Map(directory.map(x=>[x.id,x.name]));
   const mgr = groupManager(g);
-  app.innerHTML = `<div class="wa-chat-head"><button class="sec" id="back">‹</button><div class="wa-avatar">${esc((g.name||"G").trim().slice(0,1).toUpperCase())}</div><div class="wa-chat-title"><b>${esc(g.name)}</b><small>${(g.members||[]).length} عضو · ${esc(g.description||"محادثة الجروب")}</small></div>${mgr?`<button class="sec" id="manageToggle">إدارة الجروب</button>`:""}${groupOwner(g)?`<button class="sec" id="editGroup">تعديل</button><button class="del" id="deleteGroup">حذف</button>`:""}<button id="voiceCall">☎ مكالمة صوتية</button></div><div id="callNotice"></div>${mgr?`<section id="groupManagePanel" class="wa-manage" style="display:none"></section>`:""}<div id="waMessages" class="wa-messages"></div><form id="waForm" class="wa-compose"><textarea id="waText" rows="2" placeholder="اكتب رسالة للجروب..."></textarea><button type="submit">إرسال</button></form>`;
+  app.innerHTML = `<div class="wa-chat-head"><button class="sec" id="back">‹</button><div class="wa-avatar">${esc((g.name||"G").trim().slice(0,1).toUpperCase())}</div><div class="wa-chat-title"><b>${esc(g.name)}</b><small>${(g.members||[]).length} عضو · ${esc(g.description||"محادثة الجروب")}</small></div><button id="voiceCall">☎ مكالمة صوتية</button>${(mgr||groupOwner(g))?`<div class="wa-menu-wrap"><button class="sec wa-menu-trigger" id="groupMenuToggle" aria-label="خيارات الجروب" title="خيارات الجروب">⋮</button><div class="wa-menu" id="groupMenu" hidden>${mgr?`<button data-group-action="manage">إدارة الجروب</button><button data-group-action="members">الأعضاء وإدارة المدراء</button><button data-group-action="add">إضافة أعضاء</button><button data-group-action="requests">طلبات الانضمام <span class="wa-menu-count" id="joinRequestCount"></span></button><button data-group-action="admins">تعيين مدير</button>`:""}${groupOwner(g)?`<hr><button data-group-action="edit">تعديل الجروب</button><button class="danger-item" data-group-action="delete">حذف الجروب</button>`:""}</div></div>`:""}</div><div id="callNotice"></div>${mgr?`<section id="groupManagePanel" class="wa-manage" style="display:none"></section>`:""}<div id="waMessages" class="wa-messages"></div><form id="waForm" class="wa-compose"><textarea id="waText" rows="2" placeholder="اكتب رسالة للجروب..."></textarea><button type="submit">إرسال</button></form>`;
   $("#back").onclick = groupsPage;
   groupChatUnsubs.push(onSnapshot(doc(db,"groups",g.id),snap=>{if(!snap.exists()||snap.data().deleted){if(voiceSession?.g?.id===g.id)leaveVoiceCall();groupsPage();return;}const fresh={id:g.id,...snap.data()};if(!admin&&!(fresh.members||[]).includes(user.uid)){if(voiceSession?.g?.id===g.id)leaveVoiceCall();showGroupPreview(fresh,"approved");return;}if(groupManager(fresh)!==mgr||fresh.name!==g.name)groupView(fresh);}));
-  if (groupOwner(g)) { $("#editGroup").onclick=()=>editGroupSettings(g); $("#deleteGroup").onclick=()=>deleteGroup(g); }
-  if(mgr) $("#manageToggle").onclick=()=>{const p=$("#groupManagePanel");p.style.display=p.style.display==="none"?"block":"none";};
+  const menu=$("#groupMenu"),menuToggle=$("#groupMenuToggle");
+  if(menu&&menuToggle){menuToggle.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden;};const closeMenu=e=>{if(!menu.contains(e.target)&&!menuToggle.contains(e.target))menu.hidden=true;};document.addEventListener("click",closeMenu);groupChatUnsubs.push(()=>document.removeEventListener("click",closeMenu));
+    app.querySelectorAll("[data-group-action]").forEach(button=>button.onclick=()=>{menu.hidden=true;const action=button.dataset.groupAction,panel=$("#groupManagePanel");if(action==="manage"){panel.style.display=panel.style.display==="none"?"block":"none";if(panel.style.display==="block")panel.scrollIntoView({behavior:"smooth",block:"start"});}else if(action==="requests"){panel.style.display="block";panel.scrollIntoView({behavior:"smooth",block:"start"});setTimeout(()=>$("#groupRequestsSection")?.scrollIntoView({behavior:"smooth",block:"center"}),180);}else if(action==="members"){panel.style.display="block";setTimeout(()=>$("#groupMembersSection")?.scrollIntoView({behavior:"smooth",block:"center"}),100);}else if(action==="add")addGroupMembers(g);else if(action==="admins")appointGroupAdmin(g);else if(action==="edit")editGroupSettings(g);else if(action==="delete")deleteGroup(g);});
+  }
   $("#waForm").onsubmit = async e => { e.preventDefault(); const box = $("#waText"), text = box.value.trim(); if (!text) return; box.value = ""; try { await post(g, text); } catch (err) { alert("تعذر إرسال الرسالة: " + (err.code || err.message)); box.value = text; } };
   const messages = $("#waMessages");
   groupChatUnsubs.push(onSnapshot(collection(db, "groups", g.id, "posts"), snap => {
     const rows = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.created?.seconds || 0) - (b.created?.seconds || 0));
-    messages.innerHTML = rows.map(m => `<article class="wa-bubble ${m.uid === user.uid ? "mine" : ""}"><small>${esc(m.by || "عضو")}</small><div>${esc(m.text || "")}</div><time>${m.created?.toDate ? m.created.toDate().toLocaleString("ar-EG", { dateStyle: "short", timeStyle: "short" }) : "الآن"}</time></article>`).join("") || `<p class="mut">ابدأ المحادثة برسالة.</p>`;
+    messages.innerHTML = rows.map(m => `<article class="wa-bubble ${m.uid === user.uid ? "mine" : ""}"><small>${esc(memberNameByUid.get(m.uid)||m.by||"عضو")}</small><div>${esc(m.text || "")}</div><time>${m.created?.toDate ? m.created.toDate().toLocaleString("ar-EG", { dateStyle: "short", timeStyle: "short" }) : "الآن"}</time></article>`).join("") || `<p class="mut">ابدأ المحادثة برسالة.</p>`;
     messages.scrollTop = messages.scrollHeight;
     setDoc(doc(db, "users", user.uid, "groupReads", g.id), { lastReadAt: serverTimestamp() }, { merge: true }).catch(() => {});
   }));
   if(mgr){
     const panel=$("#groupManagePanel");
     const drawManage=async reqs=>{
-      const directory=await list("groupDirectory"), nameOf=id=>directory.find(x=>x.id===id)?.name||id.slice(0,8);
-      panel.innerHTML=`<div class="wa-manage-head"><h3>إدارة الأعضاء</h3><button id="addMembers">＋ إضافة أعضاء</button><button id="appointAdmin">تعيين مدير</button></div><div class="wa-manage-grid"><div><h4>الأعضاء (${(g.members||[]).length})</h4>${(g.members||[]).map(uid=>`<div class="wa-member-row"><span>${esc(nameOf(uid))}${(g.admins||[]).includes(uid)?` <b class="wa-admin-tag">مدير</b>`:""}</span>${uid!==g.createdBy&&uid!==user.uid?`<button class="del" data-kick="${uid}">طرد</button>`:""}${uid!==g.createdBy&&(g.admins||[]).includes(uid)?`<button class="sec" data-demote="${uid}">إلغاء الإدارة</button>`:""}</div>`).join("")||`<small class="mut">لا يوجد أعضاء.</small>`}</div><div><h4>طلبات الانضمام (${reqs.length})</h4>${reqs.map(r=>`<div class="wa-member-row"><span>${esc(r.name||nameOf(r.uid))}</span><button data-approve="${r.uid}">قبول</button><button class="del" data-decline="${r.uid}">رفض</button></div>`).join("")||`<small class="mut">لا توجد طلبات معلقة.</small>`}</div></div>`;
-      $("#addMembers").onclick=()=>addGroupMembers(g);$("#appointAdmin").onclick=()=>appointGroupAdmin(g);
+      const directory=await groupStudents(), nameOf=id=>directory.find(x=>x.id===id)?.name||id.slice(0,8);
+      panel.innerHTML=`<div class="wa-manage-head"><h3>إدارة الجروب</h3></div><div class="wa-manage-grid"><div id="groupMembersSection"><h4>الأعضاء (${(g.members||[]).length})</h4>${(g.members||[]).map(uid=>`<div class="wa-member-row"><span>${esc(nameOf(uid))}${(g.admins||[]).includes(uid)?` <b class="wa-admin-tag">مدير</b>`:""}</span>${uid!==g.createdBy&&uid!==user.uid?`<button class="del" data-kick="${uid}">طرد</button>`:""}${uid!==g.createdBy&&(g.admins||[]).includes(uid)?`<button class="sec" data-demote="${uid}">إلغاء الإدارة</button>`:""}</div>`).join("")||`<small class="mut">لا يوجد أعضاء.</small>`}</div><div id="groupRequestsSection"><h4>طلبات الانضمام (${reqs.length})</h4>${reqs.map(r=>`<div class="wa-member-row"><span>${esc(directory.find(x=>x.id===r.uid)?.name||r.name||r.uid.slice(0,8))}</span><button data-approve="${r.uid}">قبول</button><button class="del" data-decline="${r.uid}">رفض</button></div>`).join("")||`<small class="mut">لا توجد طلبات معلقة.</small>`}</div></div>`;
       panel.querySelectorAll("[data-kick]").forEach(b=>b.onclick=async()=>{const uid=b.dataset.kick;if(!confirm("طرد هذا العضو من الجروب؟"))return;await updateDoc(doc(db,"groups",g.id),{members:arrayRemove(uid),admins:arrayRemove(uid)});groupView({...g,members:g.members.filter(x=>x!==uid),admins:(g.admins||[]).filter(x=>x!==uid)});});
       panel.querySelectorAll("[data-demote]").forEach(b=>b.onclick=async()=>{const uid=b.dataset.demote;await updateDoc(doc(db,"groups",g.id),{admins:arrayRemove(uid)});groupView({...g,admins:(g.admins||[]).filter(x=>x!==uid)});});
       panel.querySelectorAll("[data-approve]").forEach(b=>b.onclick=async()=>{await resolveJoinRequest(g,b.dataset.approve,"approved");const fresh=await getDoc(doc(db,"groups",g.id));groupView({id:g.id,...fresh.data()});});
       panel.querySelectorAll("[data-decline]").forEach(b=>b.onclick=async()=>{await resolveJoinRequest(g,b.dataset.decline,"declined");});
     };
-    groupChatUnsubs.push(onSnapshot(collection(db,"groups",g.id,"joinRequests"),snap=>drawManage(snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.status==="pending")).catch(console.warn)));
+    groupChatUnsubs.push(onSnapshot(collection(db,"groups",g.id,"joinRequests"),snap=>{const reqs=snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.status==="pending"),badge=$("#joinRequestCount");if(badge)badge.textContent=reqs.length?`(${reqs.length})`:"";drawManage(reqs).catch(console.warn);}));
     drawManage([]).catch(console.warn);
   }
   const callsRef = collection(db, "groups", g.id, "calls");
@@ -1559,7 +1577,7 @@ async function joinVoiceCall(g, callId) {
     }
     const callRef = callId ? doc(db, "groups", g.id, "calls", callId) : doc(calls);
     if (!callId) newCallRef = callRef;
-    if (!callId) await setDoc(callRef, { active: true, by: user.displayName || user.email, createdBy: user.uid, createdAt: serverTimestamp(), hostLastSeen: serverTimestamp() });
+    if (!callId) await setDoc(callRef, { active: true, by: currentStudentName || user.displayName || user.email, createdBy: user.uid, createdAt: serverTimestamp(), hostLastSeen: serverTimestamp() });
     else { const c = await getDoc(callRef); if (!c.exists() || !c.data().active) return alert("المكالمة انتهت."); callCreatedBy = c.data().createdBy || ""; }
     const participantsRef = collection(db, "groups", g.id, "calls", callRef.id, "participants");
     const before = await getDocs(participantsRef), fresh=[];
@@ -1568,7 +1586,7 @@ async function joinVoiceCall(g, callId) {
     if (fresh.length >= 8 && !fresh.some(d => d.id === user.uid)) return alert("المكالمة وصلت للحد الحالي وهو 8 مشاركين.");
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     const participantRef=doc(participantsRef,user.uid);
-    await setDoc(participantRef, { uid: user.uid, name: user.displayName || user.email, joinedAt: serverTimestamp(), lastSeen: serverTimestamp() });
+    await setDoc(participantRef, { uid: user.uid, name: currentStudentName || user.displayName || user.email, joinedAt: serverTimestamp(), lastSeen: serverTimestamp() });
     const session = voiceSession = { g, callRef, participantRef, stream, createdBy: callCreatedBy, peers: new Map(), seen: new Set(), queued: new Map(), unsubs: [], heartbeat:null, hostHeartbeat:null };
     session.heartbeat=setInterval(()=>updateDoc(participantRef,{lastSeen:serverTimestamp()}).catch(()=>{}),20000);
     if(callCreatedBy===user.uid)session.hostHeartbeat=setInterval(()=>updateDoc(callRef,{hostLastSeen:serverTimestamp()}).catch(()=>{}),20000);
