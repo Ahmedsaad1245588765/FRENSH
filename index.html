@@ -1563,16 +1563,88 @@ async function studentDashboard() {
   $("#goSubjects").onclick=subjects;
 }
 
-async function gradesPage() {
+let gradesCache = null;
+async function loadGradesData(force) {
+  if (gradesCache && !force) return gradesCache;
+  const [subs, lessonsAll, attempts, passes, progress, users, answers] = await Promise.all([list("subjects"), list("lessons"), list("attempts"), list("passes"), list("progress"), list("users"), list("answers")]);
+  gradesCache = { subs, lessonsAll, attempts, passes, progress, users, answers };
+  return gradesCache;
+}
+function subjectGradeStats(D, sub) {
+  const lessons = D.lessonsAll.filter(l => l.subjectId === sub.id), lid = new Set(lessons.map(l => l.id));
+  const um = new Map(D.users.map(u => [u.id, u])), by = new Map();
+  const row = uid => { if (!by.has(uid)) by.set(uid, { uid, user: um.get(uid) || {}, per: new Map() }); return by.get(uid); };
+  const cell = (r, id) => { if (!r.per.has(id)) r.per.set(id, { best: null, tries: 0, passed: false, completed: false }); return r.per.get(id); };
+  const best = (c, p) => { c.best = c.best === null ? p : Math.max(c.best, p); };
+  D.attempts.forEach(a => { if (!lid.has(a.lessonId)) return; const c = cell(row(a.uid), a.lessonId); c.tries++; best(c, Number(a.percent) || 0); });
+  D.passes.forEach(a => { if (!lid.has(a.lessonId)) return; const c = cell(row(a.uid), a.lessonId); c.passed = true; best(c, Number(a.percent) || 0); });
+  D.progress.forEach(a => { if (!a.completed || !lid.has(a.lessonId)) return; cell(row(a.uid), a.lessonId).completed = true; });
+  const students = [...by.values()].map(r => {
+    const cells = [...r.per.values()], scored = cells.filter(c => c.best !== null);
+    return { ...r, solved: scored.length, passed: cells.filter(c => c.passed).length, avg: scored.length ? Math.round(scored.reduce((a, c) => a + c.best, 0) / scored.length) : null };
+  }).sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1));
+  const scoredStudents = students.filter(x => x.avg !== null);
+  return { lessons, students, avg: scoredStudents.length ? Math.round(scoredStudents.reduce((a, x) => a + x.avg, 0) / scoredStudents.length) : null };
+}
+const gradeLevel = avg => avg === null ? ["لم يختبر", "#8a96ad"] : avg >= 85 ? ["ممتاز", "#16a34a"] : avg >= 65 ? ["جيد", "#2563eb"] : avg >= 50 ? ["مقبول", "#d97706"] : ["يحتاج متابعة", "#dc2626"];
+const gradeBadge = (txt, col) => `<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:.82rem;border:1px solid ${col};color:${col};background:${col}1a">${esc(txt)}</span>`;
+async function gradesPage(force) {
   if (!admin) return;
-  const [answers, users, lessonsAll] = await Promise.all([list("answers"), list("users"), list("lessons")]);
-  const questions = (await Promise.all(lessonsAll.map(l => list(`lessons/${l.id}/questions`)))).flat();
-  const um = new Map(users.map(x => [x.id, x])), qm = new Map(questions.map(x => [x.id, x])), lm = new Map(lessonsAll.map(x => [x.id, x]));
-  const total = answers.reduce((a,x) => a + Number(x.score || 0), 0), max = answers.reduce((a,x) => a + Number(qm.get(x.questionId)?.points || (qm.get(x.questionId)?.type === "essay" ? 10 : 1)), 0);
-  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">درجات ومحاولات الطلاب</h3><button class="sec" id="refreshGrades">تحديث</button><button class="sec" id="exportGrades">تصدير CSV</button></div><div class="dashboard"><div class="metric"><b>${new Set(answers.map(x=>x.uid)).size}</b><small>طلاب لديهم محاولات</small></div><div class="metric"><b>${answers.length}</b><small>إجمالي الإجابات</small></div><div class="metric"><b>${max ? Math.round(total/max*100) : 0}%</b><small>متوسط الأداء العام</small></div><div class="metric"><b>${new Set(answers.map(x=>x.lessonId)).size}</b><small>دروس تم حلها</small></div></div><div class="grid">${answers.map(a => { const u=um.get(a.uid)||{}, q=qm.get(a.questionId)||{}, l=lm.get(a.lessonId)||{}; return `<div class="q"><b>${esc(u.name || a.uid)}</b><small class="mut"> ${esc(u.email || "")}</small><hr><div>${esc(q.q || "سؤال محذوف")}</div><small class="mut">الدرس: ${esc(l.title || "غير معروف")}</small><p><span class="score">${Number(a.score||0)}/${Number(q.points || (q.type === "essay" ? 10 : 1))}</span>${a.correct !== undefined ? (a.correct ? " إجابة صحيحة" : " إجابة خاطئة") : ""}</p>${a.feedback ? `<div class="mut">${esc(a.feedback)}</div>` : ""}<button class="sec" data-manual="${a.id}">تعديل الدرجة</button>${a.answer ? `<details><summary>إجابة الطالب</summary><p>${esc(a.answer)}</p></details>` : ""}</div>`; }).join("") || `<p class="mut">لا توجد محاولات بعد.</p>`}</div>`;
-  app.querySelectorAll("[data-manual]").forEach(b=>b.onclick=()=>{const a=answers.find(x=>x.id===b.dataset.manual); form("تعديل الدرجة",[{n:"score",l:"الدرجة",v:String(a.score||0)},{n:"feedback",l:"ملاحظة",t:"area",v:a.feedback||""}],async v=>{await updateDoc(doc(db,"answers",a.id),{score:Number(v.score)||0,feedback:v.feedback||""}); gradesPage();});});
-  $("#refreshGrades").onclick = gradesPage;
-  $("#exportGrades").onclick = () => { const rows=[["الطالب","البريد","السؤال","الدرجة","الدرجة القصوى","الملاحظات"],...answers.map(a=>{const u=um.get(a.uid)||{},q=qm.get(a.questionId)||{};return [u.name||a.uid,u.email||"",q.q||"",a.score||0,q.points||1,a.feedback||""];})]; const csv="\ufeff"+rows.map(r=>r.map(x=>`"${String(x).replaceAll("\"","\"\"")}"`).join(",")).join("\n"), blob=new Blob([csv],{type:"text/csv;charset=utf-8"}), a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="grades.csv"; a.click(); URL.revokeObjectURL(a.href); };
+  app.innerHTML = `<p class="mut">جاري تحميل الدرجات…</p>`;
+  const D = await loadGradesData(force === true);
+  const stats = D.subs.map(sub => ({ sub, st: subjectGradeStats(D, sub) }));
+  const allStudents = new Set(stats.flatMap(x => x.st.students.map(s => s.uid)));
+  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">الدرجات حسب المادة</h3><button class="sec" id="refreshGrades">تحديث</button></div>
+    <div class="dashboard"><div class="metric"><b>${D.subs.length}</b><small>مواد</small></div><div class="metric"><b>${allStudents.size}</b><small>طلاب لديهم نشاط</small></div><div class="metric"><b>${new Set(D.attempts.map(a => a.lessonId)).size}</b><small>دروس تم حلها</small></div><div class="metric"><b>${D.attempts.length}</b><small>محاولات اختبار</small></div></div>
+    <div class="grid">${stats.map(({ sub, st }) => { const [lv, col] = gradeLevel(st.avg); return `<div class="q"><h3 style="margin:0 0 6px">${esc(sub.name)}</h3><p class="mut" style="margin:0 0 8px">${st.lessons.length} درس · ${st.students.length} طالب</p><p style="margin:0 0 10px"><span class="score">${st.avg === null ? "—" : st.avg + "%"}</span> متوسط المادة ${gradeBadge(lv, col)}</p><button data-grade-subject="${esc(sub.id)}">عرض الدروس</button></div>`; }).join("") || `<p class="mut">لا توجد مواد بعد.</p>`}</div>`;
+  $("#refreshGrades").onclick = () => gradesPage(true);
+  app.querySelectorAll("[data-grade-subject]").forEach(b => b.onclick = () => gradesSubjectPage(D.subs.find(x => x.id === b.dataset.gradeSubject)));
+}
+function lessonGradeStats(D, lesson) {
+  const att = D.attempts.filter(a => a.lessonId === lesson.id), pas = new Map(D.passes.filter(a => a.lessonId === lesson.id).map(a => [a.uid, a])), by = new Map();
+  const get = uid => { if (!by.has(uid)) by.set(uid, { uid, best: 0, tries: 0, last: 0, passed: pas.has(uid) }); return by.get(uid); };
+  att.forEach(a => { const r = get(a.uid); r.tries++; r.best = Math.max(r.best, Number(a.percent) || 0); r.last = Math.max(r.last, a.created?.seconds || 0); });
+  pas.forEach((a, uid) => { const r = get(uid); r.best = Math.max(r.best, Number(a.percent) || 0); });
+  const students = [...by.values()].sort((a, b) => b.best - a.best);
+  return { students, attempts: att.length, passed: students.filter(x => x.passed).length, avg: students.length ? Math.round(students.reduce((a, x) => a + x.best, 0) / students.length) : null };
+}
+function gradesSubjectPage(sub) {
+  const D = gradesCache; if (!admin || !D || !sub) return gradesPage();
+  const st = subjectGradeStats(D, sub);
+  const rows = st.lessons.map(l => ({ l, ls: lessonGradeStats(D, l) }));
+  app.innerHTML = `<div class="row"><button class="sec" id="backGrades">← المواد</button><h3 class="sh" style="flex:1;margin:0">${esc(sub.name)}</h3><button class="sec" id="exportSubjectGrades">تصدير CSV</button></div>
+    <div class="dashboard"><div class="metric"><b>${st.lessons.length}</b><small>دروس في المادة</small></div><div class="metric"><b>${st.students.length}</b><small>طلاب لديهم نشاط</small></div><div class="metric"><b>${st.avg === null ? "—" : st.avg + "%"}</b><small>متوسط المادة</small></div><div class="metric"><b>${rows.reduce((a, x) => a + x.ls.attempts, 0)}</b><small>محاولات اختبار</small></div></div>
+    <div class="grid">${rows.map(({ l, ls }, i) => { const [lv, col] = gradeLevel(ls.avg); return `<div class="q"><h3 class="fr" style="margin:0 0 6px">${i + 1}. ${esc(l.title)}</h3><p class="mut" style="margin:0 0 8px">${ls.students.length} طالب حلّوه · ${ls.passed} نجحوا · ${ls.attempts} محاولة</p><p style="margin:0 0 10px"><span class="score">${ls.avg === null ? "—" : ls.avg + "%"}</span> متوسط الدرس ${gradeBadge(lv, col)}</p><button data-grade-lesson="${esc(l.id)}">عرض من حلّوه</button></div>`; }).join("") || `<p class="mut">لا توجد دروس في هذه المادة.</p>`}</div>`;
+  $("#backGrades").onclick = () => gradesPage();
+  app.querySelectorAll("[data-grade-lesson]").forEach(b => b.onclick = () => gradesLessonPage(sub, st.lessons.find(x => x.id === b.dataset.gradeLesson)));
+  $("#exportSubjectGrades").onclick = () => {
+    const rowsCsv = [["الطالب", "البريد", "المتوسط", ...st.lessons.map(l => l.title)], ...st.students.map(x => [x.user.name || x.uid, x.user.email || "", x.avg ?? "", ...st.lessons.map(l => { const c = x.per.get(l.id); return c && c.best !== null ? c.best + "%" : (c?.completed ? "أنهى الدرس" : "لم يحل"); })])];
+    const csv = "\ufeff" + rowsCsv.map(r => r.map(v => `"${String(v).replaceAll('"', '""')}"`).join(",")).join("\n"), blob = new Blob([csv], { type: "text/csv;charset=utf-8" }), a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `grades-${sub.name}.csv`; a.click(); URL.revokeObjectURL(a.href);
+  };
+}
+async function gradesLessonPage(sub, lesson) {
+  const D = gradesCache; if (!admin || !D || !lesson) return gradesPage();
+  app.innerHTML = `<p class="mut">جاري تحميل الدرس…</p>`;
+  const questions = await list(`lessons/${lesson.id}/questions`), qm = new Map(questions.map(q => [q.id, q])), um = new Map(D.users.map(u => [u.id, u]));
+  const ls = lessonGradeStats(D, lesson), nameOf = uid => um.get(uid)?.name || um.get(uid)?.email || uid;
+  const stat = new Map();
+  D.answers.filter(a => a.lessonId === lesson.id).forEach(a => {
+    const q = qm.get(a.questionId); if (!q) return;
+    const max = Number(q.points || (q.type === "essay" ? 10 : 1)), score = Number(a.score || 0);
+    const wrong = a.correct === false || (a.correct === undefined && score < (q.type === "essay" ? max * 0.5 : max));
+    const x = stat.get(a.questionId) || { q, total: 0, wrong: 0, who: new Set() };
+    x.total++; if (wrong) { x.wrong++; x.who.add(a.uid); } stat.set(a.questionId, x);
+  });
+  const hard = [...stat.values()].filter(x => x.wrong > 0).sort((a, b) => b.wrong - a.wrong || b.wrong / b.total - a.wrong / a.total).slice(0, 15);
+  const [lv, col] = gradeLevel(ls.avg);
+  app.innerHTML = `<div class="row"><button class="sec" id="backSubject">← ${esc(sub.name)}</button><h3 class="sh fr" style="flex:1;margin:0">${esc(lesson.title)}</h3></div>
+    <div class="dashboard"><div class="metric"><b>${ls.students.length}</b><small>طلاب حلّوا الدرس</small></div><div class="metric"><b>${ls.passed}</b><small>نجحوا</small></div><div class="metric"><b>${ls.avg === null ? "—" : ls.avg + "%"}</b><small>متوسط أعلى درجة ${esc(lv)}</small></div><div class="metric"><b>${ls.attempts}</b><small>محاولات</small></div></div>
+    <h3 class="sh" style="margin:14px 0 8px">الطلاب اللي حلّوا الدرس</h3>
+    <div class="grid">${ls.students.map(x => { const [l2, c2] = gradeLevel(x.best), u = um.get(x.uid) || {}; return `<div class="q"><b>${esc(u.name || x.uid)}</b> ${gradeBadge(l2, c2)}<br><small class="mut">${esc(u.email || "")}</small><p style="margin:8px 0 4px">أعلى درجة: <span class="score">${x.best}%</span> · ${x.tries} محاولة</p><p style="margin:0">${x.passed ? gradeBadge("ناجح ✓", "#16a34a") : gradeBadge("لم ينجح بعد", "#d97706")}${x.last ? ` <small class="mut">آخر محاولة: ${esc(new Date(x.last * 1000).toLocaleDateString("ar-EG"))}</small>` : ""}</p></div>`; }).join("") || `<p class="mut">لم يحل أحد هذا الدرس بعد.</p>`}</div>
+    <h3 class="sh" style="margin:18px 0 8px">الأسئلة الأكثر غلطًا</h3>
+    <div class="grid">${hard.map((x, i) => { const pct = Math.round(x.wrong / x.total * 100), q = x.q, right = q.type !== "essay" && Array.isArray(q.options) && Number.isInteger(q.answer) ? q.options[q.answer] : ""; return `<div class="q"><b>${i + 1}.</b> <span class="fr">${esc(q.q || "سؤال بدون نص")}</span><p style="margin:8px 0 4px"><span class="score">${x.wrong}/${x.total}</span> إجابة خاطئة (${pct}%) · ${x.who.size} طالب</p><div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:#dc2626"></div></div>${right ? `<p class="mut" style="margin:8px 0 0">الإجابة الصحيحة: <span class="fr">${esc(right)}</span></p>` : ""}<details><summary>مين غلط فيه</summary><p>${[...x.who].map(u => esc(nameOf(u))).join("، ")}</p></details></div>`; }).join("") || `<p class="mut">مفيش أسئلة اتغلط فيها لسه (أو مفيش إجابات مسجلة للدرس ده).</p>`}</div>`;
+  $("#backSubject").onclick = () => gradesSubjectPage(sub);
 }
 
 
