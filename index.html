@@ -523,7 +523,7 @@ async function askJSON(prompt, tries = 2, parts = null) {
 }
 const $ = s => document.querySelector(s), app = $("#app");
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let user = null, admin = false, editor = false, groupAdmin = false, currentStudentName = "";
+let user = null, admin = false, editor = false, groupAdmin = false, isAssistantUser = false, currentStudentName = "";
 let groupListUnsubs = [], groupChatUnsubs = [], activeGraduationRecognition=null;
 function canonicalStudentName(profile={}, authUser=null) {
   const candidates=[profile?.name,profile?.fullName,profile?.authName,profile?.displayName,authUser?.displayName,profile?.email?.split("@")[0],authUser?.email?.split("@")[0]]
@@ -557,12 +557,12 @@ $("#themeToggle").onclick = () => { document.body.classList.toggle("night"); loc
 if (localStorage.getItem("fr-theme") === "night") { document.body.classList.add("night"); $("#themeToggle").textContent="☀"; }
 const withTimeout = (promise, ms=4500) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error("FIRESTORE_TIMEOUT")), ms))]);
 onAuthStateChanged(auth, async u => {
-  user = u; currentStudentName=u?canonicalStudentName({},u):""; admin = !!u && u.email === ADMIN_EMAIL; groupAdmin = admin;
+  user = u; currentStudentName=u?canonicalStudentName({},u):""; admin = !!u && u.email === ADMIN_EMAIL; isAssistantUser=false; groupAdmin = admin;
   $("#who").textContent = u ? (u.displayName || u.email) : "";
   $("#n6").style.display = admin ? "" : "none";
   $("#aiFab").style.display = u ? "grid" : "none"; $("#penFab").style.display = u ? "grid" : "none"; if (!u && penOn) $("#penFab").click(); if (!u) { $("#aiPanel").style.display = "none"; tutorChat = null; $("#aiMsgs").innerHTML = ""; }
   $("#auth").textContent = u ? "خروج" : "دخول بجوجل";
-  editor = admin; $("#n5").style.display = admin ? "" : "none";
+  editor = admin; $("#n5").style.display = admin ? "" : "none"; $("#n5").textContent="المستخدمين";
   if (!u) return needLogin();
   startAppCheck();
   // اعرض الصفحة فورًا، ولا تجعل مزامنة Firestore تمنع تسجيل الدخول
@@ -572,7 +572,10 @@ onAuthStateChanged(auth, async u => {
     if(existing.data()?.disabled){ alert("هذا الحساب متوقف من الإدارة"); await signOut(auth); return; }
     currentStudentName=canonicalStudentName(existing.data(),u);
     await withTimeout(setDoc(doc(db,"users",u.uid),{name:currentStudentName,authName:u.displayName||"",email:u.email,photo:u.photoURL||"",last:serverTimestamp()},{merge:true}));
-    editor=admin || existing.data()?.role === "assistant";
+    isAssistantUser=existing.data()?.role === "assistant";
+    editor=admin || isAssistantUser;
+    $("#n5").style.display=admin||isAssistantUser?"":"none";
+    $("#n5").textContent=admin?"المستخدمين":"إحصائيات المستخدمين";
     groupAdmin=admin || existing.data()?.groupsAdmin === true;
     await withTimeout(setDoc(doc(db,"groupDirectory",u.uid),{name:currentStudentName,disabled:false,updatedAt:serverTimestamp()},{merge:true}));
     if(admin) await withTimeout(setDoc(doc(db,"groups","general"),{name:"الجروب العام",public:true,members:[]},{merge:true}));
@@ -1497,13 +1500,26 @@ async function gradesPage() {
 
 
 async function usersPage() {
-  if (!admin) return;
+  if (!admin && !isAssistantUser) return;
+  if(!admin){
+    const renderAssistantStats=async()=>{
+      let data=null;
+      try{const snap=await getDoc(doc(db,"siteStats","userCounts"));if(snap.exists())data=snap.data();}catch(e){console.warn("assistant stats read",e);}
+      if(!data){app.innerHTML=`<div class="row"><h3 class="sh" style="flex:1;margin:0">إحصائيات المستخدمين</h3><button id="refreshUserStats" class="sec" type="button">تحديث</button></div><p class="mut">لم يحدّث أدمن الموقع الإحصاءات بعد. ستظهر هنا بعد فتحه صفحة المستخدمين أو تحديثها.</p>`;$("#refreshUserStats").onclick=renderAssistantStats;return;}
+      const stats=[["إجمالي المستخدمين",data.total],["الحسابات النشطة",data.active],["مديرو الجروبات فعليًا",data.groupManagers],["مصرح لهم بإنشاء جروب",data.groupCreators],["الطلاب العاديون",data.ordinaryStudents],["المساعدون",data.assistants],["أدمن الموقع",data.siteAdmins],["الحسابات المعطّلة",data.disabled]];
+      const updated=data.updatedAt?.toDate?.(),stamp=updated?updated.toLocaleString("ar-EG"):"";
+      app.innerHTML=`<div class="row"><h3 class="sh" style="flex:1;margin:0">إحصائيات المستخدمين</h3><button id="refreshUserStats" class="sec" type="button">تحديث</button></div><section class="user-stats-grid">${stats.map(([label,count])=>`<article class="user-stat-card"><span>${label}</span><strong>${Number(count)||0}</strong></article>`).join("")}</section><p class="mut user-stats-note">عرض إحصائي فقط — لا تظهر لك بيانات الحسابات الفردية. آخر تحديث: ${esc(stamp||"غير معروف")}.</p>`;
+      $("#refreshUserStats").onclick=renderAssistantStats;
+    };
+    return renderAssistantStats();
+  }
   const [us,groupDocs] = await Promise.all([list("users"),list("groups")]);
   await Promise.all(groupDocs.map(g=>setDoc(doc(db,"groupCards",g.id),{name:g.name||"",description:g.description||"",deleted:g.deleted===true},{merge:true}).catch(e=>console.warn("group card sync",e))));
   const activeUsers=us.filter(u=>u.disabled!==true),disabledCount=us.length-activeUsers.length,groupManagerIds=new Set();
   groupDocs.filter(g=>g.deleted!==true).forEach(g=>{if(g.createdBy)groupManagerIds.add(g.createdBy);(Array.isArray(g.admins)?g.admins:[]).forEach(uid=>groupManagerIds.add(uid));});
   const siteAdmins=activeUsers.filter(u=>u.email===ADMIN_EMAIL),assistants=activeUsers.filter(u=>u.role==="assistant"),actualGroupManagers=activeUsers.filter(u=>u.email!==ADMIN_EMAIL&&groupManagerIds.has(u.id)),groupCreators=activeUsers.filter(u=>u.email!==ADMIN_EMAIL&&u.groupsAdmin===true),ordinaryStudents=activeUsers.filter(u=>u.email!==ADMIN_EMAIL&&u.role!=="assistant"&&!groupManagerIds.has(u.id)&&u.groupsAdmin!==true);
   const stats=[["إجمالي الحسابات",us.length],["الحسابات النشطة",activeUsers.length],["مديرو الجروبات فعليًا",actualGroupManagers.length],["مصرح لهم بإنشاء جروب",groupCreators.length],["طلاب عاديون",ordinaryStudents.length],["مساعدون",assistants.length],["أدمن الموقع",siteAdmins.length],["حسابات معطلة",disabledCount]];
+  await setDoc(doc(db,"siteStats","userCounts"),{total:us.length,active:activeUsers.length,groupManagers:actualGroupManagers.length,groupCreators:groupCreators.length,ordinaryStudents:ordinaryStudents.length,assistants:assistants.length,siteAdmins:siteAdmins.length,disabled:disabledCount,updatedAt:serverTimestamp()}).catch(e=>console.warn("stats snapshot write",e));
   await Promise.all(us.map(async u => {const name=canonicalStudentName(u),disabled=u.disabled===true;await setDoc(doc(db,"groupDirectory",u.id),{name,disabled,updatedAt:serverTimestamp()},{merge:true}).catch(e=>console.warn("group directory sync",e));await setDoc(doc(db,"studentDirectory",u.id),{name,disabled,updatedAt:serverTimestamp(),email:deleteField()},{merge:true}).catch(e=>console.warn("legacy directory sync",e));}));
   app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">المستخدمين</h3><button id="refreshUserStats" class="sec" type="button">تحديث الإحصاءات</button></div><section class="user-stats-grid">${stats.map(([label,count])=>`<article class="user-stat-card"><span>${label}</span><strong>${count}</strong></article>`).join("")}</section><p class="mut user-stats-note">المدير يُحسب مرة واحدة حتى لو كان مسؤولًا عن عدة جروبات. قد تتداخل صلاحية إنشاء الجروب مع صفة المساعد أو مدير الجروب؛ الطلاب العاديون لا يحملون هذه الصلاحيات. الإحصاءات التفصيلية تخص الحسابات النشطة، بينما الإجمالي يشمل المعطّلين.</p>` + us.map(u => `<div class="item"><span>${esc(canonicalStudentName(u))} <small class="mut">${esc(u.email)}</small></span>${u.email === ADMIN_EMAIL ? "<b>أدمن</b>" : `<button class="sec" data-setname="${u.id}">تصحيح الاسم</button><button data-u="${u.id}" class="${u.role === "assistant" ? "del" : ""}">${u.role === "assistant" ? "إلغاء المساعد" : "اجعله مساعد"}</button><button class="sec" data-group-role="${u.id}">إدارة مديري الجروبات</button><button class="sec" data-gadmin="${u.id}">${u.groupsAdmin ? "إلغاء صلاحية إنشاء جروب واحد" : "السماح بإنشاء جروب واحد"}</button><button class="sec" data-ban="${u.id}">${u.disabled ? "تفعيل" : "تعطيل"}</button>`}</div>`).join("");
   $("#refreshUserStats").onclick=usersPage;
