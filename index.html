@@ -417,7 +417,7 @@ iframe{border-radius:10px;margin:8px 0}
   p,li{orphans:3;widows:3}
 }
 .wa-groups-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:8px 0 16px}.wa-groups-head h2{margin:4px 0}.wa-search{margin:12px 0 18px}.wa-search input{width:100%;border-radius:999px;padding:12px 18px}.wa-group-list{display:grid;gap:8px}.wa-group-card{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid #e1e8f2;border-radius:18px;background:#fff;box-shadow:0 5px 17px rgba(35,63,115,.07);transition:.2s}.wa-group-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(35,63,115,.12)}.wa-avatar,.wa-preview-avatar{width:52px;height:52px;flex:none;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:1.3rem;font-weight:800;background:linear-gradient(135deg,#1f64a7,#31ad85)}.wa-group-copy{min-width:0;flex:1;cursor:pointer}.wa-group-copy b,.wa-group-copy small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wa-group-copy small{margin-top:5px;color:#74819a}.wa-group-side{display:flex;align-items:flex-end;flex-direction:column;gap:5px;color:#77839b;font-size:.78rem}.request-badge{background:#fff0d8;color:#8d5b00;padding:4px 8px;border-radius:99px;font-size:.72rem}.wa-join-btn{font-size:.76rem;padding:6px 10px;white-space:nowrap}.wa-preview{text-align:center;max-width:640px;margin:50px auto;padding:32px;border-radius:24px;background:#fff;border:1px solid #e1e8f2;box-shadow:0 16px 40px rgba(35,63,115,.12)}.wa-preview-avatar{width:88px;height:88px;margin:24px auto 12px;font-size:2rem}.wa-preview-meta{color:#6f7b94;margin:16px}.wa-chat-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:12px;background:#fff;border:1px solid #e1e8f2;border-radius:18px}.wa-chat-title{flex:1;min-width:0}.wa-chat-title b,.wa-chat-title small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wa-chat-title small{font-size:.78rem;color:#72809a;margin-top:4px}.wa-manage{margin:12px 0;padding:16px;border-radius:18px;background:#f4f7fb;border:1px solid #dde5ef}.wa-manage-head,.wa-manage-grid{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.wa-manage-head h3{flex:1}.wa-manage-grid{align-items:flex-start}.wa-manage-grid>div{flex:1;min-width:240px}.wa-member-row{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:9px 4px;border-bottom:1px solid #e4eaf2}.wa-member-row span{flex:1}.wa-admin-tag{font-size:.7rem;color:#147a52;background:#ddf6e8;border-radius:99px;padding:3px 7px}body.night .wa-group-card,body.night .wa-preview,body.night .wa-chat-head{background:#17233d;color:#eef3ff;border-color:#34435f}body.night .wa-group-copy small,body.night .wa-chat-title small{color:#b5c1d7}body.night .wa-manage{background:#111d35;border-color:#34435f}body.night .wa-member-row{border-color:#34435f}@media(max-width:650px){.wa-groups-head{align-items:flex-start}.wa-chat-head{flex-wrap:wrap}.wa-chat-title{min-width:calc(100% - 90px)}.wa-chat-head button{font-size:.72rem;padding:7px 9px}.wa-group-card{padding:11px}.wa-avatar{width:44px;height:44px}.wa-manage-grid{display:block}.wa-preview{margin:24px auto;padding:22px 14px}#voiceBar{gap:4px;padding:8px;font-size:.78rem}#voiceBar button{font-size:.72rem;padding:6px 8px}}
-@media(max-width:600px){#aiFab,#penFab{z-index:80}}
+#aiFab,#penFab{touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}#aiFab.dragging,#penFab.dragging{cursor:grabbing;transition:none!important;z-index:90}@media(max-width:600px){#aiFab,#penFab{z-index:80}}
 </style>
 <style>
 .wa-menu-wrap{position:relative;display:flex;align-items:center}.wa-menu-trigger{width:42px;height:42px;padding:0!important;border-radius:50%!important;font-size:1.65rem;line-height:1;box-shadow:none!important}.wa-menu{position:absolute;z-index:120;top:calc(100% + 7px);inset-inline-end:0;min-width:230px;display:flex;flex-direction:column;padding:7px;border:1px solid #e2e8f0;border-radius:13px;background:#fff;box-shadow:0 10px 32px rgba(0,0,0,.2);direction:rtl}.wa-menu[hidden]{display:none!important}.wa-menu button{width:100%;text-align:right;padding:11px 13px;border:0;border-radius:8px;background:transparent;color:#263548;box-shadow:none;font-weight:500;transform:none}.wa-menu button:hover{background:#f0f5f4;color:#075e54;box-shadow:none;transform:none}.wa-menu button:after{display:none}.wa-menu hr{width:100%;border:0;border-top:1px solid #e6e9ed;margin:5px 0}.wa-menu button.danger-item{color:#c0394a}.wa-menu button.danger-item:hover{background:#fff0f1;color:#a61f31}body.night .wa-menu{background:#17233d;border-color:#34435f}body.night .wa-menu button{color:#eef3ff}body.night .wa-menu button:hover{background:#243654;color:#9de2ce}body.night .wa-menu hr{border-color:#34435f}@media(max-width:650px){.wa-menu{min-width:215px;top:calc(100% + 5px)}.wa-menu-trigger{width:38px;height:38px}}
@@ -484,8 +484,8 @@ body.night #app #gpPronunciationResult p,body.night #app #gpPronunciationResult 
 <div id="sheet"><div class="f fr"></div><div class="a"></div><div class="b"></div>
 <button id="sp">🔊 نطق</button> <button id="sv">➕ أضف للكاردز</button> <button id="aiExplain" class="sec">🎓 اشرح بالذكاء الاصطناعي</button> <button id="cl" class="sec">إغلاق</button></div>
 
-<button id="aiFab" title="مدرس الفرنسي" aria-label="مدرس الفرنسي">🎓</button>
-<button id="penFab" title="قلم: علّم على اللي مش فاهمه" aria-label="قلم">✏️</button>
+<button id="aiFab" title="اسحب لتحريكه، واضغط لفتح مدرس الفرنسي" aria-label="مدرس الفرنسي؛ اسحب لتحريكه">🎓</button>
+<button id="penFab" title="اسحب لتحريكه، واضغط لتفعيل القلم" aria-label="القلم؛ اسحب لتحريكه">✏️</button>
 <div id="aiPanel"><div id="aiHead"><span>🎓 مدرس الفرنسي</span><button id="aiClose" aria-label="إغلاق">✕</button></div><div id="aiMsgs"></div><div id="aiBar"><textarea id="aiIn" placeholder="اسأل عن كلمة، قاعدة، أو اكتب جملة تتصحح..."></textarea><button id="aiSend">إرسال</button></div></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
@@ -523,6 +523,22 @@ async function askJSON(prompt, tries = 2, parts = null) {
   throw last;
 }
 const $ = s => document.querySelector(s), app = $("#app");
+const lessonFabUserMoved={ai:false,pen:false};
+function makeLessonFabDraggable(el,key,name){
+  if(!el)return;
+  const save=()=>{try{localStorage.setItem(key,JSON.stringify({left:parseFloat(el.style.left),top:parseFloat(el.style.top)}));}catch{}};
+  const setXY=(left,top)=>{const r=el.getBoundingClientRect(),w=r.width||48,h=r.height||48;left=Math.max(8,Math.min(left,window.innerWidth-w-8));top=Math.max(8,Math.min(top,window.innerHeight-h-8));el.style.left=`${left}px`;el.style.top=`${top}px`;el.style.right="auto";el.style.bottom="auto";el.style.transform="none";return {left,top};};
+  try{const saved=JSON.parse(localStorage.getItem(key)||"null");if(Number.isFinite(saved?.left)&&Number.isFinite(saved?.top)){lessonFabUserMoved[name]=true;el.dataset.userMoved="true";el.style.left=`${saved.left}px`;el.style.top=`${saved.top}px`;el.style.right="auto";el.style.bottom="auto";el.style.transform="none";requestAnimationFrame(()=>{const p=setXY(saved.left,saved.top);save();});}}catch{}
+  let pointer=null,startX=0,startY=0,originX=0,originY=0,moved=false,suppressClick=false;
+  el.addEventListener("pointerdown",e=>{if(e.button!==undefined&&e.button!==0)return;pointer=e.pointerId;startX=e.clientX;startY=e.clientY;const r=el.getBoundingClientRect();originX=r.left;originY=r.top;moved=false;try{el.setPointerCapture(pointer);}catch{};});
+  el.addEventListener("pointermove",e=>{if(pointer!==e.pointerId)return;const dx=e.clientX-startX,dy=e.clientY-startY;if(!moved&&Math.hypot(dx,dy)<6)return;moved=true;el.classList.add("dragging");const p=setXY(originX+dx,originY+dy);lessonFabUserMoved[name]=true;el.dataset.userMoved="true";try{localStorage.setItem(key,JSON.stringify(p));}catch{};e.preventDefault();});
+  const finish=e=>{if(pointer!==e.pointerId)return;if(moved)suppressClick=true;pointer=null;el.classList.remove("dragging");};
+  el.addEventListener("pointerup",finish);el.addEventListener("pointercancel",finish);
+  el.addEventListener("click",e=>{if(suppressClick){e.preventDefault();e.stopImmediatePropagation();suppressClick=false;}},true);
+  window.addEventListener("resize",()=>{if(!lessonFabUserMoved[name])return;const r=el.getBoundingClientRect();const p=setXY(r.left,r.top);try{localStorage.setItem(key,JSON.stringify(p));}catch{}});
+}
+makeLessonFabDraggable($("#aiFab"),"lessonFabAiPosition","ai");
+makeLessonFabDraggable($("#penFab"),"lessonFabPenPosition","pen");
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let user = null, admin = false, editor = false, groupAdmin = false, isAssistantUser = false, currentStudentName = "", userRoleUnsub = null;
 let groupListUnsubs = [], groupChatUnsubs = [], activeGraduationRecognition=null;
@@ -2064,11 +2080,11 @@ async function translateSentence(sent) {
 function positionLessonFabs(){
   const sheet=$("#sheet"),aiFab=$("#aiFab"),penFab=$("#penFab");if(!sheet||!aiFab||!penFab)return;
   const mobile=window.matchMedia("(max-width:600px)").matches,visible=getComputedStyle(sheet).display!=="none";
-  if(!mobile||!visible){aiFab.style.top="";aiFab.style.bottom="";penFab.style.top="";penFab.style.bottom="";return;}
+  if(!mobile||!visible){if(!lessonFabUserMoved.ai){aiFab.style.top="";aiFab.style.bottom="";}if(!lessonFabUserMoved.pen){penFab.style.top="";penFab.style.bottom="";}return;}
   const gap=8,h=window.innerHeight,rect=sheet.getBoundingClientRect(),aiH=aiFab.offsetHeight||44,penH=penFab.offsetHeight||36;
   const bottom=h-rect.top+10,maxBottom=h-12-aiH-penH-gap;
-  if(bottom>maxBottom){penFab.style.top="max(12px, env(safe-area-inset-top))";penFab.style.bottom="auto";aiFab.style.top=`calc(max(12px, env(safe-area-inset-top)) + ${penH+gap}px)`;aiFab.style.bottom="auto";}
-  else{aiFab.style.top="auto";aiFab.style.bottom=`${bottom}px`;penFab.style.top="auto";penFab.style.bottom=`${bottom+aiH+gap}px`;}
+  if(bottom>maxBottom){if(!lessonFabUserMoved.pen){penFab.style.top="max(12px, env(safe-area-inset-top))";penFab.style.bottom="auto";}if(!lessonFabUserMoved.ai){aiFab.style.top=`calc(max(12px, env(safe-area-inset-top)) + ${penH+gap}px)`;aiFab.style.bottom="auto";}}
+  else{if(!lessonFabUserMoved.ai){aiFab.style.top="auto";aiFab.style.bottom=`${bottom}px`;}if(!lessonFabUserMoved.pen){penFab.style.top="auto";penFab.style.bottom=`${bottom+aiH+gap}px`;}}
 }
 const lessonSheetObserver=window.ResizeObserver?new ResizeObserver(positionLessonFabs):null;
 if(lessonSheetObserver)lessonSheetObserver.observe($("#sheet"));
