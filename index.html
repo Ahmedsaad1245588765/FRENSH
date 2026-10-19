@@ -417,6 +417,7 @@ iframe{border-radius:10px;margin:8px 0}
   p,li{orphans:3;widows:3}
 }
 .wa-groups-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:8px 0 16px}.wa-groups-head h2{margin:4px 0}.wa-search{margin:12px 0 18px}.wa-search input{width:100%;border-radius:999px;padding:12px 18px}.wa-group-list{display:grid;gap:8px}.wa-group-card{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid #e1e8f2;border-radius:18px;background:#fff;box-shadow:0 5px 17px rgba(35,63,115,.07);transition:.2s}.wa-group-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(35,63,115,.12)}.wa-avatar,.wa-preview-avatar{width:52px;height:52px;flex:none;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:1.3rem;font-weight:800;background:linear-gradient(135deg,#1f64a7,#31ad85)}.wa-group-copy{min-width:0;flex:1;cursor:pointer}.wa-group-copy b,.wa-group-copy small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wa-group-copy small{margin-top:5px;color:#74819a}.wa-group-side{display:flex;align-items:flex-end;flex-direction:column;gap:5px;color:#77839b;font-size:.78rem}.request-badge{background:#fff0d8;color:#8d5b00;padding:4px 8px;border-radius:99px;font-size:.72rem}.wa-join-btn{font-size:.76rem;padding:6px 10px;white-space:nowrap}.wa-preview{text-align:center;max-width:640px;margin:50px auto;padding:32px;border-radius:24px;background:#fff;border:1px solid #e1e8f2;box-shadow:0 16px 40px rgba(35,63,115,.12)}.wa-preview-avatar{width:88px;height:88px;margin:24px auto 12px;font-size:2rem}.wa-preview-meta{color:#6f7b94;margin:16px}.wa-chat-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:12px;background:#fff;border:1px solid #e1e8f2;border-radius:18px}.wa-chat-title{flex:1;min-width:0}.wa-chat-title b,.wa-chat-title small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wa-chat-title small{font-size:.78rem;color:#72809a;margin-top:4px}.wa-manage{margin:12px 0;padding:16px;border-radius:18px;background:#f4f7fb;border:1px solid #dde5ef}.wa-manage-head,.wa-manage-grid{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.wa-manage-head h3{flex:1}.wa-manage-grid{align-items:flex-start}.wa-manage-grid>div{flex:1;min-width:240px}.wa-member-row{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:9px 4px;border-bottom:1px solid #e4eaf2}.wa-member-row span{flex:1}.wa-admin-tag{font-size:.7rem;color:#147a52;background:#ddf6e8;border-radius:99px;padding:3px 7px}body.night .wa-group-card,body.night .wa-preview,body.night .wa-chat-head{background:#17233d;color:#eef3ff;border-color:#34435f}body.night .wa-group-copy small,body.night .wa-chat-title small{color:#b5c1d7}body.night .wa-manage{background:#111d35;border-color:#34435f}body.night .wa-member-row{border-color:#34435f}@media(max-width:650px){.wa-groups-head{align-items:flex-start}.wa-chat-head{flex-wrap:wrap}.wa-chat-title{min-width:calc(100% - 90px)}.wa-chat-head button{font-size:.72rem;padding:7px 9px}.wa-group-card{padding:11px}.wa-avatar{width:44px;height:44px}.wa-manage-grid{display:block}.wa-preview{margin:24px auto;padding:22px 14px}#voiceBar{gap:4px;padding:8px;font-size:.78rem}#voiceBar button{font-size:.72rem;padding:6px 8px}}
+@media(max-width:600px){#aiFab,#penFab{z-index:80}}
 </style>
 <style>
 .wa-menu-wrap{position:relative;display:flex;align-items:center}.wa-menu-trigger{width:42px;height:42px;padding:0!important;border-radius:50%!important;font-size:1.65rem;line-height:1;box-shadow:none!important}.wa-menu{position:absolute;z-index:120;top:calc(100% + 7px);inset-inline-end:0;min-width:230px;display:flex;flex-direction:column;padding:7px;border:1px solid #e2e8f0;border-radius:13px;background:#fff;box-shadow:0 10px 32px rgba(0,0,0,.2);direction:rtl}.wa-menu[hidden]{display:none!important}.wa-menu button{width:100%;text-align:right;padding:11px 13px;border:0;border-radius:8px;background:transparent;color:#263548;box-shadow:none;font-weight:500;transform:none}.wa-menu button:hover{background:#f0f5f4;color:#075e54;box-shadow:none;transform:none}.wa-menu button:after{display:none}.wa-menu hr{width:100%;border:0;border-top:1px solid #e6e9ed;margin:5px 0}.wa-menu button.danger-item{color:#c0394a}.wa-menu button.danger-item:hover{background:#fff0f1;color:#a61f31}body.night .wa-menu{background:#17233d;border-color:#34435f}body.night .wa-menu button{color:#eef3ff}body.night .wa-menu button:hover{background:#243654;color:#9de2ce}body.night .wa-menu hr{border-color:#34435f}@media(max-width:650px){.wa-menu{min-width:215px;top:calc(100% + 5px)}.wa-menu-trigger{width:38px;height:38px}}
@@ -2060,28 +2061,40 @@ async function translateSentence(sent) {
   setDoc(ref, { ar: j.ar }).catch(() => {});
   return j.ar;
 }
+function positionLessonFabs(){
+  const sheet=$("#sheet"),aiFab=$("#aiFab"),penFab=$("#penFab");if(!sheet||!aiFab||!penFab)return;
+  const mobile=window.matchMedia("(max-width:600px)").matches,visible=getComputedStyle(sheet).display!=="none";
+  if(!mobile||!visible){aiFab.style.top="";aiFab.style.bottom="";penFab.style.top="";penFab.style.bottom="";return;}
+  const gap=8,h=window.innerHeight,rect=sheet.getBoundingClientRect(),aiH=aiFab.offsetHeight||44,penH=penFab.offsetHeight||36;
+  const bottom=h-rect.top+10,maxBottom=h-12-aiH-penH-gap;
+  if(bottom>maxBottom){penFab.style.top="max(12px, env(safe-area-inset-top))";penFab.style.bottom="auto";aiFab.style.top=`calc(max(12px, env(safe-area-inset-top)) + ${penH+gap}px)`;aiFab.style.bottom="auto";}
+  else{aiFab.style.top="auto";aiFab.style.bottom=`${bottom}px`;penFab.style.top="auto";penFab.style.bottom=`${bottom+aiH+gap}px`;}
+}
+const lessonSheetObserver=window.ResizeObserver?new ResizeObserver(positionLessonFabs):null;
+if(lessonSheetObserver)lessonSheetObserver.observe($("#sheet"));
+window.addEventListener("resize",positionLessonFabs);window.addEventListener("orientationchange",positionLessonFabs);
 async function openSentence(sent) {
   const mine = cur = { fr: sent, word: sent, ar: "", ex: sent };
   $("#sheet .f").textContent = sent; $("#sheet .f").style.fontSize = "1.05rem";
   $("#sheet .a").textContent = "..."; $("#sheet .a").style.fontSize = "1.2rem"; $("#sheet .b").textContent = "";
-  $("#sv").style.display = "none"; $("#aiExplain").style.display = "none"; $("#sheet").style.display = "block";
-  try { const t = await translateSentence(sent); if (cur !== mine) return; $("#sheet .a").textContent = t; $("#sheet .a").dir = "auto"; }
-  catch (e) { console.error(e); if (cur !== mine) return; $("#sheet .a").textContent = "الترجمة مش متاحة دلوقتي"; $("#sheet .b").textContent = (e.message || e.code || "").slice(0, 160); }
+  $("#sv").style.display = "none"; $("#aiExplain").style.display = "none"; $("#sheet").style.display = "block";positionLessonFabs();
+  try { const t = await translateSentence(sent); if (cur !== mine) return; $("#sheet .a").textContent = t; $("#sheet .a").dir = "auto";positionLessonFabs(); }
+  catch (e) { console.error(e); if (cur !== mine) return; $("#sheet .a").textContent = "الترجمة مش متاحة دلوقتي"; $("#sheet .b").textContent = (e.message || e.code || "").slice(0, 160);positionLessonFabs(); }
 }
 async function openWord(w, sent) {
   const mine = cur = { fr: w.toLowerCase(), word: w, ar: "", ex: sent.trim() };
   $("#sheet .f").style.fontSize = ""; $("#sheet .a").style.fontSize = ""; $("#sv").style.display = ""; $("#aiExplain").style.display = "inline-block";
-  $("#sheet .f").textContent = w; $("#sheet .a").textContent = "..."; $("#sheet .b").textContent = ""; $("#sv").textContent = "➕ أضف للكاردز"; $("#sheet").style.display = "block";
+  $("#sheet .f").textContent = w; $("#sheet .a").textContent = "..."; $("#sheet .b").textContent = ""; $("#sv").textContent = "➕ أضف للكاردز"; $("#sheet").style.display = "block";positionLessonFabs();
   speak(w);
   try {
     const t = await translate(mine.fr, mine.ex); if (cur !== mine) return; const base = t.base || w; mine.ar = t.ar; mine.fr = base; $("#sheet .a").textContent = t.ar;
     const synonyms = (t.synonyms || []).filter(x => sane(x));
-    $("#sheet .b").textContent = synonyms.length ? `مرادفات: ${synonyms.join("، ")}` : "";
-  } catch (e) { console.error(e); if (cur !== mine) return; $("#sheet .a").textContent = "الترجمة مش متاحة دلوقتي"; $("#sheet .b").textContent = (e.message || e.code || "").slice(0, 160); }
+    $("#sheet .b").textContent = synonyms.length ? `مرادفات: ${synonyms.join("، ")}` : "";positionLessonFabs();
+  } catch (e) { console.error(e); if (cur !== mine) return; $("#sheet .a").textContent = "الترجمة مش متاحة دلوقتي"; $("#sheet .b").textContent = (e.message || e.code || "").slice(0, 160);positionLessonFabs(); }
 }
 $("#sp").onclick = () => speak(cur.word || cur.fr);
-$("#aiExplain").onclick = () => { const text = cur?.word || cur?.fr || ""; if (!text) return; $("#sheet").style.display = "none"; $("#aiPanel").style.display = "flex"; $("#aiIn").value = `اشرحلي التعبير أو القاعدة الفرنسية «${text}» باستفاضة: المعنى، الاستخدام، الزمن أو القاعدة إن وجدت، أمثلة بالفرنسية مع الترجمة العربية، والأخطاء الشائعة.`; askTutor(); };
-$("#cl").onclick = () => $("#sheet").style.display = "none";
+$("#aiExplain").onclick = () => { const text = cur?.word || cur?.fr || ""; if (!text) return; $("#sheet").style.display = "none"; positionLessonFabs(); $("#aiPanel").style.display = "flex"; $("#aiIn").value = `اشرحلي التعبير أو القاعدة الفرنسية «${text}» باستفاضة: المعنى، الاستخدام، الزمن أو القاعدة إن وجدت، أمثلة بالفرنسية مع الترجمة العربية، والأخطاء الشائعة.`; askTutor(); };
+$("#cl").onclick = () => { $("#sheet").style.display = "none"; positionLessonFabs(); };
 $("#sv").onclick = async e => {
   if (!cur?.ar) return;
   const ref = doc(db, "users", user.uid, "cards", cur.fr);
@@ -2090,7 +2103,7 @@ $("#sv").onclick = async e => {
 };
 
 async function review() {
-  $("#sheet").style.display = "none";
+  $("#sheet").style.display = "none";positionLessonFabs();
   const all = (await getDocs(collection(db, "users", user.uid, "cards"))).docs.map(d => ({ id: d.id, ...d.data() }));
   const q = all.filter(c => c.due <= Date.now()), DAYS = [0, 1, 3, 7, 14, 30];
   const show = () => {
