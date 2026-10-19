@@ -472,7 +472,7 @@ body.night #app .gp-fr summary,body.night #app .gp-card details summary{color:#8
 body.night #app #gpPronunciationResult{background:#172c49;border-color:#38537a;color:#e5eeff}
 body.night #app #gpPronunciationResult p,body.night #app #gpPronunciationResult small{color:#d6e2f4}
 @media(max-width:700px){#app .gp-head{align-items:stretch}#app .gp-head>div{min-width:0;width:100%}#app .gp-head>.sec{align-self:flex-start}#app .gp-task-row{grid-template-columns:minmax(0,1fr);gap:8px}#app .gp-task-row>div{min-width:0}#app .gp-task-row>button,#app .gp-task-row>select{width:100%}#app .gp-card,#app .gp-task{padding:14px}#app .gp-grid{grid-template-columns:1fr}}
-.gp-member-progress-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:12px;margin-top:14px}.gp-member-progress-card{padding:14px;min-width:0}.gp-progress-head{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:9px}.gp-progress-head strong{white-space:nowrap}.gp-progress-task-list{list-style:none;padding:0;margin:9px 0 0;display:grid;gap:6px}.gp-progress-task-list li{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;border-top:1px solid #e5eaf2;padding-top:6px;font-size:.9rem}.gp-task-state-done{color:#138046;font-weight:700;white-space:nowrap}.gp-task-state-pending{color:#9a6500;font-weight:700;white-space:nowrap}body.night #app .gp-progress-task-list li{border-color:#344563}body.night #app .gp-task-state-done{color:#75d8a0}body.night #app .gp-task-state-pending{color:#ffd274}.gp-task-admin-actions{display:flex;gap:7px;flex-wrap:wrap}.gp-task-admin-actions button{padding:8px 11px}.gp-bilingual-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-top:10px}.gp-bilingual-grid .gp-card{margin:0}.gp-speaker-assign{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}.gp-speaker-assign select{min-width:190px;max-width:100%}</style>
+.gp-member-progress-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:12px;margin-top:14px}.gp-member-progress-card{padding:14px;min-width:0}.gp-progress-head{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:9px}.gp-progress-head strong{white-space:nowrap}.gp-progress-task-list{list-style:none;padding:0;margin:9px 0 0;display:grid;gap:6px}.gp-progress-task-list li{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;border-top:1px solid #e5eaf2;padding-top:6px;font-size:.9rem}.gp-task-state-done{color:#138046;font-weight:700;white-space:nowrap}.gp-task-state-pending{color:#9a6500;font-weight:700;white-space:nowrap}body.night #app .gp-progress-task-list li{border-color:#344563}body.night #app .gp-task-state-done{color:#75d8a0}body.night #app .gp-task-state-pending{color:#ffd274}.gp-task-admin-actions{display:flex;gap:7px;flex-wrap:wrap}.gp-task-admin-actions button{padding:8px 11px}.gp-bilingual-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-top:10px}.gp-bilingual-grid .gp-card{margin:0}.gp-speaker-assign{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}.gp-speaker-assign select{min-width:190px;max-width:100%}.user-stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin:16px 0 8px}.user-stat-card{display:flex;flex-direction:column;gap:8px;padding:14px 16px;border:1px solid #d9e3f3;border-radius:14px;background:linear-gradient(145deg,#fff,#f1f5fc);box-shadow:0 5px 15px rgba(27,55,105,.06)}.user-stat-card span{font-size:.9rem;color:#52627b}.user-stat-card strong{font-size:1.75rem;line-height:1;color:#21478d}.user-stats-note{margin:8px 0 16px;line-height:1.6}body.night .user-stat-card{background:linear-gradient(145deg,#172542,#111b32);border-color:#344563}body.night .user-stat-card span{color:#c2cee3}body.night .user-stat-card strong{color:#a9c8ff}@media(max-width:520px){.user-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.user-stat-card{padding:12px}.user-stat-card strong{font-size:1.5rem}}</style>
 </head>
 <body>
 <div class="top">Faculté · Département de français — قسم اللغة الفرنسية</div>
@@ -590,6 +590,11 @@ const list = async (col, field, val) => {
   const q = field ? query(collection(db, col), where(field, "==", val)) : collection(db, col);
   try { return (await withTimeout(getDocs(q))).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.created?.seconds || 0) - (b.created?.seconds || 0)); }
   catch(e){ console.warn(`تعذر تحميل ${col}:`,e.message); if (e.code !== "permission-denied") netWarn(); return []; }
+};
+const listArrayContains = async (col, field, val) => {
+  const q=query(collection(db,col),where(field,"array-contains",val));
+  try { return (await withTimeout(getDocs(q))).docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.created?.seconds||0)-(b.created?.seconds||0)); }
+  catch(e){ console.warn(`تعذر تحميل ${col}:`,e.message); if(e.code!=="permission-denied")netWarn(); return []; }
 };
 async function groupStudents() {
   const current=await list("groupDirectory"), merged=new Map();
@@ -1456,14 +1461,16 @@ async function lesson(l, sub, startKey) {
 
 /* ---------- المستخدمين والجروبات ---------- */
 async function myGroups() {
-  return (await list("groups")).filter(g => !g.deleted).sort((a,b) => String(a.name||"").localeCompare(String(b.name||""), "ar"));
+  if(!user)return [];
+  const groups=admin?await list("groups"):await listArrayContains("groups","members",user.uid);
+  return groups.filter(g => !g.deleted).sort((a,b) => String(a.name||"").localeCompare(String(b.name||""), "ar"));
 }
 async function groupCreatorSlotState(){
   if(admin||!groupAdmin)return "available";
   const slotRef=doc(db,"groupCreatorSlots",user.uid);
   try{
     const slot=await getDoc(slotRef);if(slot.exists())return "used";
-    const owned=(await list("groups")).find(g=>g.createdBy===user.uid);
+    const owned=(await listArrayContains("groups","members",user.uid)).find(g=>g.createdBy===user.uid);
     if(owned){await setDoc(slotRef,{groupId:owned.id,claimedAt:serverTimestamp()});return "used";}
     return "available";
   }catch(e){console.warn("group creator slot check",e);return "blocked";}
@@ -1491,9 +1498,15 @@ async function gradesPage() {
 
 async function usersPage() {
   if (!admin) return;
-  const us = await list("users");
+  const [us,groupDocs] = await Promise.all([list("users"),list("groups")]);
+  await Promise.all(groupDocs.map(g=>setDoc(doc(db,"groupCards",g.id),{name:g.name||"",description:g.description||"",deleted:g.deleted===true},{merge:true}).catch(e=>console.warn("group card sync",e))));
+  const activeUsers=us.filter(u=>u.disabled!==true),disabledCount=us.length-activeUsers.length,groupManagerIds=new Set();
+  groupDocs.filter(g=>g.deleted!==true).forEach(g=>{if(g.createdBy)groupManagerIds.add(g.createdBy);(Array.isArray(g.admins)?g.admins:[]).forEach(uid=>groupManagerIds.add(uid));});
+  const siteAdmins=activeUsers.filter(u=>u.email===ADMIN_EMAIL),assistants=activeUsers.filter(u=>u.role==="assistant"),actualGroupManagers=activeUsers.filter(u=>u.email!==ADMIN_EMAIL&&groupManagerIds.has(u.id)),groupCreators=activeUsers.filter(u=>u.email!==ADMIN_EMAIL&&u.groupsAdmin===true),ordinaryStudents=activeUsers.filter(u=>u.email!==ADMIN_EMAIL&&u.role!=="assistant"&&!groupManagerIds.has(u.id)&&u.groupsAdmin!==true);
+  const stats=[["إجمالي الحسابات",us.length],["الحسابات النشطة",activeUsers.length],["مديرو الجروبات فعليًا",actualGroupManagers.length],["مصرح لهم بإنشاء جروب",groupCreators.length],["طلاب عاديون",ordinaryStudents.length],["مساعدون",assistants.length],["أدمن الموقع",siteAdmins.length],["حسابات معطلة",disabledCount]];
   await Promise.all(us.map(async u => {const name=canonicalStudentName(u),disabled=u.disabled===true;await setDoc(doc(db,"groupDirectory",u.id),{name,disabled,updatedAt:serverTimestamp()},{merge:true}).catch(e=>console.warn("group directory sync",e));await setDoc(doc(db,"studentDirectory",u.id),{name,disabled,updatedAt:serverTimestamp(),email:deleteField()},{merge:true}).catch(e=>console.warn("legacy directory sync",e));}));
-  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">المستخدمين</h3></div>` + us.map(u => `<div class="item"><span>${esc(canonicalStudentName(u))} <small class="mut">${esc(u.email)}</small></span>${u.email === ADMIN_EMAIL ? "<b>أدمن</b>" : `<button class="sec" data-setname="${u.id}">تصحيح الاسم</button><button data-u="${u.id}" class="${u.role === "assistant" ? "del" : ""}">${u.role === "assistant" ? "إلغاء المساعد" : "اجعله مساعد"}</button><button class="sec" data-group-role="${u.id}">إدارة مديري الجروبات</button><button class="sec" data-gadmin="${u.id}">${u.groupsAdmin ? "إلغاء صلاحية إنشاء جروب واحد" : "السماح بإنشاء جروب واحد"}</button><button class="sec" data-ban="${u.id}">${u.disabled ? "تفعيل" : "تعطيل"}</button>`}</div>`).join("");
+  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">المستخدمين</h3><button id="refreshUserStats" class="sec" type="button">تحديث الإحصاءات</button></div><section class="user-stats-grid">${stats.map(([label,count])=>`<article class="user-stat-card"><span>${label}</span><strong>${count}</strong></article>`).join("")}</section><p class="mut user-stats-note">المدير يُحسب مرة واحدة حتى لو كان مسؤولًا عن عدة جروبات. قد تتداخل صلاحية إنشاء الجروب مع صفة المساعد أو مدير الجروب؛ الطلاب العاديون لا يحملون هذه الصلاحيات. الإحصاءات التفصيلية تخص الحسابات النشطة، بينما الإجمالي يشمل المعطّلين.</p>` + us.map(u => `<div class="item"><span>${esc(canonicalStudentName(u))} <small class="mut">${esc(u.email)}</small></span>${u.email === ADMIN_EMAIL ? "<b>أدمن</b>" : `<button class="sec" data-setname="${u.id}">تصحيح الاسم</button><button data-u="${u.id}" class="${u.role === "assistant" ? "del" : ""}">${u.role === "assistant" ? "إلغاء المساعد" : "اجعله مساعد"}</button><button class="sec" data-group-role="${u.id}">إدارة مديري الجروبات</button><button class="sec" data-gadmin="${u.id}">${u.groupsAdmin ? "إلغاء صلاحية إنشاء جروب واحد" : "السماح بإنشاء جروب واحد"}</button><button class="sec" data-ban="${u.id}">${u.disabled ? "تفعيل" : "تعطيل"}</button>`}</div>`).join("");
+  $("#refreshUserStats").onclick=usersPage;
   app.querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => { const x=us.find(x=>x.id===b.dataset.ban); await updateDoc(doc(db,"users",x.id),{disabled:!x.disabled}); usersPage(); });
   app.querySelectorAll("[data-gadmin]").forEach(b => b.onclick = async () => { const x=us.find(x=>x.id===b.dataset.gadmin); await updateDoc(doc(db,"users",x.id),{groupsAdmin:!x.groupsAdmin}); if (x.id === user.uid) groupAdmin = !x.groupsAdmin; usersPage(); });
   app.querySelectorAll("[data-setname]").forEach(b=>b.onclick=()=>{const x=us.find(y=>y.id===b.dataset.setname);form("تصحيح اسم العضو",[{n:"name",l:"الاسم الذي سيظهر داخل الجروبات",v:canonicalStudentName(x)}],async v=>{const name=v.name.trim().replace(/\s+/g," ");if(!name)return alert("اكتب اسمًا صحيحًا.");await updateDoc(doc(db,"users",x.id),{name});await setDoc(doc(db,"groupDirectory",x.id),{name,disabled:x.disabled===true,updatedAt:serverTimestamp()},{merge:true});usersPage();});});
@@ -1507,7 +1520,11 @@ async function groupsPage() {
   if (!user) return needLogin();
   groupListUnsubs.forEach(fn => fn()); groupListUnsubs = [];
   groupChatUnsubs.forEach(fn => fn()); groupChatUnsubs = [];
-  const gs = await myGroups();
+  const memberGroups=await myGroups();
+  if(admin)await Promise.all(memberGroups.map(g=>setDoc(doc(db,"groupCards",g.id),{name:g.name||"",description:g.description||"",deleted:g.deleted===true},{merge:true}).catch(e=>console.warn("group card sync",e))));
+  const cards=await list("groupCards"),groupsById=new Map(cards.filter(g=>g.deleted!==true).map(g=>[g.id,g]));
+  memberGroups.forEach(g=>groupsById.set(g.id,g));
+  const gs=[...groupsById.values()].sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"ar"));
   const creatorSlotState=await groupCreatorSlotState();
   const mayCreateGroup=groupAdmin&&(admin||creatorSlotState==="available");
   const readAt = new Map(), unread = new Map(), requestStates = new Map(), lastTexts = new Map(), hiddenPostsByGroup=new Map(), postDocsByGroup=new Map();
@@ -1529,7 +1546,7 @@ async function groupsPage() {
     }
   }
   app.innerHTML = `<div class="wa-groups-head"><div><small>مساحة التواصل</small><h2 class="sh">جروبات الطلاب</h2><p class="mut">استعرض الجروبات واطلب الانضمام. المحادثة تظهر بعد الموافقة.</p></div><div class="row"><button class="sec" id="refreshGroups">تحديث</button>${mayCreateGroup ? `<button id="addg">＋ إنشاء جروب</button>` : groupAdmin&&!admin?`<small class="mut">${creatorSlotState==="used"?"استخدمت بالفعل رصيد إنشاء جروب واحد.":"تعذر التحقق من صلاحية إنشاء الجروب؛ راجع الاتصال أو القواعد."}</small>`:""}</div></div><div class="wa-search"><input id="groupFilter" placeholder="ابحث عن جروب..."></div><div class="wa-group-list">` +
-    (gs.length ? gs.map(g => { const member=admin||(g.members||[]).includes(user.uid), state=requestStates.get(g.id)||"none", badge=member?(unread.get(g.id)||0):state==="pending"?"قيد المراجعة":""; return `<article class="wa-group-card" data-group-card="${g.id}" data-search="${esc((g.name||"").toLowerCase())}"><div class="wa-avatar">${esc((g.name||"G").trim().slice(0,1).toUpperCase())}</div><div class="wa-group-copy" ${member?`data-open-group="${g.id}"`:`data-preview="${g.id}"`}><b>${esc(g.name||"جروب")}</b><small>${member?esc(lastTexts.get(g.id)||"لا توجد رسائل بعد"):esc(g.description||"جروب طلاب — انضم للمشاركة")}</small></div><div class="wa-group-side"><small>${(g.members||[]).length} عضو</small>${member?`<span class="unread-badge" data-unread="${g.id}" style="${badge?"":"display:none"}">${badge||0}</span>`:badge?`<span class="request-badge">${badge}</span>`:""}${member?"":`<button class="sec wa-join-btn" data-preview="${g.id}">${state==="pending"?"عرض الطلب":"عرض الجروب"}</button>`}</div></article>`; }).join("") : `<p class="mut">لا توجد جروبات متاحة حاليًا.</p>`) + `</div>`;
+    (gs.length ? gs.map(g => { const member=admin||(g.members||[]).includes(user.uid), state=requestStates.get(g.id)||"none", badge=member?(unread.get(g.id)||0):state==="pending"?"قيد المراجعة":""; return `<article class="wa-group-card" data-group-card="${g.id}" data-search="${esc((g.name||"").toLowerCase())}"><div class="wa-avatar">${esc((g.name||"G").trim().slice(0,1).toUpperCase())}</div><div class="wa-group-copy" ${member?`data-open-group="${g.id}"`:`data-preview="${g.id}"`}><b>${esc(g.name||"جروب")}</b><small>${member?esc(lastTexts.get(g.id)||"لا توجد رسائل بعد"):esc(g.description||"جروب طلاب — انضم للمشاركة")}</small></div><div class="wa-group-side"><small>${member?`${(g.members||[]).length} عضو`:`جروب خاص`}</small>${member?`<span class="unread-badge" data-unread="${g.id}" style="${badge?"":"display:none"}">${badge||0}</span>`:badge?`<span class="request-badge">${badge}</span>`:""}${member?"":`<button class="sec wa-join-btn" data-preview="${g.id}">${state==="pending"?"عرض الطلب":"عرض الجروب"}</button>`}</div></article>`; }).join("") : `<p class="mut">لا توجد جروبات متاحة حاليًا.</p>`) + `</div>`;
   if (mayCreateGroup) $("#addg").onclick = async () => {
     const directory = (await groupStudents()).filter(x => x.id !== user.uid);
     form("إنشاء جروب", [{ n: "name", l: "اسم الجروب" }, { n: "description", l: "وصف مختصر", t: "area" }, { n: "m", l: "إضافة طلاب", t: "chk", o: directory.map(x => [x.id, x.name || "طالب"]) }],
@@ -1538,10 +1555,10 @@ async function groupsPage() {
         const members=[...new Set([user.uid,...(v.m||[])])],payload={name:String(v.name).trim(),description:v.description||"",public:false,members,admins:[user.uid],createdBy:user.uid,deleted:false,created:serverTimestamp()};
         try{
           let groupId;
-          if(admin){const ref=await addDoc(collection(db,"groups"),payload);groupId=ref.id;}
+          if(admin){const ref=doc(collection(db,"groups")),cardRef=doc(db,"groupCards",ref.id),batch=writeBatch(db);batch.set(ref,payload);batch.set(cardRef,{name:payload.name,description:payload.description,deleted:false});await batch.commit();groupId=ref.id;}
           else{
-            const ref=doc(collection(db,"groups")),slotRef=doc(db,"groupCreatorSlots",user.uid);
-            await runTransaction(db,async tx=>{const slot=await tx.get(slotRef);if(slot.exists())throw new Error("GROUP_SLOT_USED");tx.set(ref,payload);tx.set(slotRef,{groupId:ref.id,claimedAt:serverTimestamp()});});
+            const ref=doc(collection(db,"groups")),cardRef=doc(db,"groupCards",ref.id),slotRef=doc(db,"groupCreatorSlots",user.uid);
+            await runTransaction(db,async tx=>{const slot=await tx.get(slotRef);if(slot.exists())throw new Error("GROUP_SLOT_USED");tx.set(ref,payload);tx.set(cardRef,{name:payload.name,description:payload.description,deleted:false});tx.set(slotRef,{groupId:ref.id,claimedAt:serverTimestamp()});});
             groupId=ref.id;
           }
           await setDoc(doc(db,"users",user.uid,"groupReads",groupId),{lastReadAt:serverTimestamp()});groupsPage();
@@ -1573,7 +1590,7 @@ async function extractLocalGraduationPdf(file){
 async function graduationProjectsPage(){
   if(!user)return needLogin();
   groupListUnsubs.forEach(fn=>fn());groupListUnsubs=[];groupChatUnsubs.forEach(fn=>fn());groupChatUnsubs=[];
-  const groups=(await myGroups()).filter(g=>groupManager(g)||groupMember(g));
+  const groups=(await myGroups()).filter(g=>admin||groupMember(g));
   const items=await Promise.all(groups.map(async g=>{const snap=await getDoc(doc(db,"graduationProjects",g.id)).catch(e=>{console.warn("graduation project",e);return null;});if(!snap?.exists())return {g,p:null};let p={id:snap.id,...snap.data()};const currentMembers=[...(g.members||[])];if(JSON.stringify(currentMembers)!==JSON.stringify(p.members||[])){try{await updateDoc(doc(db,"graduationProjects",g.id),{members:currentMembers,updatedAt:serverTimestamp()});p={...p,members:currentMembers};}catch(e){console.warn("automatic graduation team sync",e);p={...p,members:currentMembers};}}return {g,p};}));
   app.innerHTML=`<div class="gp-head"><div><small>مساحة خاصة بكل فريق</small><h2 class="sh">مشروع التخرج</h2><p class="mut">اربط مشروع الجروب، نظّم أدوار العرض، وتابع إنجاز كل طالب.</p></div><button class="sec" id="refreshGraduation">تحديث</button></div><div class="gp-note">أي مدير للجروب يستطيع إنشاء المشروع، وتُضاف إليه تلقائيًا أسماء جميع أعضاء الجروب الحالي (من 2 إلى 10 طلاب). أضف رابط PDF ليشاهده الفريق، أو اختر ملفًا لاستخراج نصه محليًا على جهازك؛ الملف نفسه لا يُرفع. يُبنى طول النص الشفهي وفق مدة كلام الطالب التي يحددها المدير (1–8 دقائق). يمكن أن يبدأ محتوى المشروع من الاسم وحده؛ النص أو PDF اختياري لتحسين الدقة.</div><div class="gp-grid gp-section">${items.map(({g,p})=>p?`<article class="gp-card"><small>${esc(g.name||"جروب")}</small><h3>${esc(p.title||"مشروع التخرج")}</h3><div class="gp-badges"><span>${(g.members||[]).length} أعضاء</span><span>${groupManager(g)?"مدير فريق":"عضو فريق"}</span></div><button data-open-graduation="${esc(g.id)}" style="margin-top:12px">فتح مساحة المشروع</button></article>`:groupManager(g)?`<article class="gp-card"><small>${esc(g.name||"جروب")}</small><h3>لم يتم إنشاء مساحة للمشروع</h3><div class="gp-badges"><span>${(g.members||[]).length} أعضاء في الجروب</span><span>أنت مدير الجروب</span></div><button data-create-graduation="${esc(g.id)}" style="margin-top:12px">＋ إنشاء المشروع كاملًا بالذكاء الاصطناعي</button></article>`:`<article class="gp-card"><small>${esc(g.name||"جروب")}</small><h3>لا توجد مساحة حتى الآن</h3><p class="mut">مدير الجروب لم ينشئ مساحة مشروع التخرج بعد.</p></article>` ).join("")||`<p class="mut">لا توجد جروبات متاحة لحسابك بعد. اطلب الانضمام إلى جروب مشروع التخرج أولًا.</p>`}</div>`;
   const byId=new Map(groups.map(g=>[g.id,g]));
@@ -1726,7 +1743,7 @@ async function generateGraduationPlan(g,p,tasks){
   finally{if(button){button.disabled=false;button.textContent="✨ ابنِ المشروع كاملًا بالذكاء الاصطناعي";}}
 }
 async function graduationProjectRoom(g,p){
-  if(!user||(!groupManager(g)&&!groupMember(g)))return alert("هذه مساحة خاصة بأعضاء الفريق.");
+  if(!user||!groupMember(g))return alert("هذه مساحة خاصة بأعضاء الفريق.");
   groupListUnsubs.forEach(fn=>fn());groupListUnsubs=[];groupChatUnsubs.forEach(fn=>fn());groupChatUnsubs=[];
   const currentMembers=[...(g.members||[])];if(JSON.stringify(currentMembers)!==JSON.stringify(p.members||[])){try{await updateDoc(doc(db,"graduationProjects",g.id),{members:currentMembers,updatedAt:serverTimestamp()});p={...p,members:currentMembers};}catch(e){console.warn("automatic graduation team sync",e);p={...p,members:currentMembers};}}
   const [taskSnap,directory]=await Promise.all([getDocs(collection(db,"graduationProjects",g.id,"tasks")).catch(e=>{console.warn(e);return {docs:[]};}),groupStudents()]);
@@ -1755,14 +1772,14 @@ async function graduationProjectRoom(g,p){
   app.querySelectorAll("[data-grad-minutes]").forEach(el=>el.onchange=async()=>{const minutes=Number(el.value);if(!Number.isInteger(minutes)||minutes<1||minutes>8){alert("حدد مدة صحيحة من دقيقة إلى 8 دقائق.");el.value=Math.max(1,Math.min(8,Number(el.defaultValue)||3));return;}try{await updateDoc(doc(db,"graduationProjects",g.id,"tasks",el.dataset.gradMinutes),{suggestedMinutes:minutes,updatedAt:serverTimestamp()});if(tasks.length===members.length){const total=tasks.reduce((sum,t)=>sum+(t.id===el.dataset.gradMinutes?minutes:Math.max(1,Number(t.suggestedMinutes)||3)),0);await updateDoc(doc(db,"graduationProjects",g.id),{presentationMinutes:total,updatedAt:serverTimestamp()});p={...p,presentationMinutes:total};}graduationProjectRoom(g,p);}catch(e){alert("تعذر حفظ مدة الدور: "+(e.code||e.message));}});
   app.querySelectorAll("[data-grad-voice]").forEach(el=>el.onclick=()=>{const t=tasks.find(x=>x.id===el.dataset.gradVoice);if(t)startGraduationVoicePractice(g,p,t);});
   app.querySelectorAll("[data-grad-done]").forEach(el=>el.onclick=async()=>{const t=tasks.find(x=>x.id===el.dataset.gradDone);if(!t)return;try{await updateDoc(doc(db,"graduationProjects",g.id,"tasks",t.id),{status:t.status==="done"?"todo":"done",updatedAt:serverTimestamp()});graduationProjectRoom(g,p);}catch(e){alert("تعذر تحديث حالة الجزء: "+(e.code||e.message));}});
-  groupListUnsubs.push(onSnapshot(doc(db,"groups",g.id),snap=>{if(!snap.exists()||snap.data().deleted){app.innerHTML='<div class="gp-note">لم يعد هذا الجروب متاحًا.</div>';graduationProjectsPage();return;}const fresh={id:g.id,...snap.data()},freshMembers=[...(fresh.members||[])];if(!groupManager(fresh)&&!groupMember(fresh)){app.innerHTML='<div class="gp-note">لم تعد عضوًا في هذا الجروب.</div>';graduationProjectsPage();return;}if(JSON.stringify(freshMembers)!==JSON.stringify(p.members||[]))graduationProjectRoom(fresh,{...p,members:freshMembers});}));
+  groupListUnsubs.push(onSnapshot(doc(db,"groups",g.id),snap=>{if(!snap.exists()||snap.data().deleted){app.innerHTML='<div class="gp-note">لم يعد هذا الجروب متاحًا.</div>';graduationProjectsPage();return;}const fresh={id:g.id,...snap.data()},freshMembers=[...(fresh.members||[])];if(!groupMember(fresh)){app.innerHTML='<div class="gp-note">لم تعد عضوًا في هذا الجروب.</div>';graduationProjectsPage();return;}if(JSON.stringify(freshMembers)!==JSON.stringify(p.members||[]))graduationProjectRoom(fresh,{...p,members:freshMembers});}));
 }
 async function showGroupPreview(g,state="none") {
   groupListUnsubs.forEach(fn=>fn());groupListUnsubs=[];groupChatUnsubs.forEach(fn=>fn());groupChatUnsubs=[];
   if(!g)return; const label=state==="pending"?"طلبك قيد المراجعة":state==="declined"?"لم تتم الموافقة — يمكنك إرسال طلب جديد":"اطلب الانضمام";
-  app.innerHTML=`<section class="wa-preview"><button class="sec" id="backGroups">← رجوع للجروبات</button><div class="wa-preview-avatar">${esc((g.name||"G").trim().slice(0,1).toUpperCase())}</div><h2>${esc(g.name||"جروب")}</h2><p>${esc(g.description||"جروب طلاب")}</p><div class="wa-preview-meta">${(g.members||[]).length} عضو · محتوى الجروب للأعضاء فقط</div>${state==="pending"?`<button class="sec" id="cancelJoin">إلغاء الطلب</button>`:`<button id="requestJoin">${label}</button>`}</section>`;
+  app.innerHTML=`<section class="wa-preview"><button class="sec" id="backGroups">← رجوع للجروبات</button><div class="wa-preview-avatar">${esc((g.name||"G").trim().slice(0,1).toUpperCase())}</div><h2>${esc(g.name||"جروب")}</h2><p>${esc(g.description||"جروب طلاب")}</p><div class="wa-preview-meta">محتوى الجروب ومشروعه متاحان للأعضاء المقبولين فقط.</div>${state==="pending"?`<button class="sec" id="cancelJoin">إلغاء الطلب</button>`:`<button id="requestJoin">${label}</button>`}</section>`;
   $("#backGroups").onclick=groupsPage;
-  groupChatUnsubs.push(onSnapshot(doc(db,"groups",g.id),snap=>{if(!snap.exists()||snap.data().deleted){groupsPage();return;}const fresh={id:g.id,...snap.data()};if(!admin&&(fresh.members||[]).includes(user.uid))groupView(fresh);}));
+  groupChatUnsubs.push(onSnapshot(doc(db,"groups",g.id,"joinRequests",user.uid),async snap=>{if(!snap.exists())return;const status=snap.data().status;if(status==="approved"){const fresh=await getDoc(doc(db,"groups",g.id)).catch(()=>null);if(fresh?.exists()&&!fresh.data().deleted&&(fresh.data().members||[]).includes(user.uid))groupView({id:g.id,...fresh.data()});}else if(status==="declined"&&state!=="declined")showGroupPreview(g,"declined");}));
   if(state==="pending") $("#cancelJoin").onclick=async()=>{await deleteDoc(doc(db,"groups",g.id,"joinRequests",user.uid));groupsPage();};
   else $("#requestJoin").onclick=async()=>{const ref=doc(db,"groups",g.id,"joinRequests",user.uid),old=await getDoc(ref),data={uid:user.uid,name:currentStudentName||user.displayName||"طالب",status:"pending",requestedAt:serverTimestamp()}; if(old.exists())await updateDoc(ref,{status:"pending",requestedAt:serverTimestamp()}); else await setDoc(ref,data); showGroupPreview(g,"pending");};
 }
@@ -1790,12 +1807,12 @@ async function appointGroupAdmin(g) {
 }
 async function editGroupSettings(g) {
   if(!groupOwner(g))return;
-  form("تعديل بيانات الجروب",[{n:"name",l:"اسم الجروب",v:g.name||""},{n:"description",l:"الوصف",t:"area",v:g.description||""}],async v=>{const name=v.name.trim();if(!name)return alert("اكتب اسم الجروب.");await updateDoc(doc(db,"groups",g.id),{name,description:v.description||""});groupView({...g,name,description:v.description||""});});
+  form("تعديل بيانات الجروب",[{n:"name",l:"اسم الجروب",v:g.name||""},{n:"description",l:"الوصف",t:"area",v:g.description||""}],async v=>{const name=v.name.trim(),description=v.description||"";if(!name)return alert("اكتب اسم الجروب.");const batch=writeBatch(db);batch.update(doc(db,"groups",g.id),{name,description});batch.set(doc(db,"groupCards",g.id),{name,description,deleted:false},{merge:true});await batch.commit();groupView({...g,name,description});});
 }
 async function deleteGroup(g) {
   if(!groupOwner(g)||!confirm(`إخفاء جروب «${g.name}» عن الطلاب وإيقافه؟`))return;
   if(voiceSession?.g?.id===g.id)await leaveVoiceCall();
-  await updateDoc(doc(db,"groups",g.id),{deleted:true,deletedAt:serverTimestamp()});groupsPage();
+  const batch=writeBatch(db);batch.update(doc(db,"groups",g.id),{deleted:true,deletedAt:serverTimestamp()});batch.set(doc(db,"groupCards",g.id),{name:g.name||"",description:g.description||"",deleted:true},{merge:true});await batch.commit();groupsPage();
 }
 async function groupView(g) {
   if(!groupMember(g))return showGroupPreview(g);
