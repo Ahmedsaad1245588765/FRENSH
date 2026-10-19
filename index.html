@@ -420,7 +420,7 @@ iframe{border-radius:10px;margin:8px 0}
 <body>
 <div class="top">Faculté · Département de français — قسم اللغة الفرنسية</div>
 <header><div class="brand" id="home"><svg viewBox="0 0 44 52"><path d="M22 2 L42 9 V26 C42 38 33 46 22 50 C11 46 2 38 2 26 V9Z" fill="#14264f" stroke="#c19a4b" stroke-width="2.5"/><text x="22" y="34" text-anchor="middle" font-family="Fraunces,serif" font-size="26" font-style="italic" fill="#c19a4b">F</text></svg><div><b>Département de français</b><small>قسم اللغة الفرنسية</small></div></div>
-<nav><button id="menuToggle" aria-label="فتح القائمة" aria-expanded="false">☰</button><a id="n1">المواد</a><a id="n10">قواعد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n4">مركز الأسئلة</a><a id="n5" style="display:none">المستخدمين</a><a id="n6" style="display:none">الدرجات</a><a id="n7">لوحتي</a><a id="n8">الإعلانات</a><a id="n9">الإشعارات</a><span id="who"></span><button id="themeToggle" title="الوضع الليلي">☾</button><button id="auth">تسجيل الدخول</button></nav></header>
+<nav><button id="menuToggle" aria-label="فتح القائمة" aria-expanded="false">☰</button><a id="n1">المواد</a><a id="n10">قواعد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n5" style="display:none">المستخدمين</a><a id="n6" style="display:none">الدرجات</a><a id="n7">لوحتي</a><span id="who"></span><button id="themeToggle" title="الوضع الليلي">☾</button><button id="auth">تسجيل الدخول</button></nav></header>
 <main id="app"></main>
 <footer>© قسم اللغة الفرنسية — Département de français</footer>
 <div id="sheet"><div class="f fr"></div><div class="a"></div><div class="b"></div>
@@ -432,7 +432,7 @@ iframe{border-radius:10px;margin:8px 0}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp, deleteField, writeBatch } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp, deleteField } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app-check.js";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-ai.js";
 
@@ -487,12 +487,9 @@ document.querySelectorAll("nav a").forEach(a=>a.addEventListener("click",()=>{co
 $("#home").onclick = $("#n1").onclick = () => subjects();
 $("#n2").onclick = () => user ? review() : needLogin();
 $("#n3").onclick = () => groupsPage();
-$("#n4").onclick = () => askPage();
 $("#n5").onclick = () => usersPage();
 $("#n6").onclick = () => gradesPage();
 $("#n7").onclick = () => studentDashboard();
-$("#n8").onclick = () => announcementsPage();
-$("#n9").onclick = () => notificationsPage();
 $("#themeToggle").onclick = () => { document.body.classList.toggle("night"); localStorage.setItem("fr-theme", document.body.classList.contains("night") ? "night" : "light"); $("#themeToggle").textContent = document.body.classList.contains("night") ? "☀" : "☾"; };
 if (localStorage.getItem("fr-theme") === "night") { document.body.classList.add("night"); $("#themeToggle").textContent="☀"; }
 const withTimeout = (promise, ms=4500) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error("FIRESTORE_TIMEOUT")), ms))]);
@@ -1384,32 +1381,18 @@ async function lesson(l, sub, startKey) {
   if (editor) $("#examSetup").onclick = () => examDashboard(l, sub, rawQs);
 }
 
-/* ---------- المستخدمين والجروبات ومركز الأسئلة ---------- */
+/* ---------- المستخدمين والجروبات ---------- */
 async function myGroups() {
   const m = new Map(), add = x => x.docs.forEach(d => m.set(d.id, { id: d.id, ...d.data() }));
   if (admin) add(await getDocs(collection(db, "groups")));
   else for (const c of [where("members", "array-contains", user.uid), where("public", "==", true)]) add(await getDocs(query(collection(db, "groups"), c)));
   return [...m.values()].sort((a, b) => (b.id === "general") - (a.id === "general"));
 }
-async function notificationsPage() {
-  if (!user) return needLogin();
-  const ns=await list("notifications","uid",user.uid);
-  app.innerHTML=`<div class="row"><h3 class="sh" style="flex:1;margin:0">الإشعارات</h3><button class="sec" id="readAll">تحديد الكل كمقروء</button></div>${ns.sort((a,b)=>(b.created?.seconds||0)-(a.created?.seconds||0)).map(n=>`<article class="notice" style="opacity:${n.read?.8:1}"><h4>${n.read?"":"● "}${esc(n.title)}</h4><div>${esc(n.text)}</div><button class="sec" data-read="${n.id}">${n.read?"مقروء":"تحديد كمقروء"}</button></article>`).join("")||`<p class="mut">لا توجد إشعارات.</p>`}`;
-  app.querySelectorAll("[data-read]").forEach(b=>b.onclick=async()=>{await updateDoc(doc(db,"notifications",b.dataset.read),{read:true}); notificationsPage();});
-  $("#readAll").onclick=async()=>{for(const n of ns)if(!n.read)await updateDoc(doc(db,"notifications",n.id),{read:true});notificationsPage();};
-}
-
-async function announcementsPage() {
-  if (!user) return needLogin();
-  const ns = await list("announcements");
-  app.innerHTML = `<div class="row"><h3 class="sh" style="flex:1;margin:0">إعلانات القسم</h3>${admin ? `<button id="addNotice">+ إعلان</button>` : ""}</div><div>${ns.map(n => `<article class="notice"><h4>${esc(n.title)}</h4><div>${esc(n.text)}</div><time>${n.by ? esc(n.by) : "إدارة القسم"}</time></article>`).join("") || `<p class="mut">لا توجد إعلانات جديدة.</p>`}</div>`;
-  if (admin) $("#addNotice").onclick=()=>form("إعلان جديد",[{n:"title",l:"العنوان"},{n:"text",l:"نص الإعلان",t:"area"}],async v=>{await addDoc(collection(db,"announcements"),{title:v.title,text:v.text,by:user.displayName,created:serverTimestamp()}); const us=await list("users"); for (let i = 0; i < us.length; i += 400) { const wb = writeBatch(db); us.slice(i, i + 400).forEach(x => wb.set(doc(collection(db, "notifications")), { uid: x.id, title: v.title, text: v.text, read: false, created: serverTimestamp() })); await wb.commit(); } announcementsPage();});
-}
 async function studentDashboard() {
   if (!user) return needLogin();
-  const [subs, ls, prog, attempts, cards, ns] = await Promise.all([list("subjects"),list("lessons"),list("progress","uid",user.uid),list("attempts","uid",user.uid),getDocs(collection(db,"users",user.uid,"cards")),list("announcements")]);
+  const [subs, ls, prog, attempts, cards] = await Promise.all([list("subjects"),list("lessons"),list("progress","uid",user.uid),list("attempts","uid",user.uid),getDocs(collection(db,"users",user.uid,"cards"))]);
   const done=prog.filter(x=>x.completed).length, percent=ls.length?Math.round(done/ls.length*100):0, avg=attempts.length?Math.round(attempts.reduce((a,x)=>a+Number(x.percent||0),0)/attempts.length):0;
-  app.innerHTML=`<div class="row"><h2 class="sh" style="flex:1;margin:0">لوحتي التعليمية</h2><button class="sec" id="goSubjects">استكشف المواد</button></div><div class="dashboard"><div class="metric"><b>${percent}%</b><small>نسبة إتمام الدروس</small></div><div class="metric"><b>${done}/${ls.length}</b><small>دروس مكتملة</small></div><div class="metric"><b>${avg}%</b><small>متوسط الاختبارات</small></div><div class="metric"><b>${cards.size}</b><small>كلمات في الكاردز</small></div></div><div class="q"><h3>تقدمك العام</h3><div class="progress-track"><div class="progress-fill" style="width:${percent}%"></div></div><p class="mut">استمر! كل درس جديد يقربك من مستوى أفضل في الفرنسية.</p></div><h3 class="sh">آخر الإعلانات</h3>${ns.slice(-3).reverse().map(n=>`<article class="notice"><h4>${esc(n.title)}</h4><div>${esc(n.text)}</div></article>`).join("")||`<p class="mut">لا توجد إعلانات.</p>`}`;
+  app.innerHTML=`<div class="row"><h2 class="sh" style="flex:1;margin:0">لوحتي التعليمية</h2><button class="sec" id="goSubjects">استكشف المواد</button></div><div class="dashboard"><div class="metric"><b>${percent}%</b><small>نسبة إتمام الدروس</small></div><div class="metric"><b>${done}/${ls.length}</b><small>دروس مكتملة</small></div><div class="metric"><b>${avg}%</b><small>متوسط الاختبارات</small></div><div class="metric"><b>${cards.size}</b><small>كلمات في الكاردز</small></div></div><div class="q"><h3>تقدمك العام</h3><div class="progress-track"><div class="progress-fill" style="width:${percent}%"></div></div><p class="mut">استمر! كل درس جديد يقربك من مستوى أفضل في الفرنسية.</p></div>`;
   $("#goSubjects").onclick=subjects;
 }
 
@@ -1470,19 +1453,6 @@ async function groupView(g) {
     groupView(g);
   });
 }
-async function askPage() {
-  if (!user) return needLogin();
-  const gs = await myGroups();
-  const bank = editor ? await list("questionBank") : [];
-  app.innerHTML = `<h3 class="sh">مركز الأسئلة</h3><div class="q"><p class="mut">اكتب سؤالًا ثم حوّله إلى جروب. ويمكن للأدمن/المساعد حفظه في بنك الأسئلة لإعادة استخدامه.</p><label>السؤال<textarea id="aq" rows="4"></textarea></label><label>الجروب<select id="ag">${gs.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join("")}</select></label><div class="row"><button id="ago">حوّل للجروب</button>${editor ? `<button id="saveBank" class="sec">حفظ في بنك الأسئلة</button>` : ""}</div></div>${editor ? `<h3 class="sh">بنك الأسئلة</h3>${bank.map(x => `<div class="item"><span>${esc(x.text)}</span><select data-move="${x.id}">${gs.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join("")}</select><button data-send="${x.id}">إرسال</button><button class="del" data-db="${x.id}">حذف</button></div>`).join("") || `<p class="mut">البنك فارغ.</p>`}` : ""}`;
-  $("#ago").onclick = async () => { const t = $("#aq").value.trim(); if (!t) return; const g = gs.find(g => g.id === $("#ag").value); await post(g, t); groupView(g); };
-  if (editor) {
-    $("#saveBank").onclick = async () => { const t = $("#aq").value.trim(); if (!t) return; await addDoc(collection(db, "questionBank"), { text:t, by:user.displayName, uid:user.uid, created:serverTimestamp() }); askPage(); };
-    app.querySelectorAll("[data-send]").forEach(b => b.onclick = async () => { const x=bank.find(x=>x.id===b.dataset.send), g=gs.find(g=>g.id===app.querySelector(`[data-move="${x.id}"]`).value); await post(g,x.text); groupView(g); });
-    app.querySelectorAll("[data-db]").forEach(b => b.onclick = async () => { await deleteDoc(doc(db,"questionBank",b.dataset.db)); askPage(); });
-  }
-}
-
 /* ---------- النطق والترجمة والكاردز ---------- */
 function speak(t) {
   if (!("speechSynthesis" in window)) return;
