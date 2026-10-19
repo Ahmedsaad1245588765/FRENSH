@@ -1825,7 +1825,7 @@ async function appointGroupAdmin(g) {
   const directory=await groupStudents(), current=new Set(g.admins||[]);
   const choices=(g.members||[]).filter(uid=>uid!==g.createdBy&&!current.has(uid)).map(uid=>{const d=directory.find(x=>x.id===uid);return [uid,esc(d?.name||uid.slice(0,8))];});
   if(!choices.length)return alert("أضف عضوًا للجروب أولًا أو كل الأعضاء الحاليين مديرون.");
-  form("تعيين مدير للجروب",[{n:"uid",l:"العضو",t:"sel",o:choices}],async v=>{await updateDoc(doc(db,"groups",g.id),{admins:arrayUnion(v.uid)});groupView({...g,admins:[...(g.admins||[]),v.uid]});});
+  form("تعيين مدير للجروب",[{n:"uid",l:"العضو",t:"sel",o:choices}],async v=>{await updateDoc(doc(db,"groups",g.id),{members:arrayUnion(v.uid),admins:arrayUnion(v.uid)});groupView({...g,members:[...new Set([...(g.members||[]),v.uid])],admins:[...new Set([...(g.admins||[]),v.uid])]});});
 }
 async function editGroupSettings(g) {
   if(!groupOwner(g))return;
@@ -1895,23 +1895,27 @@ async function joinVoiceCall(g, callId) {
   if (voiceSession) return alert("أنت بالفعل في مكالمة صوتية.");
   if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) return alert("المتصفح لا يدعم المكالمات الصوتية. افتح الموقع عبر HTTPS وبمتصفح حديث.");
   const calls = collection(db, "groups", g.id, "calls");
-  let callCreatedBy = user.uid, newCall = !callId, newCallRef = null;
+  let callCreatedBy = user.uid, newCall = !callId, newCallRef = null, callStage="بدء المكالمة";
   try {
     if (!callId) {
+      callStage="قراءة المكالمات الحالية";
       const active = (await getDocs(calls)).docs.find(d => d.data().active);
-      if (active) { const since=active.data().hostLastSeen?.toMillis?.()||active.data().createdAt?.toMillis?.()||0; if(Date.now()-since<75000)return joinVoiceCall(g,active.id); await updateDoc(active.ref,{active:false}); }
+      if (active) { const since=active.data().hostLastSeen?.toMillis?.()||active.data().createdAt?.toMillis?.()||0; if(Date.now()-since<75000)return joinVoiceCall(g,active.id); callStage="إغلاق مكالمة قديمة"; await updateDoc(active.ref,{active:false}); }
     }
     const callRef = callId ? doc(db, "groups", g.id, "calls", callId) : doc(calls);
     if (!callId) newCallRef = callRef;
-    if (!callId) await setDoc(callRef, { active: true, by: currentStudentName || user.displayName || user.email, createdBy: user.uid, createdAt: serverTimestamp(), hostLastSeen: serverTimestamp() });
-    else { const c = await getDoc(callRef); if (!c.exists() || !c.data().active) return alert("المكالمة انتهت."); callCreatedBy = c.data().createdBy || ""; }
+    if (!callId) { callStage="إنشاء سجل المكالمة"; await setDoc(callRef, { active: true, by: currentStudentName || user.displayName || user.email, createdBy: user.uid, createdAt: serverTimestamp(), hostLastSeen: serverTimestamp() }); }
+    else { callStage="التحقق من المكالمة القائمة"; const c = await getDoc(callRef); if (!c.exists() || !c.data().active) return alert("المكالمة انتهت."); callCreatedBy = c.data().createdBy || ""; }
     const participantsRef = collection(db, "groups", g.id, "calls", callRef.id, "participants");
+    callStage="قراءة المشاركين";
     const before = await getDocs(participantsRef), fresh=[];
-    for(const d of before.docs){const last=d.data().lastSeen?.toMillis?.()||d.data().joinedAt?.toMillis?.()||0;if(Date.now()-last>75000){await deleteDoc(d.ref).catch(()=>{});}else fresh.push(d);}
+    for(const d of before.docs){const last=d.data().lastSeen?.toMillis?.()||d.data().joinedAt?.toMillis?.()||0;if(Date.now()-last>75000){callStage="تنظيف مشارك غير نشط";await deleteDoc(d.ref).catch(()=>{});}else fresh.push(d);}
     const existing=fresh.map(d=>d.id).filter(id=>id!==user.uid);
     if (fresh.length >= 8 && !fresh.some(d => d.id === user.uid)) return alert("المكالمة وصلت للحد الحالي وهو 8 مشاركين.");
+    callStage="طلب إذن الميكروفون";
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     const participantRef=doc(participantsRef,user.uid);
+    callStage="تسجيل العضو في المكالمة";
     await setDoc(participantRef, { uid: user.uid, name: currentStudentName || user.displayName || user.email, joinedAt: serverTimestamp(), lastSeen: serverTimestamp() });
     const session = voiceSession = { g, callRef, participantRef, stream, createdBy: callCreatedBy, peers: new Map(), seen: new Set(), queued: new Map(), unsubs: [], heartbeat:null, hostHeartbeat:null };
     session.heartbeat=setInterval(()=>updateDoc(participantRef,{lastSeen:serverTimestamp()}).catch(()=>{}),20000);
@@ -1930,7 +1934,9 @@ async function joinVoiceCall(g, callId) {
     };
     const flushCandidates = async (peerId, pc) => { const pending = session.queued.get(peerId) || []; session.queued.delete(peerId); for (const c of pending) try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch (e) { console.warn("ICE candidate", e); } };
     for (const peerId of existing) {
+      callStage="إنشاء اتصال صوتي مع مشارك موجود";
       const pc = peerFor(peerId), offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+      callStage="إرسال إشارة الاتصال الصوتية";
       await send(peerId, "offer", { type: pc.localDescription.type, sdp: pc.localDescription.sdp });
     }
     session.unsubs.push(onSnapshot(query(collection(db, "groups", g.id, "calls", callRef.id, "signals"), where("to", "==", user.uid)), snap => {
@@ -1953,10 +1959,10 @@ async function joinVoiceCall(g, callId) {
     session.unsubs.push(onSnapshot(doc(db,"groups",g.id),snap=>{if(voiceSession===session&&(!snap.exists()||snap.data().deleted))leaveVoiceCall();}));
     return;
   } catch (e) {
-    console.error(e);
+    console.error("Voice call failed at:",callStage,e);
     if (voiceSession?.g?.id === g.id) await leaveVoiceCall();
     if (newCallRef) updateDoc(newCallRef, { active: false }).catch(() => {});
-    alert("تعذر بدء المكالمة. تأكد من السماح باستخدام الميكروفون وتحديث قواعد Firestore. " + (e.code || e.message || ""));
+    alert(`تعذر بدء المكالمة — المرحلة: ${callStage}. السبب: ${e.code || e.name || e.message || "خطأ غير معروف"}.`);
   }
 }
 async function leaveVoiceCall() {
