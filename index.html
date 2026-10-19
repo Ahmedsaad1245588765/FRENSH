@@ -804,6 +804,25 @@ async function paragraphTranslations(texts) {
   if (!Array.isArray(out) || out.length !== texts.length || out.some(x => !String(x || "").trim())) throw new Error("ترجمة الفقرات غير مكتملة");
   return out.map(x => String(x).trim());
 }
+const BL_BULLET = line => /^\s*(?:[-–—•*]|\d+[.)]|[٠-٩]+[.)\-])\s+/.test(line);
+const blSplit = v => String(v || "").split(/\n\s*\n+/).map(x => x.trim()).filter(Boolean);
+function blLineUnits(part) {
+  const lines = part.split(/\n+/).map(x => x.trim()).filter(Boolean);
+  if (lines.length < 2 || lines.filter(BL_BULLET).length < 2) return [part];
+  const out = [];
+  lines.forEach(line => { if (BL_BULLET(line) || !out.length) out.push(line); else out[out.length - 1] += " " + line; });
+  return out;
+}
+const blUnits = v => blSplit(v).flatMap(blLineUnits);
+function blAlign(french, arabic) {
+  let fr = blUnits(french), ar = blUnits(arabic);
+  if (fr.length !== ar.length) {
+    const rl = v => String(v || "").split(/\n+/).map(x => x.trim()).filter(Boolean);
+    const fl = rl(french), al = rl(arabic);
+    if (fl.length > 1 && fl.length === al.length) { fr = fl; ar = al; }
+  }
+  return { fr, ar, ok: fr.length === ar.length };
+}
 function renderBilingualParagraph(box, french, arabic, pairs = []) {
   box.classList.add("bilingual-pair"); box.innerHTML = "";
   const wordKey = x => String(x || "").toLowerCase().replace(/[^\p{L}\p{M}]/gu, "");
@@ -825,13 +844,7 @@ function renderBilingualParagraph(box, french, arabic, pairs = []) {
     side.onclick = e => { const word = e.target.closest(".pair-word"); if (!word) return; e.preventDefault(); e.stopPropagation(); const pair = word.dataset.pair; const frWord = row.querySelector(".bilingual-side.fr .pair-word[data-pair=\"" + pair + "\"]"); if (lang === "fr" && frWord) { const selected = frWord.textContent.trim(); openWord(selected, value); } };
     return side;
   };
-  const split = value => String(value || "").split(/\n\s*\n+/).map(x => x.trim()).filter(Boolean);
-  const bullet = line => /^\s*(?:[-–—•*]|\d+[.)])\s+/.test(line);
-  const units = value => split(value).flatMap(part => {
-    const lines = part.split(/\n+/).map(x => x.trim()).filter(Boolean);
-    return lines.length > 1 && lines.every(bullet) ? lines : [part];
-  });
-  const frParts = units(french), arParts = units(arabic), count = Math.max(frParts.length, arParts.length);
+  const al = blAlign(french, arabic), frParts = al.fr, arParts = al.ar, count = Math.max(frParts.length, arParts.length);
   for (let i = 0; i < count; i++) { const row = document.createElement("div"); row.className = "bilingual-row"; row.append(makeSide(frParts[i] || "", "fr", row), makeSide(arParts[i] || "", "ar", row)); box.appendChild(row); }
 }
 function focusLessonWord(term) {
@@ -1396,7 +1409,7 @@ async function lesson(l, sub, startKey) {
   app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2><button class="sec important-print-hide" id="exportPdf">📄 PDF</button>${editor ? `<button id="examSetup">📊 لوحة الاختبار</button>` : ""}</div>
     <div class="stepper" id="stepper">${steps.map((s, i) => `<button type="button" class="stp" data-step="${i}"><b>${i + 1}</b> ${s.i} ${s.t}</button>`).join("")}</div>
     ${hasVideo ? `<section class="pane" id="p_video"><div class="vsw">${yt ? `<button type="button" class="vbtn on" data-v="fr" title="الفيديو بالفرنسية"><span class="vi">FR</span> فرنسي</button>` : ""}${ytA ? `<button type="button" class="vbtn${yt ? "" : " on"}" data-v="ar" title="الفيديو بالعربي"><span class="vi">ع</span> عربي</button>` : ""}</div><iframe id="vid" src="about:blank" allowfullscreen></iframe><div class="row"><button type="button" data-next="1">التالي: الدرس ←</button></div></section>` : ""}
-    <section class="pane" id="p_lesson"><div class="row"><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button><span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div><div id="ttsStatus" class="mut" style="margin:-4px 0 10px;font-size:.88rem"></div><div class="lesson-nav-actions lesson-top"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: أهم الكلمات ←</button></div><div class="text fr" id="txt"></div><div class="lesson-nav-actions bottom"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: أهم الكلمات ←</button></div></section>
+    <section class="pane" id="p_lesson"><div class="row"><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button>${admin ? `<button class="sec important-print-hide" id="alignLesson">🧩 تنظيم ومحاذاة الدرس</button>` : ""}<span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div><div id="ttsStatus" class="mut" style="margin:-4px 0 10px;font-size:.88rem"></div><div class="lesson-nav-actions lesson-top"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: أهم الكلمات ←</button></div><div class="text fr" id="txt"></div><div class="lesson-nav-actions bottom"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: أهم الكلمات ←</button></div></section>
     <section class="pane" id="p_words"><h3>⭐ أهم الكلمات</h3>${importantWordsHtml || `<p class="mut">لم تتم إضافة أهم الكلمات لهذا الدرس بعد.</p>`}<div class="lesson-nav-actions"><button type="button" data-next="1">التالي: القواعد ←</button></div></section>
     <section class="pane" id="p_grammar">${grammarHtml}<div class="lesson-nav-actions"><button type="button" data-next="1">التالي: الاختبار ←</button></div></section>
     <section class="pane" id="p_exam"><h3>الاختبار</h3><div class="q" id="quizBar"><span id="quizStatus">${qs.length ? `الاختبار: ${qs.length} سؤال — الدرجة الكلية ${totalPts} — المدة ${Math.round(examSecs / 60)} دقيقة — النجاح من ${passPct}%` : "مفيش اختبار للدرس ده لسه."}</span><span id="quizTimer" class="score" style="display:none"></span><div class="question-progress" style="flex:1;min-width:120px"><div class="progress-track"><div id="quizFill" class="progress-fill" style="width:0%"></div></div></div><button id="startQuiz">ابدأ الاختبار</button><button id="finishQuiz" class="sec" style="display:none">إنهاء الاختبار</button></div><div id="quizResult"></div><div id="qs" style="display:none"></div></section>`;
@@ -1406,6 +1419,42 @@ async function lesson(l, sub, startKey) {
   if (user) await setDoc(doc(db, "progress", `${user.uid}_${l.id}`), { uid:user.uid, lessonId:l.id, subjectId:sub.id, lastOpened:serverTimestamp() }, {merge:true});
   app.querySelectorAll(".completeLessonBtn").forEach(btn => btn.onclick = async () => { if(user){ await setDoc(doc(db,"progress",`${user.uid}_${l.id}`), {uid:user.uid, lessonId:l.id, subjectId:sub.id, completed:true, completedAt:serverTimestamp()}, {merge:true}); app.querySelectorAll(".completeLessonBtn").forEach(x => x.textContent="✓ تم إتمام الدرس"); } });
   renderLessonBody($("#txt"), l, imgMap);
+  const alignBtn = $("#alignLesson");
+  if (alignBtn) alignBtn.onclick = async () => {
+    if (!confirm("هيتم فحص الدرس وإعادة ترجمة الفقرات غير المتحاذية بالذكاء الاصطناعي وحفظها. تكمل؟")) return;
+    const oldText = alignBtn.textContent; alignBtn.disabled = true;
+    try {
+      const c = await getContent(l);
+      const blocks = (c.blocks && c.blocks.length) ? c.blocks.map(b => ({ ...b })) : [];
+      if (!blocks.length) { alert("مفيش بلوكات في الدرس."); return; }
+      const todo = blocks.filter(b => b.t !== "img" && b.ar && !blAlign(b.v, b.ar).ok);
+      if (!todo.length) { alert("كل الفقرات متحاذية بالفعل ✅"); return; }
+      let fixed = 0, failed = 0;
+      for (let i = 0; i < todo.length; i++) {
+        const b = todo[i]; alignBtn.textContent = `⏳ ${i + 1} / ${todo.length}`;
+        const frUnits = blUnits(b.v); let ar = null;
+        try { ar = await paragraphTranslations(frUnits); }
+        catch {
+          try { ar = []; for (const u of frUnits) ar.push((await translateUnit(u, false)).ar); }
+          catch (e) { console.warn("align translate failed", e); ar = null; }
+        }
+        if (!ar) { failed++; continue; }
+        b.ar = frUnits.map((u, k) => {
+          let t = String(ar[k] || "").replace(/\s*\n+\s*/g, " ").trim();
+          const m = u.match(/^\s*(\d+[.)]|[-–—•*])\s+/);
+          if (m && !BL_BULLET(t)) t = m[1] + " " + t;
+          return t;
+        }).join("\n\n");
+        b.pairs = []; fixed++;
+      }
+      if (fixed) {
+        await setDoc(doc(db, "lessonContent", l.id), { text: c.text || "", blocks, youtube: c.youtube || "", youtubeAr: c.youtubeAr || "" }, { merge: true });
+        l.blocks = blocks; renderLessonBody($("#txt"), l, imgMap);
+      }
+      alert(`تم تنظيم ${fixed} فقرة${failed ? ` وتعذر ${failed} (اضغط تاني لإعادة المحاولة)` : ""}.`);
+    } catch (e) { console.error(e); alert("تعذر التنظيم: " + String(e.code || e.message || "").slice(0, 120)); }
+    finally { alignBtn.disabled = false; alignBtn.textContent = oldText; }
+  };
   app.querySelectorAll("[data-important-word]").forEach(btn => btn.onclick = () => { const w = l.importantWords[Number(btn.dataset.importantWord)]; if (!w) return; focusLessonWord(w.word); openWord(w.word, w.example || l.text || ""); });
   window.lessonCtx = { title: l.title, text: (l.text || "").slice(0, 3000) };
   /* ---- stepper: video -> lesson -> exam ---- */
