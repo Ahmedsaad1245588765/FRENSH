@@ -389,6 +389,32 @@ iframe{border-radius:10px;margin:8px 0}
   #aiFab{bottom:14px;left:14px}
   #penFab{bottom:68px;left:18px}
 }
+/* ===== PDF/print polish: compact, no big gaps, consistent look ===== */
+@media print{
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact;animation:none!important;transition:none!important}
+  body{min-height:0!important}
+  body:before,body:after,.top,#netWarn,#p_lesson>.row,#p_words>h3,#p_words>p.mut,.grammar-points:has(>p.mut),.sti,.pti,.paragraph-tools{display:none!important}
+  #p_lesson>.text{font-size:11pt!important;line-height:1.7!important}
+  .lsec+.lsec{margin-top:12px!important;padding-top:10px!important;border-top:1px solid #d5deed!important}
+  .lh1{font-size:17pt!important;margin:4px 0 8px!important;line-height:1.35!important}
+  .lh1::after{width:56px!important;height:3px!important;margin-top:6px!important}
+  .lh2{font-size:13pt!important;margin:12px 0 6px!important;line-height:1.4!important}
+  .lp{display:block!important;break-inside:auto!important;page-break-inside:auto!important;padding:0!important;margin:0 0 8px!important;background:transparent!important;border:0!important;border-radius:0!important;line-height:1.7!important;font-size:11pt!important}
+  .bilingual-pair{display:block!important}
+  .bilingual-row{display:grid!important;margin:0 0 7px!important}
+  .bilingual-side{line-height:1.65!important}
+  .ll{break-inside:auto!important;page-break-inside:auto!important;background:transparent!important;border:0!important;border-radius:0!important;padding:0!important;padding-inline-start:22px!important;margin:0 0 8px!important;line-height:1.7!important}
+  .ll li{break-inside:avoid;page-break-inside:avoid;margin:2px 0!important}
+  .limg{break-inside:avoid;page-break-inside:avoid;margin:10px 0!important}
+  .limg img{max-width:100%!important;max-height:95mm!important;box-shadow:none!important;border-radius:6px!important}
+  .important-words,.grammar-points{break-inside:auto!important;page-break-inside:auto!important;margin:14px 0 0!important}
+  .important-words h3,.grammar-points h3{break-after:avoid;page-break-after:avoid}
+  .important-words table{break-inside:auto}
+  .important-words tr{break-inside:avoid;page-break-inside:avoid}
+  .important-words thead{display:table-header-group}
+  .grammar-card{break-inside:avoid!important;page-break-inside:avoid!important}
+  p,li{orphans:3;widows:3}
+}
 </style>
 </head>
 <body>
@@ -491,10 +517,16 @@ onAuthStateChanged(auth, async u => {
 });
 
 /* ---------- أدوات ---------- */
+let netWarnTimer = null;
+function netWarn() {
+  let b = document.querySelector("#netWarn");
+  if (!b) { b = document.createElement("div"); b.id = "netWarn"; b.textContent = "⚠ تعذر تحميل بعض البيانات. اتأكد من النت وحاول تاني."; b.style.cssText = "position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#b3261e;color:#fff;padding:10px 18px;border-radius:10px;z-index:100;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.3)"; document.body.appendChild(b); }
+  clearTimeout(netWarnTimer); netWarnTimer = setTimeout(() => b.remove(), 6000);
+}
 const list = async (col, field, val) => {
   const q = field ? query(collection(db, col), where(field, "==", val)) : collection(db, col);
   try { return (await withTimeout(getDocs(q))).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.created?.seconds || 0) - (b.created?.seconds || 0)); }
-  catch(e){ console.warn(`تعذر تحميل ${col}:`,e.message); return []; }
+  catch(e){ console.warn(`تعذر تحميل ${col}:`,e.message); if (e.code !== "permission-denied") netWarn(); return []; }
 };
 function form(title, fields, cb) {
   const d = document.createElement("dialog");
@@ -550,13 +582,13 @@ async function lessons(sub) {
   const starsHtml = n => n ? `<span class="lesson-stars" title="${n} من 3 نجوم">${"★".repeat(n)}${`<span class="empty">${"★".repeat(3 - n)}</span>`}</span>` : "";
   const need = x => x.examPass ?? 50, passed = x => passedIds.has(x.id), locked = ls.map(l => !editor && !!l.prevId && !passedIds.has(l.prevId));
   app.innerHTML = `<div class="row"><button class="sec" id="back">← المواد</button><h2 style="flex:1;margin:0">${esc(sub.name)}</h2>${editor ? `<button id="add">+ درس</button>` : ""}</div><input id="lessonSearch" placeholder="ابحث داخل دروس ${esc(sub.name)}..." style="margin:10px 0 18px">
-    <div id="lessonList">${ls.map((l, i) => `<div class="item fr${locked[i] ? " locked" : ""}" data-id="${l.id}"><b class="n">${locked[i] ? "🔒" : i + 1}</b><span>${esc(l.title)}</span>${bestStars[l.id] ? starsHtml(bestStars[l.id]) : ""}${(l.examCount || 0) ? (passed(l) ? `<small class="badge">✓ نجحت${best[l.id] !== undefined ? " — " + best[l.id] + "%" : ""}</small>` : best[l.id] !== undefined ? `<small class="badge">آخر نتيجة ${best[l.id]}% — المطلوب ${need(l)}%</small>` : `<small class="badge">اختبار — المطلوب ${need(l)}%</small>`) : ""}${editor ? `<button class="sec" data-edit-lesson="${l.id}">تعديل</button><button class="del" data-del="${l.id}">حذف</button>` : ""}</div>`).join("") || `<p class="mut">مفيش دروس لسه.</p>`}</div>`;
+    <div id="lessonList">${ls.map((l, i) => `<div class="item fr${locked[i] ? " locked" : ""}" data-id="${l.id}"><b class="n">${locked[i] ? "🔒" : i + 1}</b><span>${esc(l.title)}</span>${bestStars[l.id] ? starsHtml(bestStars[l.id]) : ""}${(l.examCount || 0) ? (passed(l) ? `<small class="badge">✓ نجحت${best[l.id] !== undefined ? " — " + best[l.id] + "%" : ""}</small>` : best[l.id] !== undefined ? `<small class="badge">آخر نتيجة ${best[l.id]}% — المطلوب ${need(l)}%</small>` : `<small class="badge">اختبار — المطلوب ${need(l)}%</small>`) : ""}${editor ? `<button class="sec" data-edit-lesson="${l.id}">تعديل</button>${admin ? `<button class="del" data-del="${l.id}">حذف</button>` : ""}` : ""}</div>`).join("") || `<p class="mut">مفيش دروس لسه.</p>`}</div>`;
   $("#back").onclick = subjects;
   $("#lessonSearch").oninput = e => app.querySelectorAll("#lessonList .item").forEach(x => x.style.display = x.innerText.toLowerCase().includes(e.target.value.toLowerCase()) ? "" : "none");
   if (editor) $("#add").onclick = () => lessonEditor(null, sub, () => lessons(sub));
   app.querySelectorAll(".item").forEach(el => el.onclick = async e => {
     if (e.target.dataset.editLesson) return editLesson(ls.find(x => x.id === e.target.dataset.editLesson), sub);
-    if (e.target.dataset.del) { if (confirm("حذف الدرس؟")) { await delLesson(e.target.dataset.del); await recomputeGates(sub.id); lessons(sub); } return; }
+    if (e.target.dataset.del) { if (admin && confirm("حذف الدرس؟")) { await delLesson(e.target.dataset.del); await recomputeGates(sub.id); lessons(sub); } return; }
     const idx = ls.findIndex(l => l.id === el.dataset.id);
     if (locked[idx]) { const g = ls.find(x => x.id === ls[idx].prevId); return alert(g ? `لازم تجيب ${need(g)}% على الأقل في اختبار «${g.title}» الأول 🔒` : "الدرس مقفول 🔒"); }
     lesson(ls[idx], sub);
@@ -1290,8 +1322,8 @@ async function lesson(l, sub, startKey) {
     sib[q.answer].classList.add("right"); if (+t.dataset.o !== q.answer) t.classList.add("wrong");
     mcqScores[q.id] = +t.dataset.o === q.answer ? (q.points || 1) : 0;
     showFeedback(t.parentElement, q, +t.dataset.o, l.text);
-    if (user) await addDoc(collection(db, "answers"), { uid:user.uid, lessonId:l.id, questionId:q.id, selected:+t.dataset.o, correct:+t.dataset.o === q.answer, score:+t.dataset.o === q.answer ? (q.points || 1) : 0, created:serverTimestamp() });
     const answered=box.querySelectorAll("[data-done]").length; $("#quizFill").style.width=`${qs.length?Math.round(answered/qs.length*100):0}%`;
+    if (user) { try { await addDoc(collection(db, "answers"), { uid:user.uid, lessonId:l.id, questionId:q.id, selected:+t.dataset.o, correct:+t.dataset.o === q.answer, score:+t.dataset.o === q.answer ? (q.points || 1) : 0, created:serverTimestamp() }); } catch (e) { console.warn("answer save", e); } }
   };
   if (editor) $("#examSetup").onclick = () => examDashboard(l, sub, rawQs);
 }
@@ -1413,7 +1445,7 @@ async function translate(w, sent) {
   const task = (async () => {
     const normalizedWord = w.toLowerCase().replace(/\s+/g, " ").trim();
     const sharedRef = doc(db, "translations", "word_v1_" + hash(normalizedWord));
-    const ref = doc(db, "translations", "v3_" + normalizedWord + "_" + hash(sent));
+    const ref = doc(db, "translations", "v3_" + hash(normalizedWord) + "_" + hash(sent));
     let fromAI = false;
     try { const shared = await withTimeout(getDoc(sharedRef), 2500); if (shared.exists() && shared.data().ar) return shared.data(); } catch (e) { console.warn("Shared word cache unavailable", e); }
     const cloud = withTimeout(getDoc(ref), 2500).then(s => { if (!s.exists()) throw new Error("miss"); return s.data(); });
@@ -1431,7 +1463,7 @@ async function translate(w, sent) {
     catch (e) { console.error("Translation failed:", e.errors || e); throw (e.errors && e.errors[1]) || e; }
     memCache.set(key, out);
     try { localStorage.setItem(lk, JSON.stringify(out)); } catch {}
-    if (fromAI) { setDoc(sharedRef, { ...out, word: normalizedWord, example: sent }).catch(e => console.warn("Shared translation cache save skipped:", e.message)); setDoc(ref, out).catch(e => console.warn("Translation cache save skipped:", e.message)); }
+    if (fromAI) { setDoc(sharedRef, out).catch(e => console.warn("Shared translation cache save skipped:", e.message)); setDoc(ref, out).catch(e => console.warn("Translation cache save skipped:", e.message)); }
     return out;
   })();
   translationPending.set(key, task);
