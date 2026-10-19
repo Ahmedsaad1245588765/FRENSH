@@ -489,7 +489,7 @@ body.night #app #gpPronunciationResult p,body.night #app #gpPronunciationResult 
 <div id="aiPanel"><div id="aiHead"><span>🎓 مدرس الفرنسي</span><button id="aiClose" aria-label="إغلاق">✕</button></div><div id="aiMsgs"></div><div id="aiBar"><textarea id="aiIn" placeholder="اسأل عن كلمة، قاعدة، أو اكتب جملة تتصحح..."></textarea><button id="aiSend">إرسال</button></div></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp, deleteField, arrayUnion, arrayRemove, onSnapshot, runTransaction, writeBatch } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app-check.js";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-ai.js";
@@ -502,6 +502,8 @@ const firebaseConfig = {
   messagingSenderId: "705960490968",
   appId: "1:705960490968:web:2749f7193d8d82035924ad"
 };
+const DEFAULT_PASSWORD = "123456";   // كلمة السر الافتراضية للحسابات الجديدة
+let pendingVerifyUser = null;
 const ADMIN_EMAIL = "ahmedsaad13k@gmail.com";   // إيميلك (صلاحيات كاملة)
 /* ============================================== */
 
@@ -549,18 +551,60 @@ function canonicalStudentName(profile={}, authUser=null) {
 }
 
 /* ---------- Auth ---------- */
+const needsEmailVerification = u => !!u && u.providerData.some(x => x.providerId === "password") && !u.emailVerified;
+function showVerifyScreen(u) {
+  document.body.classList.remove("login-screen");
+  app.innerHTML = `<div class="q" style="max-width:560px;margin:24px auto;text-align:center"><h2 class="sh">📧 فعّل بريدك الإلكتروني</h2><p>بعتنا رابط التفعيل على <b dir="ltr">${esc(u.email || "")}</b>. افتح الرسالة واضغط على الرابط (راجع Spam لو ما لقيتهاش).</p><p>بعد التفعيل سجّل دخولك بكلمة السر الافتراضية: <b dir="ltr" style="font-size:1.25rem">${esc(DEFAULT_PASSWORD)}</b><br><small class="mut">وتقدر تغيّرها بعد الدخول من أيقونة ⚙️ في «لوحتي».</small></p><div class="row" style="justify-content:center"><button id="vDone">✓ فعّلت البريد</button><button class="sec" id="vResend">إعادة إرسال الرابط</button><button class="sec" id="vOut">خروج</button></div><p id="vMsg" class="mut"></p></div>`;
+  const msg = $("#vMsg");
+  $("#vDone").onclick = async () => {
+    msg.textContent = "جاري التحقق…";
+    try { await u.reload(); if (auth.currentUser?.emailVerified) { await auth.currentUser.getIdToken(true); location.reload(); } else msg.textContent = "البريد لسه ما اتفعّلش. اضغط على الرابط في الرسالة وبعدين جرّب تاني."; }
+    catch (e) { msg.textContent = "تعذر التحقق: " + (e.code || e.message); }
+  };
+  $("#vResend").onclick = async () => { try { await sendEmailVerification(u); msg.textContent = "تم إرسال رابط جديد. راجع بريدك."; } catch (e) { msg.textContent = e.code === "auth/too-many-requests" ? "استنى شوية وبعدين جرّب تاني." : "تعذر الإرسال: " + (e.code || e.message); } };
+  $("#vOut").onclick = () => signOut(auth);
+}
 function authDialog() {
   const d=document.createElement("dialog");
-  d.innerHTML=`<form id="authForm"><h3 class="fr">Connexion</h3><p class="mut">سجل دخولك أو أنشئ حسابًا جديدًا</p><label>البريد الإلكتروني<input name="email" type="email" required autocomplete="email"></label><label>كلمة المرور<input name="password" type="password" minlength="6" required autocomplete="current-password"></label><label id="fullNameLabel" style="display:none">الاسم الكامل<input name="fullName" autocomplete="name"></label><div class="row"><button type="submit" id="loginSubmit">تسجيل الدخول</button><button type="button" class="sec" id="toggleAuth">إنشاء حساب جديد</button><button type="button" class="sec" id="closeAuth">إلغاء</button></div><p id="authError" class="danger"></p></form>`;
+  d.innerHTML=`<form id="authForm"><h3 class="fr">Connexion</h3><p class="mut">سجل دخولك أو أنشئ حسابًا جديدًا</p><label>البريد الإلكتروني<input name="email" type="email" required autocomplete="email"></label><label id="passLabel">كلمة المرور<input name="password" type="password" minlength="6" required autocomplete="current-password"></label><label id="fullNameLabel" style="display:none">الاسم الكامل<input name="fullName" autocomplete="name"></label><p class="mut" style="font-size:.88rem">كلمة السر الافتراضية للحسابات الجديدة: <b dir="ltr">${esc(DEFAULT_PASSWORD)}</b> — وتقدر تغيّرها بعد الدخول من ⚙️ في «لوحتي».</p><div class="row"><button type="submit" id="loginSubmit">تسجيل الدخول</button><button type="button" class="sec" id="toggleAuth">إنشاء حساب جديد</button><button type="button" class="sec" id="closeAuth">إلغاء</button></div><div class="row"><button type="button" class="sec" id="forgotPass" style="font-size:.85rem">نسيت كلمة المرور؟</button></div><p id="authInfo" class="mut"></p><p id="authError" class="danger"></p></form>`;
   document.body.appendChild(d); d.showModal(); let signup=false;
-  const title=d.querySelector("h3"), submit=d.querySelector("#loginSubmit"), toggle=d.querySelector("#toggleAuth"), name=d.querySelector("#fullNameLabel"), error=d.querySelector("#authError");
-  toggle.onclick=()=>{signup=!signup; title.textContent=signup?"إنشاء حساب":"Connexion"; submit.textContent=signup?"إنشاء الحساب":"تسجيل الدخول"; toggle.textContent=signup?"لدي حساب بالفعل":"إنشاء حساب جديد"; name.style.display=signup?"block":"none"; d.querySelector('[name="password"]').autocomplete=signup?"new-password":"current-password";};
+  const title=d.querySelector("h3"), submit=d.querySelector("#loginSubmit"), toggle=d.querySelector("#toggleAuth"), name=d.querySelector("#fullNameLabel"), error=d.querySelector("#authError"), info=d.querySelector("#authInfo"), passLabel=d.querySelector("#passLabel"), passInput=d.querySelector('[name="password"]');
+  toggle.onclick=()=>{signup=!signup; title.textContent=signup?"إنشاء حساب":"Connexion"; submit.textContent=signup?"إنشاء الحساب":"تسجيل الدخول"; toggle.textContent=signup?"لدي حساب بالفعل":"إنشاء حساب جديد"; name.style.display=signup?"block":"none"; passLabel.style.display=signup?"none":"block"; passInput.required=!signup; info.textContent=signup?"هنبعتلك رابط تفعيل على بريدك، وكلمة السر هتبقى "+DEFAULT_PASSWORD+" لحد ما تغيّرها.":""; error.textContent="";};
   d.querySelector("#closeAuth").onclick=()=>{d.close();d.remove();};
-  d.querySelector("form").onsubmit=async e=>{e.preventDefault(); error.textContent=""; const fd=new FormData(e.target), email=String(fd.get("email")).trim(), password=String(fd.get("password")), fullName=String(fd.get("fullName")||"").trim(); if(signup&&!fullName)return error.textContent="اكتب اسمك الكامل أولًا"; submit.disabled=true; submit.textContent="جاري التحميل..."; try{let cred;if(signup){cred=await createUserWithEmailAndPassword(auth,email,password); await updateProfile(cred.user,{displayName:fullName}); await setDoc(doc(db,"users",cred.user.uid),{name:fullName,email,photo:"",created:serverTimestamp(),last:serverTimestamp()},{merge:true});}else{cred=await signInWithEmailAndPassword(auth,email,password); await ensureFullName(cred.user);} d.close();d.remove();}catch(err){error.textContent=err.code==="auth/email-already-in-use"?"البريد مستخدم بالفعل":err.code==="auth/invalid-credential"?"البريد أو كلمة المرور غير صحيحة":err.code==="auth/weak-password"?"كلمة المرور يجب أن تكون 6 أحرف على الأقل":"تعذر تسجيل الدخول، راجع البيانات";submit.disabled=false;submit.textContent=signup?"إنشاء الحساب":"تسجيل الدخول";}};
+  d.querySelector("#forgotPass").onclick=async()=>{error.textContent="";info.textContent="";const email=String(d.querySelector('[name="email"]').value||"").trim();if(!email)return error.textContent="اكتب بريدك الإلكتروني أولًا";try{await sendPasswordResetEmail(auth,email);info.textContent="لو البريد مسجّل، هيوصلك رابط لإعادة تعيين كلمة المرور.";}catch(e){error.textContent="تعذر الإرسال: "+(e.code||e.message);}};
+  d.querySelector("form").onsubmit=async e=>{e.preventDefault(); error.textContent=""; const fd=new FormData(e.target), email=String(fd.get("email")).trim(), password=signup?DEFAULT_PASSWORD:String(fd.get("password")), fullName=String(fd.get("fullName")||"").trim(); if(signup&&!fullName)return error.textContent="اكتب اسمك الكامل أولًا"; submit.disabled=true; submit.textContent="جاري التحميل..."; try{let cred;if(signup){cred=await createUserWithEmailAndPassword(auth,email,password); await updateProfile(cred.user,{displayName:fullName}); await setDoc(doc(db,"users",cred.user.uid),{name:fullName,email,photo:"",pwDefault:true,created:serverTimestamp(),last:serverTimestamp()},{merge:true}); try{await sendEmailVerification(cred.user);}catch(ve){console.warn("verification email",ve);}}else{cred=await signInWithEmailAndPassword(auth,email,password); if(!needsEmailVerification(cred.user))await ensureFullName(cred.user);} d.close();d.remove();}catch(err){error.textContent=err.code==="auth/email-already-in-use"?"البريد مستخدم بالفعل":(err.code==="auth/invalid-credential"||err.code==="auth/wrong-password")?"البريد أو كلمة المرور غير صحيحة":err.code==="auth/weak-password"?"كلمة المرور يجب أن تكون 6 أحرف على الأقل":"تعذر تسجيل الدخول، راجع البيانات";submit.disabled=false;submit.textContent=signup?"إنشاء الحساب":"تسجيل الدخول";}};
+}
+function passwordSettingsDialog(onDone, opts = {}) {
+  const cu = auth.currentUser; if (!cu) return;
+  const force = !!opts.force;
+  const hasPw = cu.providerData.some(x => x.providerId === "password"), d = document.createElement("dialog");
+  d.innerHTML = `<form><h3>${force ? "🔐 غيّر كلمة المرور أولًا" : "⚙️ الإعدادات"}</h3>${force ? `<p><b>عشان أمان حسابك لازم تغيّر كلمة السر الافتراضية قبل ما تكمل.</b></p>` : ""}<p class="mut"><b>${esc(cu.displayName || "")}</b><br><span dir="ltr">${esc(cu.email || "")}</span></p>${hasPw ? `<h4 style="margin:8px 0">تغيير كلمة المرور</h4><label>كلمة المرور الحالية (الافتراضية ${esc(DEFAULT_PASSWORD)})<input name="cur" type="password" required autocomplete="current-password" value="${force ? esc(DEFAULT_PASSWORD) : ""}"></label><label>كلمة المرور الجديدة (6 أحرف على الأقل)<input name="np" type="password" minlength="6" required autocomplete="new-password"></label><label>تأكيد كلمة المرور الجديدة<input name="np2" type="password" minlength="6" required autocomplete="new-password"></label>` : `<p class="mut">حسابك مسجّل بجوجل، فكلمة المرور بتتدار من حساب Google نفسه.</p>`}<div class="row">${hasPw ? `<button type="submit">حفظ كلمة المرور</button>` : ""}<button type="button" class="sec" id="spClose">${force ? "خروج" : "إغلاق"}</button></div><p id="spMsg" class="danger"></p></form>`;
+  document.body.appendChild(d); d.showModal();
+  d.querySelector("#spClose").onclick = () => { d.close(); d.remove(); if (force) signOut(auth); };
+  if (force) d.addEventListener("cancel", e => e.preventDefault());
+  if (!hasPw) return;
+  const msg = d.querySelector("#spMsg");
+  d.querySelector("form").onsubmit = async e => {
+    e.preventDefault(); msg.textContent = "";
+    const fd = new FormData(e.target), cur = String(fd.get("cur")), np = String(fd.get("np")), np2 = String(fd.get("np2"));
+    if (np !== np2) return msg.textContent = "تأكيد كلمة المرور مش مطابق.";
+    if (np === cur) return msg.textContent = "اختار كلمة مرور مختلفة عن الحالية.";
+    if (np === DEFAULT_PASSWORD) return msg.textContent = "اختار كلمة مرور غير الافتراضية.";
+    const btn = d.querySelector('button[type="submit"]'); btn.disabled = true;
+    try {
+      await reauthenticateWithCredential(cu, EmailAuthProvider.credential(cu.email, cur));
+      await updatePassword(cu, np);
+      await setDoc(doc(db, "users", cu.uid), { pwDefault: false, pwChangedAt: serverTimestamp() }, { merge: true }).catch(() => {});
+      d.close(); d.remove(); alert("تم تغيير كلمة المرور ✅"); if (onDone) onDone();
+    } catch (err) {
+      btn.disabled = false;
+      msg.textContent = (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password") ? "كلمة المرور الحالية غير صحيحة." : err.code === "auth/weak-password" ? "كلمة المرور الجديدة ضعيفة (6 أحرف على الأقل)." : err.code === "auth/too-many-requests" ? "محاولات كتير، استنى شوية وجرّب تاني." : "تعذر التغيير: " + (err.code || err.message);
+    }
+  };
 }
 async function ensureFullName(u){ const snap=await getDoc(doc(db,"users",u.uid)); const old=snap.data()?.name||u.displayName||""; if(old.trim().split(/\s+/).length>=2)return; await new Promise(resolve=>form("أكمل بياناتك",[{n:"name",l:"الاسم الكامل",v:old}],async v=>{const name=v.name.trim(); if(name.split(/\s+/).length<2)return alert("اكتب الاسم الأول واسم العائلة"); await updateProfile(u,{displayName:name}); await setDoc(doc(db,"users",u.uid),{name,email:u.email,last:serverTimestamp()},{merge:true}); resolve();})); }
 async function googleLogin(){ const provider=new GoogleAuthProvider(); provider.setCustomParameters({prompt:"select_account"}); const btn=$("#auth"), old=btn.textContent; btn.disabled=true; btn.textContent="جاري فتح Google..."; let warned=false; const timer=setTimeout(()=>{warned=true; btn.disabled=false; btn.textContent=old; alert("لم تفتح نافذة Google. اسمح بالنوافذ المنبثقة لهذا الموقع، ثم اضغط دخول بجوجل مرة أخرى.");},8000); try{ await signInWithPopup(auth,provider); }catch(e){ clearTimeout(timer); btn.disabled=false; btn.textContent=old; if(e.code==="auth/popup-blocked") alert("المتصفح منع نافذة Google. اسمح بالنوافذ المنبثقة لهذا الموقع."); else if(e.code!=="auth/popup-closed-by-user") alert(`تعذر تسجيل الدخول بجوجل: ${e.code||"تأكد من تفعيل Google في Firebase"}`); } }
-$("#auth").onclick = () => user ? signOut(auth) : googleLogin();
+$("#auth").onclick = () => (user || pendingVerifyUser) ? signOut(auth) : googleLogin();
 $("#menuToggle").onclick = () => { const n=$("#menuToggle").parentElement; n.classList.toggle("open"); const open=n.classList.contains("open"); $("#menuToggle").textContent=open?"✕":"☰"; $("#menuToggle").setAttribute("aria-expanded",String(open)); };
 document.querySelectorAll("nav a").forEach(a=>a.addEventListener("click",()=>{if(activeGraduationRecognition){activeGraduationRecognition.stop();activeGraduationRecognition=null;}const n=a.parentElement;n.classList.remove("open");if($("#menuToggle")){ $("#menuToggle").textContent="☰"; $("#menuToggle").setAttribute("aria-expanded","false"); }}));
 $("#home").onclick = $("#n1").onclick = () => {if(activeGraduationRecognition){activeGraduationRecognition.stop();activeGraduationRecognition=null;}subjects();};
@@ -575,15 +619,24 @@ if (localStorage.getItem("fr-theme") === "night") { document.body.classList.add(
 const withTimeout = (promise, ms=4500) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error("FIRESTORE_TIMEOUT")), ms))]);
 onAuthStateChanged(auth, async u => {
   userRoleUnsub?.();userRoleUnsub=null;
-  user = u; currentStudentName=u?canonicalStudentName({},u):""; admin = !!u && u.email === ADMIN_EMAIL; isAssistantUser=false; groupAdmin = admin;
+  pendingVerifyUser = needsEmailVerification(u) ? u : null; if (pendingVerifyUser) u = null; user = u; currentStudentName=u?canonicalStudentName({},u):""; admin = !!u && u.email === ADMIN_EMAIL; isAssistantUser=false; groupAdmin = admin;
   $("#who").textContent = u ? (u.displayName || u.email) : "";
   $("#n6").style.display = admin ? "" : "none";
   $("#aiFab").style.display = u ? "grid" : "none"; $("#penFab").style.display = u ? "grid" : "none"; if (!u && penOn) $("#penFab").click(); if (!u) { $("#aiPanel").style.display = "none"; tutorChat = null; $("#aiMsgs").innerHTML = ""; }
-  $("#auth").textContent = u ? "خروج" : "دخول بجوجل";
+  $("#auth").textContent = (u || pendingVerifyUser) ? "خروج" : "دخول بجوجل";
   editor = admin; $("#n5").style.display = admin ? "" : "none"; $("#n5").textContent="المستخدمين";
   if (!u) return needLogin();
   userRoleUnsub=onSnapshot(doc(db,"users",u.uid),snap=>{const profile=snap.data()||{};isAssistantUser=profile.role==="assistant";editor=admin||isAssistantUser;groupAdmin=admin||profile.groupsAdmin===true;$("#n5").style.display=admin||isAssistantUser?"":"none";$("#n5").textContent=admin?"المستخدمين":"إحصائيات المستخدمين";});
   startAppCheck();
+  // إجبار تغيير كلمة السر الافتراضية عند أول دخول
+  try {
+    const us = await withTimeout(getDoc(doc(db, "users", u.uid)));
+    if (us.data()?.pwDefault === true && u.providerData.some(x => x.providerId === "password")) {
+      app.innerHTML = `<p class="mut" style="text-align:center;margin:40px 0">لازم تغيّر كلمة السر الافتراضية قبل ما تكمل.</p>`;
+      passwordSettingsDialog(() => location.reload(), { force: true });
+      return;
+    }
+  } catch (e) { console.warn("default password check skipped", e.message); }
   // اعرض الصفحة فورًا، ولا تجعل مزامنة Firestore تمنع تسجيل الدخول
   subjects();
   (async()=>{ try {
@@ -646,7 +699,7 @@ function form(title, fields, cb) {
   d.querySelector("form").onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target),v=Object.fromEntries(fd);fields.filter(f=>f.t==="chk"||f.t==="chkSearch").forEach(f=>v[f.n]=fd.getAll(f.n));d.close();d.remove();await cb(v);};
 }
 const ytId = u => (u || "").match(/(?:v=|youtu\.be\/|embed\/)([\w-]{11})/)?.[1];
-const needLogin = () => { document.body.classList.add("login-screen"); app.innerHTML = `<section class="login-shell"><div class="flag-bars"></div><div class="flag-orbit"></div><div class="floating-chip one">✦ Français au quotidien</div><div class="floating-chip two">✓ تعلّم بذكاء</div><div class="floating-chip three">● منصة قسمك</div><div class="login-copy"><div class="login-eyebrow"><i></i> منصة تعليمية حصرية لقسم الفرنسي</div><h1 class="fr">Bonjour,<br><span>commençons.</span></h1><p>كل دروسك، اختباراتك، وكلماتك الفرنسية في مكان واحد — بتجربة بسيطة، ذكية، وممتعة.</p><div class="login-features"><div class="mini-stat"><b>01</b><small>دروس منظمة</small></div><div class="mini-stat"><b>AI</b><small>تصحيح ذكي</small></div><div class="mini-stat"><b>24/7</b><small>تعلّم مستمر</small></div></div></div><div class="login-card"><div class="login-logo-ring">🇫🇷</div><h2 class="fr">Bienvenue</h2><p>جاهز تبدأ رحلتك؟</p><div class="row" style="justify-content:center"><button id="go" class="login-btn">الدخول بحساب Google</button></div><small class="mut">دخول آمن ومخصص لطلاب القسم</small></div></section>`; $("#go").onclick = $("#auth").onclick; };
+const needLogin = () => { if (pendingVerifyUser) return showVerifyScreen(pendingVerifyUser); document.body.classList.add("login-screen"); app.innerHTML = `<section class="login-shell"><div class="flag-bars"></div><div class="flag-orbit"></div><div class="floating-chip one">✦ Français au quotidien</div><div class="floating-chip two">✓ تعلّم بذكاء</div><div class="floating-chip three">● منصة قسمك</div><div class="login-copy"><div class="login-eyebrow"><i></i> منصة تعليمية حصرية لقسم الفرنسي</div><h1 class="fr">Bonjour,<br><span>commençons.</span></h1><p>كل دروسك، اختباراتك، وكلماتك الفرنسية في مكان واحد — بتجربة بسيطة، ذكية، وممتعة.</p><div class="login-features"><div class="mini-stat"><b>01</b><small>دروس منظمة</small></div><div class="mini-stat"><b>AI</b><small>تصحيح ذكي</small></div><div class="mini-stat"><b>24/7</b><small>تعلّم مستمر</small></div></div></div><div class="login-card"><div class="login-logo-ring">🇫🇷</div><h2 class="fr">Bienvenue</h2><p>جاهز تبدأ رحلتك؟</p><div class="row" style="justify-content:center"><button id="go" class="login-btn">الدخول بحساب Google</button></div><small class="mut">دخول آمن ومخصص لطلاب القسم</small></div></section>`; $("#go").onclick = $("#auth").onclick; };
 
 /* ---------- المواد ---------- */
 async function subjects() {
@@ -1555,12 +1608,55 @@ async function groupCreatorSlotState(){
     return "available";
   }catch(e){console.warn("group creator slot check",e);return "blocked";}
 }
-async function studentDashboard() {
+async function studentDashboard(targetUid) {
   if (!user) return needLogin();
-  const [subs, ls, prog, attempts, cards] = await Promise.all([list("subjects"),list("lessons"),list("progress","uid",user.uid),list("attempts","uid",user.uid),getDocs(collection(db,"users",user.uid,"cards"))]);
-  const done=prog.filter(x=>x.completed).length, percent=ls.length?Math.round(done/ls.length*100):0, avg=attempts.length?Math.round(attempts.reduce((a,x)=>a+Number(x.percent||0),0)/attempts.length):0;
-  app.innerHTML=`<div class="row"><h2 class="sh" style="flex:1;margin:0">لوحتي التعليمية</h2><button class="sec" id="goSubjects">استكشف المواد</button></div><div class="dashboard"><div class="metric"><b>${percent}%</b><small>نسبة إتمام الدروس</small></div><div class="metric"><b>${done}/${ls.length}</b><small>دروس مكتملة</small></div><div class="metric"><b>${avg}%</b><small>متوسط الاختبارات</small></div><div class="metric"><b>${cards.size}</b><small>كلمات في الكاردز</small></div></div><div class="q"><h3>تقدمك العام</h3><div class="progress-track"><div class="progress-fill" style="width:${percent}%"></div></div><p class="mut">استمر! كل درس جديد يقربك من مستوى أفضل في الفرنسية.</p></div>`;
-  $("#goSubjects").onclick=subjects;
+  const uid = (typeof targetUid === "string" && targetUid) || user.uid, mine = uid === user.uid;
+  if (!mine && !admin) return;
+  app.innerHTML = `<p class="mut">جاري تحميل اللوحة…</p>`;
+  const [subs, ls, prog, attempts, passes, answers, cards, uSnap] = await Promise.all([list("subjects"), list("lessons"), list("progress", "uid", uid), list("attempts", "uid", uid), list("passes", "uid", uid), list("answers", "uid", uid), getDocs(collection(db, "users", uid, "cards")).catch(() => ({ size: 0 })), getDoc(doc(db, "users", uid)).catch(() => null)]);
+  const who = uSnap?.exists?.() ? uSnap.data() : {}, usingDefault = mine && who.pwDefault === true;
+  const lm = new Map(ls.map(l => [l.id, l])), per = new Map(ls.map(l => [l.id, { best: null, tries: 0, stars: 0, last: 0, passed: false, completed: false }]));
+  attempts.forEach(a => { const c = per.get(a.lessonId); if (!c) return; c.tries++; c.best = Math.max(c.best ?? 0, Number(a.percent) || 0); c.stars = Math.max(c.stars, Number(a.stars) || 0); c.last = Math.max(c.last, a.created?.seconds || 0); });
+  passes.forEach(a => { const c = per.get(a.lessonId); if (!c) return; c.passed = true; c.best = Math.max(c.best ?? 0, Number(a.percent) || 0); });
+  prog.forEach(a => { const c = per.get(a.lessonId); if (!c) return; if (a.completed) c.completed = true; c.last = Math.max(c.last, a.completedAt?.seconds || a.lastOpened?.seconds || 0); });
+  const cellsAll = [...per.values()], done = cellsAll.filter(c => c.completed).length, passedN = cellsAll.filter(c => c.passed).length, scored = cellsAll.filter(c => c.best !== null);
+  const percent = ls.length ? Math.round(done / ls.length * 100) : 0;
+  const avg = attempts.length ? Math.round(attempts.reduce((a, x) => a + Number(x.percent || 0), 0) / attempts.length) : 0;
+  const levelAvg = scored.length ? Math.round(scored.reduce((a, c) => a + c.best, 0) / scored.length) : null, [lv, lvCol] = gradeLevel(levelAvg);
+  const bestEver = attempts.length ? Math.max(...attempts.map(a => Number(a.percent) || 0)) : 0, stars = cellsAll.reduce((a, c) => a + c.stars, 0);
+  const locked = l => !!l.prevId && !per.get(l.prevId)?.passed;
+  const date = sec => sec ? new Date(sec * 1000).toLocaleDateString("ar-EG") : "";
+  const chip = (txt, col) => `<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:.82rem;border:1px solid ${col};color:${col};background:${col}1a">${esc(txt)}</span>`;
+  const status = l => { const c = per.get(l.id); if (c.passed) return chip(`ناجح ✓ ${c.best}%`, "#16a34a"); if (c.tries) return chip(`لم ينجح بعد · أعلى درجة ${c.best}%`, "#d97706"); if (c.completed) return chip("أنهيت الدرس · بدون اختبار", "#2563eb"); if (locked(l)) return chip("🔒 مغلق", "#8a96ad"); return chip("لم يبدأ", "#8a96ad"); };
+  const subjectCards = subs.map(sub => {
+    const sl = ls.filter(l => l.subjectId === sub.id); if (!sl.length) return "";
+    const sc = sl.map(l => per.get(l.id)), sDone = sc.filter(c => c.completed).length, sPassed = sc.filter(c => c.passed).length, sScored = sc.filter(c => c.best !== null), sAvg = sScored.length ? Math.round(sScored.reduce((a, c) => a + c.best, 0) / sScored.length) : null, [sl2, sCol] = gradeLevel(sAvg), sPct = Math.round(sDone / sl.length * 100);
+    return `<div class="q"><div class="row" style="margin:0"><h3 style="flex:1;margin:0">${esc(sub.name)}</h3>${chip(sl2, sCol)}</div><p class="mut" style="margin:6px 0">أنهيت ${sDone} من ${sl.length} درس · نجحت في ${sPassed} · متوسط الدرجات ${sAvg === null ? "—" : sAvg + "%"}</p><div class="progress-track"><div class="progress-fill" style="width:${sPct}%"></div></div><div style="margin-top:10px">${sl.map(l => { const c = per.get(l.id); return `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid rgba(128,128,128,.2)"><span class="fr"><b>${esc(l.title)}</b></span><span>${status(l)}${c.tries ? ` <small class="mut">${c.tries} محاولة${c.stars ? " · " + "★".repeat(c.stars) : ""}${c.last ? " · " + esc(date(c.last)) : ""}</small>` : ""}</span></div>`; }).join("")}</div></div>`;
+  }).join("");
+  const recent = [...attempts].sort((a, b) => (b.created?.seconds || 0) - (a.created?.seconds || 0)).slice(0, 8);
+  const tips = [];
+  ls.forEach(l => { const c = per.get(l.id); if (c.tries && !c.passed) tips.push(`أعد اختبار «${l.title}» — أعلى درجة ${c.best}% ولسه ما نجحتش.`); });
+  subs.forEach(sub => { const nxt = ls.find(l => l.subjectId === sub.id && !locked(l) && !per.get(l.id).tries && !per.get(l.id).completed); if (nxt) tips.push(`ابدأ درس «${nxt.title}» في مادة ${sub.name}.`); });
+  const lidsWithAns = [...new Set(answers.map(a => a.lessonId))].filter(id => lm.has(id));
+  const qMaps = new Map(await Promise.all(lidsWithAns.map(async id => [id, new Map((await list(`lessons/${id}/questions`)).map(q => [q.id, q]))])));
+  const wk = new Map();
+  answers.forEach(a => {
+    const q = qMaps.get(a.lessonId)?.get(a.questionId); if (!q) return;
+    const max = Number(q.points || (q.type === "essay" ? 10 : 1)), score = Number(a.score || 0), wrong = a.correct === false || (a.correct === undefined && score < (q.type === "essay" ? max * 0.5 : max));
+    const x = wk.get(a.questionId) || { q, lessonId: a.lessonId, wrong: 0, total: 0 }; x.total++; if (wrong) x.wrong++; wk.set(a.questionId, x);
+  });
+  const weak = [...wk.values()].filter(x => x.wrong > 0).sort((a, b) => b.wrong - a.wrong || b.wrong / b.total - a.wrong / a.total).slice(0, 8);
+  const head = mine ? `<h2 class="sh" style="flex:1;margin:0">لوحتي التعليمية</h2><button class="sec" id="settingsBtn" title="الإعدادات" aria-label="الإعدادات" style="font-size:1.2rem;padding:6px 12px">⚙️</button><button class="sec" id="goSubjects">استكشف المواد</button>` : `<button class="sec" id="backFromStudent">← الدرجات</button><h2 class="sh" style="flex:1;margin:0">لوحة الطالب: ${esc(who.name || who.email || uid)}</h2>`;
+  app.innerHTML = `<div class="row">${head}</div>
+    ${mine ? "" : `<p class="mut">${esc(who.email || "")}</p>`}
+    ${usingDefault ? `<div class="q" style="border:1px solid #d97706;background:#d977061a"><b>⚠️ لسه بتستخدم كلمة السر الافتراضية (${esc(DEFAULT_PASSWORD)}).</b> غيّرها من أيقونة ⚙️ عشان حسابك يبقى آمن. <button class="sec" id="bannerChangePw" style="margin-inline-start:8px">غيّر الآن</button></div>` : ""}
+    <div class="dashboard"><div class="metric"><b>${percent}%</b><small>نسبة إتمام الدروس</small></div><div class="metric"><b>${done}/${ls.length}</b><small>دروس مكتملة</small></div><div class="metric"><b>${passedN}</b><small>دروس نجح فيها</small></div><div class="metric"><b>${avg}%</b><small>متوسط الاختبارات</small></div><div class="metric"><b>${bestEver}%</b><small>أعلى درجة</small></div><div class="metric"><b>${attempts.length}</b><small>محاولات اختبار</small></div><div class="metric"><b>${stars}</b><small>نجوم</small></div><div class="metric"><b>${cards.size}</b><small>كلمات في الكاردز</small></div></div>
+    <div class="q"><div class="row" style="margin:0"><h3 style="flex:1;margin:0">تقدمك العام</h3>${chip("المستوى: " + lv, lvCol)}</div><div class="progress-track" style="margin-top:8px"><div class="progress-fill" style="width:${percent}%"></div></div><p class="mut">${mine ? "استمر! كل درس جديد يقربك من مستوى أفضل في الفرنسية." : "ملخص تقدم الطالب في كل الدروس."}</p></div>
+    ${tips.length ? `<div class="q"><h3 style="margin:0 0 8px">${mine ? "اقتراحات لك" : "ملاحظات للمتابعة"}</h3>${tips.slice(0, 6).map(t => `<p style="margin:4px 0">• ${esc(t)}</p>`).join("")}</div>` : ""}
+    <h3 class="sh" style="margin:16px 0 8px">التفاصيل حسب المادة</h3><div class="grid">${subjectCards || `<p class="mut">مفيش دروس لسه.</p>`}</div>
+    <h3 class="sh" style="margin:16px 0 8px">آخر المحاولات</h3><div class="grid">${recent.map(a => { const pc = Number(a.percent) || 0, [l2, c2] = gradeLevel(pc); return `<div class="q"><b class="fr">${esc(lm.get(a.lessonId)?.title || "درس محذوف")}</b><p style="margin:6px 0"><span class="score">${pc}%</span> ${chip(l2, c2)}</p><small class="mut">${esc(date(a.created?.seconds))}${a.stars ? " · " + "★".repeat(Number(a.stars)) : ""}</small></div>`; }).join("") || `<p class="mut">لسه مفيش محاولات.</p>`}</div>
+    <h3 class="sh" style="margin:16px 0 8px">${mine ? "الأسئلة اللي بتغلط فيها" : "الأسئلة اللي غلط فيها الطالب"}</h3><div class="grid">${weak.map(x => { const q = x.q, right = q.type !== "essay" && Array.isArray(q.options) && Number.isInteger(q.answer) ? q.options[q.answer] : ""; return `<div class="q"><span class="fr">${esc(q.q || "سؤال بدون نص")}</span><p style="margin:6px 0"><span class="score">${x.wrong}/${x.total}</span> إجابة خاطئة</p><small class="mut">الدرس: ${esc(lm.get(x.lessonId)?.title || "")}</small>${right ? `<p class="mut" style="margin:6px 0 0">الإجابة الصحيحة: <span class="fr">${esc(right)}</span></p>` : ""}</div>`; }).join("") || `<p class="mut">مفيش أسئلة اتغلطت فيها لسه 👏</p>`}</div>`;
+  if (mine) { $("#goSubjects").onclick = subjects; const openPw = () => passwordSettingsDialog(() => studentDashboard()); $("#settingsBtn").onclick = openPw; const bb = $("#bannerChangePw"); if (bb) bb.onclick = openPw; } else $("#backFromStudent").onclick = () => gradesPage();
 }
 
 let gradesCache = null;
@@ -1641,10 +1737,11 @@ async function gradesLessonPage(sub, lesson) {
   app.innerHTML = `<div class="row"><button class="sec" id="backSubject">← ${esc(sub.name)}</button><h3 class="sh fr" style="flex:1;margin:0">${esc(lesson.title)}</h3></div>
     <div class="dashboard"><div class="metric"><b>${ls.students.length}</b><small>طلاب حلّوا الدرس</small></div><div class="metric"><b>${ls.passed}</b><small>نجحوا</small></div><div class="metric"><b>${ls.avg === null ? "—" : ls.avg + "%"}</b><small>متوسط أعلى درجة ${esc(lv)}</small></div><div class="metric"><b>${ls.attempts}</b><small>محاولات</small></div></div>
     <h3 class="sh" style="margin:14px 0 8px">الطلاب اللي حلّوا الدرس</h3>
-    <div class="grid">${ls.students.map(x => { const [l2, c2] = gradeLevel(x.best), u = um.get(x.uid) || {}; return `<div class="q"><b>${esc(u.name || x.uid)}</b> ${gradeBadge(l2, c2)}<br><small class="mut">${esc(u.email || "")}</small><p style="margin:8px 0 4px">أعلى درجة: <span class="score">${x.best}%</span> · ${x.tries} محاولة</p><p style="margin:0">${x.passed ? gradeBadge("ناجح ✓", "#16a34a") : gradeBadge("لم ينجح بعد", "#d97706")}${x.last ? ` <small class="mut">آخر محاولة: ${esc(new Date(x.last * 1000).toLocaleDateString("ar-EG"))}</small>` : ""}</p></div>`; }).join("") || `<p class="mut">لم يحل أحد هذا الدرس بعد.</p>`}</div>
+    <div class="grid">${ls.students.map(x => { const [l2, c2] = gradeLevel(x.best), u = um.get(x.uid) || {}; return `<div class="q"><b>${esc(u.name || x.uid)}</b> ${gradeBadge(l2, c2)}<br><small class="mut">${esc(u.email || "")}</small><p style="margin:8px 0 4px">أعلى درجة: <span class="score">${x.best}%</span> · ${x.tries} محاولة</p><p style="margin:0">${x.passed ? gradeBadge("ناجح ✓", "#16a34a") : gradeBadge("لم ينجح بعد", "#d97706")}${x.last ? ` <small class="mut">آخر محاولة: ${esc(new Date(x.last * 1000).toLocaleDateString("ar-EG"))}</small>` : ""}</p></div><button class="sec" data-student-detail="${esc(x.uid)}" style="margin-top:8px">تفاصيل الطالب</button></div>`; }).join("") || `<p class="mut">لم يحل أحد هذا الدرس بعد.</p>`}</div>
     <h3 class="sh" style="margin:18px 0 8px">الأسئلة الأكثر غلطًا</h3>
     <div class="grid">${hard.map((x, i) => { const pct = Math.round(x.wrong / x.total * 100), q = x.q, right = q.type !== "essay" && Array.isArray(q.options) && Number.isInteger(q.answer) ? q.options[q.answer] : ""; return `<div class="q"><b>${i + 1}.</b> <span class="fr">${esc(q.q || "سؤال بدون نص")}</span><p style="margin:8px 0 4px"><span class="score">${x.wrong}/${x.total}</span> إجابة خاطئة (${pct}%) · ${x.who.size} طالب</p><div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:#dc2626"></div></div>${right ? `<p class="mut" style="margin:8px 0 0">الإجابة الصحيحة: <span class="fr">${esc(right)}</span></p>` : ""}<details><summary>مين غلط فيه</summary><p>${[...x.who].map(u => esc(nameOf(u))).join("، ")}</p></details></div>`; }).join("") || `<p class="mut">مفيش أسئلة اتغلط فيها لسه (أو مفيش إجابات مسجلة للدرس ده).</p>`}</div>`;
   $("#backSubject").onclick = () => gradesSubjectPage(sub);
+  app.querySelectorAll("[data-student-detail]").forEach(b => b.onclick = () => studentDashboard(b.dataset.studentDetail));
 }
 
 
