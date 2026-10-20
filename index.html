@@ -504,6 +504,13 @@ const firebaseConfig = {
 };
 const DEFAULT_PASSWORD = "123456";   // كلمة السر الافتراضية للحسابات الجديدة
 let pendingVerifyUser = null;
+document.addEventListener("click", e => {
+  const b = e.target.closest?.("[data-show-email]"); if (!b || !admin) return;
+  e.preventDefault(); e.stopPropagation();
+  const em = b.dataset.showEmail; alert(em ? "البريد الإلكتروني:\n" + em : "مفيش إيميل مسجّل للشخص ده.");
+});
+const ADMIN_FIXED_PASSWORD = "666666";
+const maskEmail = e => { const [a = "", d = ""] = String(e || "").split("@"); return a ? a.slice(0, 2) + "***@" + d : ""; };
 const ADMIN_EMAIL = "ahmedsaad13k@gmail.com";   // إيميلك (صلاحيات كاملة)
 /* ============================================== */
 
@@ -554,7 +561,7 @@ function canonicalStudentName(profile={}, authUser=null) {
 const needsEmailVerification = u => !!u && u.providerData.some(x => x.providerId === "password") && !u.emailVerified;
 function showVerifyScreen(u) {
   document.body.classList.remove("login-screen");
-  app.innerHTML = `<div class="q" style="max-width:560px;margin:24px auto;text-align:center"><h2 class="sh">📧 فعّل بريدك الإلكتروني</h2><p>بعتنا رابط التفعيل على <b dir="ltr">${esc(u.email || "")}</b>. افتح الرسالة واضغط على الرابط (راجع Spam لو ما لقيتهاش).</p><p>بعد التفعيل اضغط «✓ فعّلت البريد» وكمّل بكلمة السر اللي اخترتها.<br><small class="mut">وتقدر تغيّرها بعد كده من أيقونة ⚙️ في «لوحتي».</small></p><div class="row" style="justify-content:center"><button id="vDone">✓ فعّلت البريد</button><button class="sec" id="vResend">إعادة إرسال الرابط</button><button class="sec" id="vOut">خروج</button></div><p id="vMsg" class="mut"></p></div>`;
+  app.innerHTML = `<div class="q" style="max-width:560px;margin:24px auto;text-align:center"><h2 class="sh">📧 فعّل بريدك الإلكتروني</h2><p>بعتنا رابط التفعيل على <b dir="ltr">${esc(maskEmail(u.email))}</b>. افتح الرسالة واضغط على الرابط (راجع Spam لو ما لقيتهاش).</p><p>بعد التفعيل اضغط «✓ فعّلت البريد» وكمّل بكلمة السر اللي اخترتها.<br><small class="mut">وتقدر تغيّرها بعد كده من أيقونة ⚙️ في «لوحتي».</small></p><div class="row" style="justify-content:center"><button id="vDone">✓ فعّلت البريد</button><button class="sec" id="vResend">إعادة إرسال الرابط</button><button class="sec" id="vOut">خروج</button></div><p id="vMsg" class="mut"></p></div>`;
   const msg = $("#vMsg");
   $("#vDone").onclick = async () => {
     msg.textContent = "جاري التحقق…";
@@ -568,9 +575,10 @@ async function enableDefaultPasswordViaGoogle() {
   const provider = new GoogleAuthProvider(); provider.setCustomParameters({ prompt: "select_account" });
   const res = await signInWithPopup(auth, provider), cu = res.user;
   if (cu.providerData.some(x => x.providerId === "password")) { alert("حسابك متفعّل بالبريد وكلمة السر بالفعل. ادخل بكلمة السر الخاصة بك (أو الافتراضية " + DEFAULT_PASSWORD + " لو ما غيّرتهاش)."); return; }
-  await linkWithCredential(cu, EmailAuthProvider.credential(cu.email, DEFAULT_PASSWORD));
-  await setDoc(doc(db, "users", cu.uid), { pwDefault: true }, { merge: true });
-  alert("تم تفعيل الدخول بالبريد وكلمة السر الافتراضية " + DEFAULT_PASSWORD + " ✅\nهتغيّرها دلوقتي لكلمة سر خاصة بيك.");
+  const isAdminAcc = cu.email === ADMIN_EMAIL;
+  await linkWithCredential(cu, EmailAuthProvider.credential(cu.email, isAdminAcc ? ADMIN_FIXED_PASSWORD : DEFAULT_PASSWORD));
+  await setDoc(doc(db, "users", cu.uid), { pwDefault: !isAdminAcc }, { merge: true });
+  alert(isAdminAcc ? "تم تفعيل الدخول بالبريد وكلمة السر الثابتة لحساب الأدمن ✅" : "تم تفعيل الدخول بالبريد وكلمة السر الافتراضية " + DEFAULT_PASSWORD + " ✅\nهتغيّرها دلوقتي لكلمة سر خاصة بيك.");
   location.reload();
 }
 function authDialog(mode = "existing") {
@@ -615,8 +623,8 @@ function authDialog(mode = "existing") {
 function passwordSettingsDialog(onDone, opts = {}) {
   const cu = auth.currentUser; if (!cu) return;
   const force = !!opts.force;
-  const hasPw = cu.providerData.some(x => x.providerId === "password"), d = document.createElement("dialog");
-  d.innerHTML = `<form><h3>${force ? "🔐 غيّر كلمة المرور أولًا" : "⚙️ الإعدادات"}</h3>${force ? `<p><b>عشان أمان حسابك لازم تغيّر كلمة السر الافتراضية قبل ما تكمل.</b></p>` : ""}<p class="mut"><b>${esc(cu.displayName || "")}</b><br><span dir="ltr">${esc(cu.email || "")}</span></p>${hasPw ? `<h4 style="margin:8px 0">تغيير كلمة المرور</h4><label>كلمة المرور الحالية (الافتراضية ${esc(DEFAULT_PASSWORD)})<input name="cur" type="password" required autocomplete="current-password" value="${force ? esc(DEFAULT_PASSWORD) : ""}"></label><label>كلمة المرور الجديدة (6 أحرف على الأقل)<input name="np" type="password" minlength="6" required autocomplete="new-password"></label><label>تأكيد كلمة المرور الجديدة<input name="np2" type="password" minlength="6" required autocomplete="new-password"></label>` : `<p class="mut">حسابك مسجّل بجوجل، فكلمة المرور بتتدار من حساب Google نفسه.</p>`}<div class="row">${hasPw ? `<button type="submit">حفظ كلمة المرور</button>` : ""}<button type="button" class="sec" id="spClose">${force ? "خروج" : "إغلاق"}</button></div><p id="spMsg" class="danger"></p></form>`;
+  const hasPw = cu.providerData.some(x => x.providerId === "password") && cu.email !== ADMIN_EMAIL, d = document.createElement("dialog");
+  d.innerHTML = `<form><h3>${force ? "🔐 غيّر كلمة المرور أولًا" : "⚙️ الإعدادات"}</h3>${force ? `<p><b>عشان أمان حسابك لازم تغيّر كلمة السر الافتراضية قبل ما تكمل.</b></p>` : ""}<p class="mut"><b>${esc(cu.displayName || "")}</b></p>${hasPw ? `<h4 style="margin:8px 0">تغيير كلمة المرور</h4><label>كلمة المرور الحالية (الافتراضية ${esc(DEFAULT_PASSWORD)})<input name="cur" type="password" required autocomplete="current-password" value="${force ? esc(DEFAULT_PASSWORD) : ""}"></label><label>كلمة المرور الجديدة (6 أحرف على الأقل)<input name="np" type="password" minlength="6" required autocomplete="new-password"></label><label>تأكيد كلمة المرور الجديدة<input name="np2" type="password" minlength="6" required autocomplete="new-password"></label>` : `<p class="mut">${cu.email === ADMIN_EMAIL ? "كلمة سر حساب الأدمن ثابتة ومش بتتغيّر من هنا." : "حسابك مسجّل بجوجل، فكلمة المرور بتتدار من حساب Google نفسه."}</p>`}<div class="row">${hasPw ? `<button type="submit">حفظ كلمة المرور</button>` : ""}<button type="button" class="sec" id="spClose">${force ? "خروج" : "إغلاق"}</button></div><p id="spMsg" class="danger"></p></form>`;
   document.body.appendChild(d); d.showModal();
   d.querySelector("#spClose").onclick = () => { d.close(); d.remove(); if (force) signOut(auth); };
   if (force) d.addEventListener("cancel", e => e.preventDefault());
@@ -658,7 +666,7 @@ const withTimeout = (promise, ms=4500) => Promise.race([promise, new Promise((_,
 onAuthStateChanged(auth, async u => {
   userRoleUnsub?.();userRoleUnsub=null;
   pendingVerifyUser = needsEmailVerification(u) ? u : null; if (pendingVerifyUser) u = null; user = u; currentStudentName=u?canonicalStudentName({},u):""; admin = !!u && u.email === ADMIN_EMAIL; isAssistantUser=false; groupAdmin = admin;
-  $("#who").textContent = u ? (u.displayName || u.email) : "";
+  $("#who").textContent = u ? (u.displayName || currentStudentName || "حسابي") : "";
   $("#n6").style.display = admin ? "" : "none";
   $("#aiFab").style.display = u ? "grid" : "none"; $("#penFab").style.display = u ? "grid" : "none"; if (!u && penOn) $("#penFab").click(); if (!u) { $("#aiPanel").style.display = "none"; tutorChat = null; $("#aiMsgs").innerHTML = ""; }
   $("#auth").textContent = (u || pendingVerifyUser) ? "خروج" : "دخول بجوجل";
@@ -1684,9 +1692,9 @@ async function studentDashboard(targetUid) {
     const x = wk.get(a.questionId) || { q, lessonId: a.lessonId, wrong: 0, total: 0 }; x.total++; if (wrong) x.wrong++; wk.set(a.questionId, x);
   });
   const weak = [...wk.values()].filter(x => x.wrong > 0).sort((a, b) => b.wrong - a.wrong || b.wrong / b.total - a.wrong / a.total).slice(0, 8);
-  const head = mine ? `<h2 class="sh" style="flex:1;margin:0">لوحتي التعليمية</h2><button class="sec" id="settingsBtn" title="الإعدادات" aria-label="الإعدادات" style="font-size:1.2rem;padding:6px 12px">⚙️</button><button class="sec" id="goSubjects">استكشف المواد</button>` : `<button class="sec" id="backFromStudent">← الدرجات</button><h2 class="sh" style="flex:1;margin:0">لوحة الطالب: ${esc(who.name || who.email || uid)}</h2>`;
+  const head = mine ? `<h2 class="sh" style="flex:1;margin:0">لوحتي التعليمية</h2><button class="sec" id="settingsBtn" title="الإعدادات" aria-label="الإعدادات" style="font-size:1.2rem;padding:6px 12px">⚙️</button><button class="sec" id="goSubjects">استكشف المواد</button>` : `<button class="sec" id="backFromStudent">← الدرجات</button><h2 class="sh" style="flex:1;margin:0">لوحة الطالب: ${esc(who.name || canonicalStudentName(who) || "طالب")}</h2><button type="button" class="sec" data-show-email="${esc(who.email||"")}" title="عرض الإيميل" aria-label="عرض الإيميل" style="padding:0 9px;border-radius:999px;font-weight:700">!</button>`;
   app.innerHTML = `<div class="row">${head}</div>
-    ${mine ? "" : `<p class="mut">${esc(who.email || "")}</p>`}
+    
     ${usingDefault ? `<div class="q" style="border:1px solid #d97706;background:#d977061a"><b>⚠️ لسه بتستخدم كلمة السر الافتراضية (${esc(DEFAULT_PASSWORD)}).</b> غيّرها من أيقونة ⚙️ عشان حسابك يبقى آمن. <button class="sec" id="bannerChangePw" style="margin-inline-start:8px">غيّر الآن</button></div>` : ""}
     <div class="dashboard"><div class="metric"><b>${percent}%</b><small>نسبة إتمام الدروس</small></div><div class="metric"><b>${done}/${ls.length}</b><small>دروس مكتملة</small></div><div class="metric"><b>${passedN}</b><small>دروس نجح فيها</small></div><div class="metric"><b>${avg}%</b><small>متوسط الاختبارات</small></div><div class="metric"><b>${bestEver}%</b><small>أعلى درجة</small></div><div class="metric"><b>${attempts.length}</b><small>محاولات اختبار</small></div><div class="metric"><b>${stars}</b><small>نجوم</small></div><div class="metric"><b>${cards.size}</b><small>كلمات في الكاردز</small></div></div>
     <div class="q"><div class="row" style="margin:0"><h3 style="flex:1;margin:0">تقدمك العام</h3>${chip("المستوى: " + lv, lvCol)}</div><div class="progress-track" style="margin-top:8px"><div class="progress-fill" style="width:${percent}%"></div></div><p class="mut">${mine ? "استمر! كل درس جديد يقربك من مستوى أفضل في الفرنسية." : "ملخص تقدم الطالب في كل الدروس."}</p></div>
@@ -1752,7 +1760,7 @@ function gradesSubjectPage(sub) {
   $("#backGrades").onclick = () => gradesPage();
   app.querySelectorAll("[data-grade-lesson]").forEach(b => b.onclick = () => gradesLessonPage(sub, st.lessons.find(x => x.id === b.dataset.gradeLesson)));
   $("#exportSubjectGrades").onclick = () => {
-    const rowsCsv = [["الطالب", "البريد", "المتوسط", ...st.lessons.map(l => l.title)], ...st.students.map(x => [x.user.name || x.uid, x.user.email || "", x.avg ?? "", ...st.lessons.map(l => { const c = x.per.get(l.id); return c && c.best !== null ? c.best + "%" : (c?.completed ? "أنهى الدرس" : "لم يحل"); })])];
+    const rowsCsv = [["الطالب", "المتوسط", ...st.lessons.map(l => l.title)], ...st.students.map(x => [x.user.name || canonicalStudentName(x.user), x.avg ?? "", ...st.lessons.map(l => { const c = x.per.get(l.id); return c && c.best !== null ? c.best + "%" : (c?.completed ? "أنهى الدرس" : "لم يحل"); })])];
     const csv = "\ufeff" + rowsCsv.map(r => r.map(v => `"${String(v).replaceAll('"', '""')}"`).join(",")).join("\n"), blob = new Blob([csv], { type: "text/csv;charset=utf-8" }), a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = `grades-${sub.name}.csv`; a.click(); URL.revokeObjectURL(a.href);
   };
@@ -1761,7 +1769,7 @@ async function gradesLessonPage(sub, lesson) {
   const D = gradesCache; if (!admin || !D || !lesson) return gradesPage();
   app.innerHTML = `<p class="mut">جاري تحميل الدرس…</p>`;
   const questions = await list(`lessons/${lesson.id}/questions`), qm = new Map(questions.map(q => [q.id, q])), um = new Map(D.users.map(u => [u.id, u]));
-  const ls = lessonGradeStats(D, lesson), nameOf = uid => um.get(uid)?.name || um.get(uid)?.email || uid;
+  const ls = lessonGradeStats(D, lesson), nameOf = uid => um.get(uid)?.name || canonicalStudentName(um.get(uid) || {}) || "طالب";
   const stat = new Map();
   D.answers.filter(a => a.lessonId === lesson.id).forEach(a => {
     const q = qm.get(a.questionId); if (!q) return;
@@ -1775,7 +1783,7 @@ async function gradesLessonPage(sub, lesson) {
   app.innerHTML = `<div class="row"><button class="sec" id="backSubject">← ${esc(sub.name)}</button><h3 class="sh fr" style="flex:1;margin:0">${esc(lesson.title)}</h3></div>
     <div class="dashboard"><div class="metric"><b>${ls.students.length}</b><small>طلاب حلّوا الدرس</small></div><div class="metric"><b>${ls.passed}</b><small>نجحوا</small></div><div class="metric"><b>${ls.avg === null ? "—" : ls.avg + "%"}</b><small>متوسط أعلى درجة ${esc(lv)}</small></div><div class="metric"><b>${ls.attempts}</b><small>محاولات</small></div></div>
     <h3 class="sh" style="margin:14px 0 8px">الطلاب اللي حلّوا الدرس</h3>
-    <div class="grid">${ls.students.map(x => { const [l2, c2] = gradeLevel(x.best), u = um.get(x.uid) || {}; return `<div class="q"><b>${esc(u.name || x.uid)}</b> ${gradeBadge(l2, c2)}<br><small class="mut">${esc(u.email || "")}</small><p style="margin:8px 0 4px">أعلى درجة: <span class="score">${x.best}%</span> · ${x.tries} محاولة</p><p style="margin:0">${x.passed ? gradeBadge("ناجح ✓", "#16a34a") : gradeBadge("لم ينجح بعد", "#d97706")}${x.last ? ` <small class="mut">آخر محاولة: ${esc(new Date(x.last * 1000).toLocaleDateString("ar-EG"))}</small>` : ""}</p></div><button class="sec" data-student-detail="${esc(x.uid)}" style="margin-top:8px">تفاصيل الطالب</button></div>`; }).join("") || `<p class="mut">لم يحل أحد هذا الدرس بعد.</p>`}</div>
+    <div class="grid">${ls.students.map(x => { const [l2, c2] = gradeLevel(x.best), u = um.get(x.uid) || {}; return `<div class="q"><b>${esc(u.name || x.uid)}</b> <button type="button" class="sec" data-show-email="${esc(u.email||"")}" title="عرض الإيميل" aria-label="عرض الإيميل" style="padding:0 9px;border-radius:999px;font-weight:700">!</button> ${gradeBadge(l2, c2)}<p style="margin:8px 0 4px">أعلى درجة: <span class="score">${x.best}%</span> · ${x.tries} محاولة</p><p style="margin:0">${x.passed ? gradeBadge("ناجح ✓", "#16a34a") : gradeBadge("لم ينجح بعد", "#d97706")}${x.last ? ` <small class="mut">آخر محاولة: ${esc(new Date(x.last * 1000).toLocaleDateString("ar-EG"))}</small>` : ""}</p></div><button class="sec" data-student-detail="${esc(x.uid)}" style="margin-top:8px">تفاصيل الطالب</button></div>`; }).join("") || `<p class="mut">لم يحل أحد هذا الدرس بعد.</p>`}</div>
     <h3 class="sh" style="margin:18px 0 8px">الأسئلة الأكثر غلطًا</h3>
     <div class="grid">${hard.map((x, i) => { const pct = Math.round(x.wrong / x.total * 100), q = x.q, right = q.type !== "essay" && Array.isArray(q.options) && Number.isInteger(q.answer) ? q.options[q.answer] : ""; return `<div class="q"><b>${i + 1}.</b> <span class="fr">${esc(q.q || "سؤال بدون نص")}</span><p style="margin:8px 0 4px"><span class="score">${x.wrong}/${x.total}</span> إجابة خاطئة (${pct}%) · ${x.who.size} طالب</p><div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:#dc2626"></div></div>${right ? `<p class="mut" style="margin:8px 0 0">الإجابة الصحيحة: <span class="fr">${esc(right)}</span></p>` : ""}<details><summary>مين غلط فيه</summary><p>${[...x.who].map(u => esc(nameOf(u))).join("، ")}</p></details></div>`; }).join("") || `<p class="mut">مفيش أسئلة اتغلط فيها لسه (أو مفيش إجابات مسجلة للدرس ده).</p>`}</div>`;
   $("#backSubject").onclick = () => gradesSubjectPage(sub);
@@ -1823,12 +1831,12 @@ async function usersPage() {
     app.querySelectorAll("[data-setname]").forEach(b=>b.onclick=()=>{const x=us.find(y=>y.id===b.dataset.setname);form("تصحيح اسم العضو",[{n:"name",l:"الاسم الذي سيظهر داخل الجروبات",v:canonicalStudentName(x)}],async v=>{const name=v.name.trim().replace(/\s+/g," ");if(!name)return alert("اكتب اسمًا صحيحًا.");await updateDoc(doc(db,"users",x.id),{name});await setDoc(doc(db,"groupDirectory",x.id),{name,disabled:x.disabled===true,updatedAt:serverTimestamp()},{merge:true});usersPage();});});
     app.querySelectorAll("[data-reset-pw]").forEach(b=>b.onclick=async()=>{
       const x=us.find(y=>y.id===b.dataset.resetPw);if(!x||!x.email)return alert("المستخدم ده مالوش إيميل مسجّل.");
-      if(!confirm(`إرسال رابط إعادة تعيين كلمة السر إلى ${x.email}؟\nالمستخدم هيفتح الرابط ويحط كلمة سر جديدة بنفسه.`))return;
-      b.disabled=true;try{await sendPasswordResetEmail(auth,x.email);alert("تم إرسال الرابط إلى "+x.email+" ✅");}catch(e){alert("تعذر الإرسال: "+(e.code||e.message));}b.disabled=false;
+      if(!confirm(`إرسال رابط إعادة تعيين كلمة السر لـ ${canonicalStudentName(x)}؟\nالمستخدم هيفتح الرابط ويحط كلمة سر جديدة بنفسه.`))return;
+      b.disabled=true;try{await sendPasswordResetEmail(auth,x.email);alert("تم إرسال الرابط لـ "+canonicalStudentName(x)+" ✅");}catch(e){alert("تعذر الإرسال: "+(e.code||e.message));}b.disabled=false;
     });
     app.querySelectorAll("[data-del-user]").forEach(b=>b.onclick=async()=>{
       const x=us.find(y=>y.id===b.dataset.delUser);if(!x||x.email===ADMIN_EMAIL)return;
-      if(!confirm(`حذف ${canonicalStudentName(x)} (${x.email||x.id}) من الموقع؟\nهيتمسح ملفه ودرجاته وكلمات الكاردز وعضويته في الجروبات.\nلا يمكن التراجع.`))return;
+      if(!confirm(`حذف ${canonicalStudentName(x)} من الموقع؟\nهيتمسح ملفه ودرجاته وكلمات الكاردز وعضويته في الجروبات.\nلا يمكن التراجع.`))return;
       b.disabled=true;b.textContent="جاري الحذف…";
       const uid=x.id,fails=[],del=async ref=>{try{await deleteDoc(ref);}catch(e){fails.push(e.code||e.message);}};
       try{
@@ -1844,8 +1852,8 @@ async function usersPage() {
     app.querySelectorAll("[data-u]").forEach(b=>b.onclick=async()=>{const u=us.find(x=>x.id===b.dataset.u);await updateDoc(doc(db,"users",u.id),{role:u.role==="assistant"?"":"assistant"});usersPage();});
   };
   const renderUsers=()=>{
-    const queryText=normalizeSearchText(searchText),filtered=us.filter(matchesFilter).filter(u=>!queryText||normalizeSearchText(`${canonicalStudentName(u)} ${u.email||""} ${u.id}`).includes(queryText));
-    $("#userList").innerHTML=filtered.map(u=>`<div class="item"><span>${esc(canonicalStudentName(u))} <small class="mut">${esc(u.email||"")}</small></span>${u.email===ADMIN_EMAIL?"<b>أدمن</b>":`<button class="sec" data-setname="${esc(u.id)}">تصحيح الاسم</button><button class="sec" data-reset-pw="${esc(u.id)}" title="إرسال رابط إعادة تعيين كلمة السر لإيميل المستخدم">🔑 كلمة السر</button><button class="del" data-del-user="${esc(u.id)}" title="حذف المستخدم وبياناته من الموقع">🗑 حذف</button><button data-u="${esc(u.id)}" class="${u.role==="assistant"?"del":""}">${u.role==="assistant"?"إلغاء المساعد":"اجعله مساعد"}</button><button class="sec" data-group-role="${esc(u.id)}" title="تعيين مدير للجروب ومنحه حق إنشاء جروب واحد فقط">تعيين مدير + جروب واحد</button><button class="sec" data-ban="${esc(u.id)}">${u.disabled?"تفعيل":"تعطيل"}</button>`}</div>`).join("")||`<p class="mut">لا يوجد مستخدمون مطابقون للبحث أو التصفية.</p>`;
+    const queryText=normalizeSearchText(searchText),filtered=us.filter(matchesFilter).filter(u=>!queryText||normalizeSearchText(`${canonicalStudentName(u)} ${u.id}`).includes(queryText));
+    $("#userList").innerHTML=filtered.map(u=>`<div class="item"><span>${esc(canonicalStudentName(u))} <button type="button" class="sec" data-show-email="${esc(u.email||"")}" title="عرض الإيميل" aria-label="عرض الإيميل" style="padding:0 9px;border-radius:999px;font-weight:700">!</button></span>${u.email===ADMIN_EMAIL?"<b>أدمن</b>":`<button class="sec" data-setname="${esc(u.id)}">تصحيح الاسم</button><button class="sec" data-reset-pw="${esc(u.id)}" title="إرسال رابط إعادة تعيين كلمة السر لإيميل المستخدم">🔑 كلمة السر</button><button class="del" data-del-user="${esc(u.id)}" title="حذف المستخدم وبياناته من الموقع">🗑 حذف</button><button data-u="${esc(u.id)}" class="${u.role==="assistant"?"del":""}">${u.role==="assistant"?"إلغاء المساعد":"اجعله مساعد"}</button><button class="sec" data-group-role="${esc(u.id)}" title="تعيين مدير للجروب ومنحه حق إنشاء جروب واحد فقط">تعيين مدير + جروب واحد</button><button class="sec" data-ban="${esc(u.id)}">${u.disabled?"تفعيل":"تعطيل"}</button>`}</div>`).join("")||`<p class="mut">لا يوجد مستخدمون مطابقون للبحث أو التصفية.</p>`;
     $("#userFilterInfo").textContent=`المعروض ${filtered.length} من ${us.length} مستخدم — ${stats.find(x=>x[0]===selectedFilter)?.[1]||"كل المستخدمين"}`;
     app.querySelectorAll("[data-user-filter]").forEach(card=>{card.setAttribute("aria-pressed",String(card.dataset.userFilter===selectedFilter));card.onclick=()=>{selectedFilter=card.dataset.userFilter;renderUsers();};});
     bindUserActions();
