@@ -1953,17 +1953,18 @@ async function createGraduationProject(g){
   if(!groupManager(g))return alert("إنشاء المساحة متاح لمدير الجروب فقط.");
   const members=[...new Set(g.members||[])];
   if(members.length<2||members.length>10)return alert("لازم يكون جروب المشروع من 2 إلى 10 أعضاء. عدّل أعضاء الجروب أولًا ثم حاول مرة أخرى.");
-  form("إنشاء مساحة مشروع التخرج",[{n:"title",l:"اسم المشروع",v:g.name||""},{n:"pdfUrl",l:"رابط PDF اختياري لمشاركته مع الفريق (https://)"}],async v=>{
+  form("إنشاء مساحة مشروع التخرج",[{n:"title",l:"اسم المشروع",v:g.name||""},{n:"localPdf",l:"اختر ملف المشروع من جهازك (PDF أو Word) — يُقرأ على جهازك فقط ولا يُرفع",t:"file",accept:GP_FILE_ACCEPT},{n:"summary",l:"أو الصق نص المشروع هنا (اختياري)",t:"area"}],async v=>{
     const title=String(v.title||"").trim();if(!title)return alert("اكتب اسم المشروع.");
-    const pdfUrl=safeGraduationPdfUrl(v.pdfUrl);if(pdfUrl===null)return alert("أدخل رابطًا يبدأ بـ https:// أو اتركه فارغًا.");
-    const minutesPerStudent=3,project={groupId:g.id,groupName:g.name||"",title,pdfUrl,summary:"",presentationMinutes:members.length*minutesPerStudent,minutesPerStudent,members,managerUid:g.createdBy||user.uid,createdBy:user.uid,createdAt:serverTimestamp(),updatedAt:serverTimestamp()};
+    let extracted="";if(v.localPdf?.size){try{extracted=await extractLocalGraduationFile(v.localPdf);}catch(e){return alert("تعذر قراءة الملف: "+e.message);}}
+    const summary=[String(v.summary||"").trim(),extracted].filter(Boolean).join("\n\n").slice(0,GP_MAX_CHARS);
+    const minutesPerStudent=3,project={groupId:g.id,groupName:g.name||"",title,pdfUrl:"",summary,presentationMinutes:members.length*minutesPerStudent,minutesPerStudent,members,managerUid:g.createdBy||user.uid,createdBy:user.uid,createdAt:serverTimestamp(),updatedAt:serverTimestamp()};
     try{await setDoc(doc(db,"graduationProjects",g.id),project);await graduationProjectRoom(g,{id:g.id,...project});}catch(e){alert("تعذر إنشاء مساحة المشروع: "+(e.code||e.message));}
   });
 }
 function attachGraduationFile(g,p){
   if(!groupManager(g))return;
-  form("إضافة ملف المشروع",[{n:"localPdf",l:"اختيار ملف PDF أو Word (.docx) — يُستخرج نصه على جهازك فقط ولا يُرفع",t:"file",accept:GP_FILE_ACCEPT},{n:"summary",l:"أو الصق/عدّل نص المشروع هنا",t:"area",v:p.summary||""},{n:"pdfUrl",l:"رابط PDF عام لمشاركته مع الفريق (اختياري)",v:p.pdfUrl||""}],async v=>{
-    const pdfUrl=safeGraduationPdfUrl(v.pdfUrl);if(pdfUrl===null)return alert("أدخل رابطًا يبدأ بـ https:// أو اتركه فارغًا.");
+  form("إضافة ملف المشروع",[{n:"localPdf",l:"اختر الملف من جهازك (PDF أو Word) — يُقرأ على جهازك فقط ولا يُرفع",t:"file",accept:GP_FILE_ACCEPT},{n:"summary",l:"أو الصق/عدّل نص المشروع هنا",t:"area",v:p.summary||""}],async v=>{
+    const pdfUrl=p.pdfUrl||"";
     let extracted="";if(v.localPdf?.size){try{extracted=await extractLocalGraduationFile(v.localPdf);}catch(e){return alert("تعذر قراءة الملف: "+e.message);}}
     const pasted=String(v.summary||"").trim(),unchanged=pasted===String(p.summary||"").trim();
     const summary=(extracted?(unchanged?[extracted]:[pasted,extracted]):[pasted]).filter(Boolean).join("\n\n").slice(0,GP_MAX_CHARS);
