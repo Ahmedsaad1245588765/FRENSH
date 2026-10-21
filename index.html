@@ -509,7 +509,6 @@ document.addEventListener("click", e => {
   e.preventDefault(); e.stopPropagation();
   const em = b.dataset.showEmail; alert(em ? "البريد الإلكتروني:\n" + em : "مفيش إيميل مسجّل للشخص ده.");
 });
-const ADMIN_FIXED_PASSWORD = "666666";
 const maskEmail = e => { const [a = "", d = ""] = String(e || "").split("@"); return a ? a.slice(0, 2) + "***@" + d : ""; };
 const ADMIN_EMAIL = "ahmedsaad13k@gmail.com";   // إيميلك (صلاحيات كاملة)
 /* ============================================== */
@@ -575,10 +574,9 @@ async function enableDefaultPasswordViaGoogle() {
   const provider = new GoogleAuthProvider(); provider.setCustomParameters({ prompt: "select_account" });
   const res = await signInWithPopup(auth, provider), cu = res.user;
   if (cu.providerData.some(x => x.providerId === "password")) { alert("حسابك متفعّل بالبريد وكلمة السر بالفعل. ادخل بكلمة السر الخاصة بك (أو الافتراضية " + DEFAULT_PASSWORD + " لو ما غيّرتهاش)."); return; }
-  const isAdminAcc = cu.email === ADMIN_EMAIL;
-  await linkWithCredential(cu, EmailAuthProvider.credential(cu.email, isAdminAcc ? ADMIN_FIXED_PASSWORD : DEFAULT_PASSWORD));
-  await setDoc(doc(db, "users", cu.uid), { pwDefault: !isAdminAcc }, { merge: true });
-  alert(isAdminAcc ? "تم تفعيل الدخول بالبريد وكلمة السر الثابتة لحساب الأدمن ✅" : "تم تفعيل الدخول بالبريد وكلمة السر الافتراضية " + DEFAULT_PASSWORD + " ✅\nهتغيّرها دلوقتي لكلمة سر خاصة بيك.");
+  await linkWithCredential(cu, EmailAuthProvider.credential(cu.email, DEFAULT_PASSWORD));
+  await setDoc(doc(db, "users", cu.uid), { pwDefault: true }, { merge: true });
+  alert("تم تفعيل الدخول بالبريد وكلمة السر الافتراضية " + DEFAULT_PASSWORD + " ✅\nهتغيّرها دلوقتي لكلمة سر خاصة بيك.");
   location.reload();
 }
 function authDialog(mode = "existing") {
@@ -623,8 +621,8 @@ function authDialog(mode = "existing") {
 function passwordSettingsDialog(onDone, opts = {}) {
   const cu = auth.currentUser; if (!cu) return;
   const force = !!opts.force;
-  const hasPw = cu.providerData.some(x => x.providerId === "password") && cu.email !== ADMIN_EMAIL, d = document.createElement("dialog");
-  d.innerHTML = `<form><h3>${force ? "🔐 غيّر كلمة المرور أولًا" : "⚙️ الإعدادات"}</h3>${force ? `<p><b>عشان أمان حسابك لازم تغيّر كلمة السر الافتراضية قبل ما تكمل.</b></p>` : ""}<p class="mut"><b>${esc(cu.displayName || "")}</b></p>${hasPw ? `<h4 style="margin:8px 0">تغيير كلمة المرور</h4><label>كلمة المرور الحالية (الافتراضية ${esc(DEFAULT_PASSWORD)})<input name="cur" type="password" required autocomplete="current-password" value="${force ? esc(DEFAULT_PASSWORD) : ""}"></label><label>كلمة المرور الجديدة (6 أحرف على الأقل)<input name="np" type="password" minlength="6" required autocomplete="new-password"></label><label>تأكيد كلمة المرور الجديدة<input name="np2" type="password" minlength="6" required autocomplete="new-password"></label>` : `<p class="mut">${cu.email === ADMIN_EMAIL ? "كلمة سر حساب الأدمن ثابتة ومش بتتغيّر من هنا." : "حسابك مسجّل بجوجل، فكلمة المرور بتتدار من حساب Google نفسه."}</p>`}<div class="row">${hasPw ? `<button type="submit">حفظ كلمة المرور</button>` : ""}<button type="button" class="sec" id="spClose">${force ? "خروج" : "إغلاق"}</button></div><p id="spMsg" class="danger"></p></form>`;
+  const hasPw = cu.providerData.some(x => x.providerId === "password"), d = document.createElement("dialog");
+  d.innerHTML = `<form><h3>${force ? "🔐 غيّر كلمة المرور أولًا" : "⚙️ الإعدادات"}</h3>${force ? `<p><b>عشان أمان حسابك لازم تغيّر كلمة السر الافتراضية قبل ما تكمل.</b></p>` : ""}<p class="mut"><b>${esc(cu.displayName || "")}</b></p>${hasPw ? `<h4 style="margin:8px 0">تغيير كلمة المرور</h4><label>كلمة المرور الحالية (الافتراضية ${esc(DEFAULT_PASSWORD)})<input name="cur" type="password" required autocomplete="current-password" value="${force ? esc(DEFAULT_PASSWORD) : ""}"></label><label>كلمة المرور الجديدة (6 أحرف على الأقل)<input name="np" type="password" minlength="6" required autocomplete="new-password"></label><label>تأكيد كلمة المرور الجديدة<input name="np2" type="password" minlength="6" required autocomplete="new-password"></label>` : `<p class="mut">حسابك مسجّل بجوجل، فكلمة المرور بتتدار من حساب Google نفسه.</p>`}<div class="row">${hasPw ? `<button type="submit">حفظ كلمة المرور</button>` : ""}<button type="button" class="sec" id="spClose">${force ? "خروج" : "إغلاق"}</button></div><p id="spMsg" class="danger"></p></form>`;
   document.body.appendChild(d); d.showModal();
   d.querySelector("#spClose").onclick = () => { d.close(); d.remove(); if (force) signOut(auth); };
   if (force) d.addEventListener("cancel", e => e.preventDefault());
