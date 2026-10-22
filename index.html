@@ -332,6 +332,12 @@ body.night .fbtr{background:rgba(0,0,0,.25)}
 body.night .fb.ok{background:#12372a;color:#bff0d6;border-color:#1f6b4c}
 body.night .fb.bad{background:#40202a;color:#ffd1d8;border-color:#7a3446}
 
+/* حلول الذكاء الاصطناعي داخل الدرس */
+.lans{margin:12px 0 18px;padding:12px 16px;border-radius:14px;background:#effaf3;border:1px solid #9fdcb8;border-inline-start:5px solid #17a05d;color:#0b3d26}
+.lans::before{content:"✅ حل الذكاء الاصطناعي";display:block;font-weight:800;font-size:.85rem;color:#0e7a44;margin-bottom:6px;direction:rtl;text-align:right}
+.lans .lp{background:transparent!important;border:0!important;padding:4px 0!important;margin:0!important;color:inherit}
+body.night .lans{background:#10291d;border-color:#1f6b4c;color:#d4f5e2}
+body.night .lans::before{color:#6ee7a8}
 /* pen tool */
 #penFab{position:fixed;top:50%;left:12px;transform:translateY(-50%);z-index:40;width:48px;height:48px;border-radius:50%;padding:0;font-size:1.3rem;display:none;place-items:center}
 #penFab.on{background:linear-gradient(135deg,#e0444d,#b91f48)}
@@ -1016,6 +1022,7 @@ function renderLessonBody(el, l, imgMap) {
       sec.appendChild(fig); solid = true; return;
     }
     if (b.t === "p") { renderParas(sec, b.v, b.ar || "", b.pairs || []); solid = true; return; }
+    if (b.t === "ans") { const w = document.createElement("div"); w.className = "lans"; sec.appendChild(w); renderParas(w, b.v, b.ar || "", b.pairs || []); solid = true; return; }
     const n = document.createElement(b.t === "h1" ? "h3" : "h4"); n.className = b.t === "h1" ? "lh1 paragraph-body" : "lh2 paragraph-body"; n.dataset.french = b.v;
     sec.appendChild(n); if (b.ar) renderBilingualParagraph(n, b.v, b.ar, b.pairs || []); else clickable(n, b.v, false);
   });
@@ -1038,29 +1045,29 @@ async function lessonEditor(x, sub, done) {
       <div id="aiDrop" class="drop">📄 اسحب ملف PDF هنا أو اضغط للاختيار<br><small class="mut">أو الصق نص الدرس في الخانة اللي تحت</small></div>
       <input type="file" id="aiPdf" accept="application/pdf,.pdf,.txt,.md,text/plain" style="display:none">
       <textarea id="aiPaste" rows="5" dir="ltr" placeholder="الصق نص الدرس هنا..."></textarea>
-      <div class="row"><button type="button" id="aiRun">✨ نظّم الدرس</button><span id="aiMsg" class="mut"></span></div>
+      <div class="row"><button type="button" id="aiRun">✨ نظّم الدرس</button>${admin ? `<button type="button" class="solveQsBtn" style="background:linear-gradient(135deg,#17a05d,#0e7a44)">🧠 حل الأسئلة</button><label style="display:flex;align-items:center;gap:6px;margin:0;font-weight:600"><input type="checkbox" id="autoSolve" style="width:auto;margin:0"> حل الأسئلة تلقائيًا بعد التنظيم</label>` : ""}<span id="aiMsg" class="mut"></span></div>
     </div>
     <div id="lbBlocks"></div>
-    <div class="row"><button type="button" class="sec" data-add="h1">+ عنوان رئيسي</button><button type="button" class="sec" data-add="h2">+ عنوان فرعي</button><button type="button" class="sec" data-add="p">+ فقرة</button><button type="button" class="sec" data-add="img">+ صورة</button><button type="button" id="makeTranslations">🌐 ترجم كل البلوكات</button><button type="button" id="makeWords">✨ أنشئ أهم الكلمات</button><button type="button" id="makeGrammar">📚 أنشئ أهم القواعد</button></div>
+    <div class="row"><button type="button" class="sec" data-add="h1">+ عنوان رئيسي</button><button type="button" class="sec" data-add="h2">+ عنوان فرعي</button><button type="button" class="sec" data-add="p">+ فقرة</button><button type="button" class="sec" data-add="img">+ صورة</button><button type="button" id="makeTranslations">🌐 ترجم كل البلوكات</button><button type="button" id="makeWords">✨ أنشئ أهم الكلمات</button><button type="button" id="makeGrammar">📚 أنشئ أهم القواعد</button>${admin ? `<button type="button" class="solveQsBtn" style="background:linear-gradient(135deg,#17a05d,#0e7a44)">🧠 حل أسئلة الدرس بالذكاء الاصطناعي</button>` : ""}</div>
     <input type="file" accept="image/*" id="lbFile" style="display:none">
     <p class="danger" id="lbErr"></p>
     <div class="row"><button id="lbSave">حفظ</button><button type="button" class="sec" id="lbCancel">إلغاء</button></div></form>`;
   document.body.appendChild(d);
   const f = d.querySelector("form"), box = d.querySelector("#lbBlocks"), file = d.querySelector("#lbFile"), err = m => d.querySelector("#lbErr").textContent = m;
   f.querySelector('[name="title"]').value = x.title || ""; f.querySelector('[name="yt"]').value = c.youtube || ""; f.querySelector('[name="ytAr"]').value = c.youtubeAr || "";
-  const LBL = { h1: "عنوان رئيسي", h2: "عنوان فرعي", p: "فقرة", img: "صورة" };
+  const LBL = { h1: "عنوان رئيسي", h2: "عنوان فرعي", p: "فقرة", ans: "✅ حل الذكاء الاصطناعي", img: "صورة" };
   const draw = () => {
     box.innerHTML = "";
     blocks.forEach(b => {
-      const w = document.createElement("div"); w.className = "q"; w.style.cssText = "padding:12px;margin:10px 0";
+      const w = document.createElement("div"); w.className = "q"; w.style.cssText = "padding:12px;margin:10px 0" + (b.t === "ans" ? ";border:2px solid #17a05d" : "");
       w.innerHTML = `<div class="row" style="margin:0 0 8px"><b style="flex:1">${LBL[b.t]}</b><button type="button" class="sec" data-mv="-1" style="padding:3px 10px">↑</button><button type="button" class="sec" data-mv="1" style="padding:3px 10px">↓</button><button type="button" class="del" data-rm="1" style="padding:3px 10px">✕</button></div><div class="bb"></div>`;
       const body = w.querySelector(".bb");
       if (b.t === "img") body.innerHTML = `${b.d ? `<img src="${b.d}" style="max-width:100%;max-height:220px;border-radius:10px;display:block;margin-bottom:8px">` : `<p class="mut">لم تُختر صورة</p>`}<button type="button" class="sec" data-pick="1">${b.d ? "تغيير الصورة" : "اختر صورة"}</button>`;
       else {
-        const el = document.createElement(b.t === "p" ? "textarea" : "input"); el.dir = "ltr"; el.value = b.v; el.oninput = () => b.v = el.value;
-        if (b.t === "p") { el.rows = 5; el.placeholder = "اكتب الفقرة هنا. سطر فاضي = فقرة جديدة، وسطر يبدأ بـ - يتحول لنقطة، وبـ 1. لقائمة مرقمة"; } else { el.placeholder = b.t === "h1" ? "العنوان الرئيسي" : "العنوان الفرعي"; el.style.fontWeight = "800"; }
-        const ar = document.createElement(b.t === "p" ? "textarea" : "input"); ar.dir = "rtl"; ar.value = b.a || ""; ar.placeholder = "الترجمة العربية (اختياري — استخدم زر إضافة ترجمة البلوكات)"; ar.className = "block-ar"; ar.oninput = () => { b.a = ar.value; b.pairs = []; };
-        if (b.t === "p") ar.rows = 5;
+        const el = document.createElement((b.t === "p" || b.t === "ans") ? "textarea" : "input"); el.dir = "ltr"; el.value = b.v; el.oninput = () => b.v = el.value;
+        if (b.t === "p" || b.t === "ans") { el.rows = 5; el.placeholder = "اكتب الفقرة هنا. سطر فاضي = فقرة جديدة، وسطر يبدأ بـ - يتحول لنقطة، وبـ 1. لقائمة مرقمة"; } else { el.placeholder = b.t === "h1" ? "العنوان الرئيسي" : "العنوان الفرعي"; el.style.fontWeight = "800"; }
+        const ar = document.createElement((b.t === "p" || b.t === "ans") ? "textarea" : "input"); ar.dir = "rtl"; ar.value = b.a || ""; ar.placeholder = "الترجمة العربية (اختياري — استخدم زر إضافة ترجمة البلوكات)"; ar.className = "block-ar"; ar.oninput = () => { b.a = ar.value; b.pairs = []; };
+        if (b.t === "p" || b.t === "ans") ar.rows = 5;
         body.append(el, ar);
       }
       box.appendChild(w);
@@ -1084,7 +1091,7 @@ async function lessonEditor(x, sub, done) {
   };
   
   d.querySelector("#makeWords").onclick = async e => {
-    const btn = e.currentTarget, source = blocks.filter(b => b.t !== "img" && String(b.v || "").trim()).map(b => b.v.trim()).join("\n\n");
+    const btn = e.currentTarget, source = blocks.filter(b => b.t !== "img" && b.t !== "ans" && String(b.v || "").trim()).map(b => b.v.trim()).join("\n\n");
     if (!source) return err("أضف محتوى الدرس أولًا");
     btn.disabled = true; btn.textContent = "⏳ جاري استخراج الكلمات...";
     try {
@@ -1095,7 +1102,7 @@ async function lessonEditor(x, sub, done) {
     btn.disabled = false; btn.textContent = "✨ أنشئ أهم الكلمات";
   };
   d.querySelector("#makeGrammar").onclick = async e => {
-    const btn = e.currentTarget, source = blocks.filter(b => b.t !== "img" && String(b.v || "").trim()).map(b => b.v.trim()).join("\n\n");
+    const btn = e.currentTarget, source = blocks.filter(b => b.t !== "img" && b.t !== "ans" && String(b.v || "").trim()).map(b => b.v.trim()).join("\n\n");
     if (!source) return err("أضف محتوى الدرس أولًا");
     btn.disabled = true; btn.textContent = "⏳ جاري تبسيط القواعد...";
     try {
@@ -1105,6 +1112,30 @@ async function lessonEditor(x, sub, done) {
     } catch (ex) { console.error(ex); err("تعذر إنشاء القواعد، حاول مرة أخرى"); }
     btn.disabled = false; btn.textContent = "📚 أنشئ أهم القواعد";
   };
+  const solveQs = async btn => {
+    if (!admin) return;
+    const label = btn.textContent, src = blocks.filter(b => b.t === "p" && String(b.v || "").trim()).map((b, k) => ({ id: k, b, text: b.v.trim() }));
+    if (!src.length) return err("مفيش فقرات في الدرس");
+    if (blocks.some(b => b.t === "ans") && !confirm("الحلول القديمة هتتمسح ويتعمل حل جديد. تكمل؟")) return;
+    const chunks = []; let cur = [], len = 0;
+    src.forEach(x => { if (cur.length && len + x.text.length > 12000) { chunks.push(cur); cur = []; len = 0; } cur.push(x); len += x.text.length; });
+    if (cur.length) chunks.push(cur);
+    btn.disabled = true; err(""); const answers = new Map(); let failed = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      btn.textContent = `⏳ جاري الحل ${i + 1} من ${chunks.length}`;
+      try {
+        const prompt = `أنت أستاذ لغة فرنسية. فيما يلي فقرات من درس، كل فقرة لها رقم. حدّد الفقرات التي فيها أسئلة أو تمارين للطالب (املأ الفراغ، اختر الإجابة، صحح، ترجم، أجب عن السؤال...) وحلّها حلًا صحيحًا. تجاهل الفقرات الشرحية التي ليس فيها أسئلة. لكل فقرة فيها أسئلة اكتب إجابة كل سؤال في سطر منفصل بنفس ترقيم السؤال وبنفس لغة السؤال، وأضف شرحًا مختصرًا جدًا بالعربية المبسطة بين قوسين عند الحاجة. لا تخترع أسئلة غير موجودة في النص ولا تعدّل نص السؤال. أعد JSON فقط بالشكل {"solutions":[{"id":رقم_الفقرة,"answer":"الحل"}]}، وأعد قائمة فارغة إذا لم توجد أسئلة.\n\n` + chunks[i].map(x => `[فقرة ${x.id}]\n${x.text}`).join("\n\n");
+        const j = await askJSON(prompt, 2), sols = Array.isArray(j) ? j : (j.solutions || []);
+        sols.forEach(x => { const a = String(x?.answer || "").trim(); if (a && Number.isInteger(Number(x.id))) answers.set(Number(x.id), a); });
+      } catch (ex) { failed++; console.warn("solve chunk failed", ex); }
+    }
+    btn.disabled = false; btn.textContent = label;
+    if (!answers.size) return err(failed ? "تعذر الحل الآن، حاول مرة أخرى" : "مفيش أسئلة اتلقت في الدرس");
+    for (let k = blocks.length - 1; k >= 0; k--) if (blocks[k].t === "ans") blocks.splice(k, 1);
+    src.forEach(x => { const a = answers.get(x.id); if (!a) return; const idx = blocks.indexOf(x.b); if (idx >= 0) blocks.splice(idx + 1, 0, { t: "ans", v: a, a: "", pairs: [], d: "" }); });
+    draw(); err(`✅ تم حل ${answers.size} فقرة${failed ? ` (تعذر جزء، اضغط تاني لإعادة المحاولة)` : ""} — اضغط حفظ`);
+  };
+  d.querySelectorAll(".solveQsBtn").forEach(b => b.onclick = () => solveQs(b));
   box.onclick = e => {
     const w = e.target.closest(".q"); if (!w || w.parentElement !== box) return;
     const i = [...box.children].indexOf(w), t = e.target;
@@ -1148,6 +1179,7 @@ async function lessonEditor(x, sub, done) {
       blocks.length = 0; res.blocks.forEach(b => blocks.push({ t: b.t, v: b.v, a: "", pairs: [], d: "" })); importantWords = []; grammarPoints = [];
       const ti = f.querySelector('[name="title"]'); if (!ti.value.trim() && res.title) ti.value = res.title;
       draw(); aiMsg.textContent = `✅ تم تنظيم الدرس (${res.blocks.length} جزء) — راجعه وعدّل لو حبيت`;
+      if (admin && d.querySelector("#autoSolve")?.checked) { aiMsg.textContent += " — ⏳ جاري حل الأسئلة..."; await solveQs(runBtn); }
     } catch (e) { console.error(e); aiMsg.className = "danger"; aiMsg.textContent = "تعذر التنظيم: " + (e.message || "").slice(0, 160); }
     runBtn.disabled = false;
   };
@@ -1164,7 +1196,7 @@ async function lessonEditor(x, sub, done) {
       for (const b of kept) if (b.t === "img" && b.d && !b.v) b.v = (await addDoc(collection(db, `lessons/${ref.id}/images`), { data: b.d, created: serverTimestamp() })).id;
       for (const id of removed) { try { await deleteDoc(doc(db, `lessons/${ref.id}/images`, id)); } catch {} }
       const out = kept.map(b => b.t === "img" ? ({ t: b.t, v: b.v }) : ({ t: b.t, v: b.v.trim(), ...(b.a && b.a.trim() ? { ar: b.a.trim(), pairs: Array.isArray(b.pairs) ? b.pairs : [] } : {}) }));
-      const content = { text: out.filter(b => b.t !== "img").map(b => b.v).join("\n"), blocks: out, importantWords, grammarPoints, youtube: f.querySelector('[name="yt"]').value.trim(), youtubeAr: f.querySelector('[name="ytAr"]').value.trim() };
+      const content = { text: out.filter(b => b.t !== "img" && b.t !== "ans").map(b => b.v).join("\n"), blocks: out, importantWords, grammarPoints, youtube: f.querySelector('[name="yt"]').value.trim(), youtubeAr: f.querySelector('[name="ytAr"]').value.trim() };
       await setDoc(doc(db, "lessonContent", ref.id), content);
       if (x.id) { await updateDoc(ref, { title, v2: true, text: deleteField(), blocks: deleteField(), youtube: deleteField(), youtubeAr: deleteField() }); x.title = title; }
       else { await setDoc(ref, { subjectId: sub.id, title, v2: true, examCount: 0, prevId: "", created: serverTimestamp() }); await recomputeGates(sub.id); }
@@ -1491,56 +1523,67 @@ function speakLesson(text, button) {
 
 /* ---------- الدرس ---------- */
 /* ---------- تحميل الدرس PDF مباشرة (بدون طباعة) ---------- */
-let html2pdfPromise = null;
-function loadHtml2Pdf() {
-  return html2pdfPromise || (html2pdfPromise = new Promise((res, rej) => {
-    if (window.html2pdf) return res(window.html2pdf);
-    const s = document.createElement("script");
-    s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-    s.onload = () => window.html2pdf ? res(window.html2pdf) : rej(new Error("تعذر تحميل مكتبة PDF"));
-    s.onerror = () => { html2pdfPromise = null; rej(new Error("تعذر تحميل مكتبة PDF. تأكد من الإنترنت.")); };
+const pdfScriptCache = {};
+function loadPdfScript(src, test) {
+  if (test()) return Promise.resolve();
+  return pdfScriptCache[src] || (pdfScriptCache[src] = new Promise((res, rej) => {
+    const s = document.createElement("script"); s.src = src;
+    s.onload = () => test() ? res() : rej(new Error("تعذر تحميل مكتبة PDF"));
+    s.onerror = () => { delete pdfScriptCache[src]; rej(new Error("تعذر تحميل مكتبة PDF. تأكد من الإنترنت.")); };
     document.head.appendChild(s);
   }));
 }
+const PDF_CSS = `
+  #pdfExport{width:718px;background:#fff;color:#111;font-family:Cairo,Arial,sans-serif;line-height:1.7;box-sizing:border-box;padding:0;margin:0}
+  #pdfExport *{box-shadow:none!important;animation:none!important;transition:none!important;backdrop-filter:none!important;text-shadow:none!important}
+  #pdfExport .pdf-title{font-size:26px;margin:0 0 10px;color:#14264f;direction:ltr;text-align:left;font-family:Fraunces,Georgia,serif;padding-bottom:8px;border-bottom:3px solid #1f4da8}
+  #pdfExport .text{background:#fff!important;border:0!important;padding:0!important;margin:0!important;font-size:14px!important;line-height:1.8!important;color:#111!important;white-space:normal!important;overflow:visible!important;position:static!important}
+  #pdfExport .lsec{margin:0 0 6px;padding:0}
+  #pdfExport .lsec+.lsec{margin-top:10px;padding-top:0;border-top:0}
+  #pdfExport .lh1{font-size:20px;margin:6px 0 8px;color:#14264f!important}
+  #pdfExport .lh1::after{display:none}
+  #pdfExport .lh2{font-size:16px;margin:10px 0 6px;color:#1f4da8!important;border-inline-start:0!important;padding-inline-start:0!important}
+  #pdfExport .lp,#pdfExport .ll{background:#fff!important;border:0!important;padding:0!important;margin:0 0 8px!important;font-size:13.5px;color:#111!important;overflow:visible!important}
+  #pdfExport .ll{padding-inline-start:22px!important}
+  #pdfExport .bilingual-pair{display:block!important}
+  #pdfExport .bilingual-row{display:grid!important;grid-template-columns:1fr 1fr;gap:0;border:1px solid #d5deed;border-radius:6px;margin:0 0 6px;overflow:hidden}
+  #pdfExport .bilingual-side{background:#f7f9fd!important;color:#18233d!important;font-size:12.5px!important;line-height:1.75!important;padding:6px 9px!important;margin:0!important;border-radius:0!important;border-top:0!important}
+  #pdfExport .bilingual-side.ar{background:#fffaf0!important;border-inline-start:3px solid #d28d2d!important}
+  #pdfExport .bilingual-side.fr{border-inline-start:3px solid #1f4da8!important}
+  #pdfExport .pair-word,#pdfExport .w,#pdfExport .tts-sentence{background:transparent!important;color:inherit!important;box-shadow:none!important}
+  #pdfExport .limg{margin:10px 0;text-align:center}
+  #pdfExport .limg img{max-width:100%;max-height:260px;border-radius:6px;box-shadow:none}
+  #pdfExport .lans{margin:8px 0 10px;padding:8px 12px;border-radius:8px;background:#effaf3!important;border:1px solid #9fdcb8!important;border-inline-start:5px solid #17a05d!important;color:#0b3d26!important;overflow:visible!important;position:static!important}
+  #pdfExport .lans::before{content:"✅ حل الذكاء الاصطناعي";display:block;font-weight:800;font-size:12px;color:#0e7a44!important;margin-bottom:4px;direction:rtl;text-align:right}
+  #pdfExport .lans .lp{background:transparent!important;color:#0b3d26!important;margin:0!important}
+  #pdfExport .lans .bilingual-side{background:transparent!important;color:#0b3d26!important}
+  #pdfExport .important-words,#pdfExport .grammar-points{background:#fff!important;border:1px solid #cbd7ea!important;border-radius:8px;padding:10px 12px!important;margin:12px 0 0!important}
+  #pdfExport .important-words h3,#pdfExport .grammar-points h3{font-size:16px;margin:0 0 8px;color:#14264f!important}
+  #pdfExport table{width:100%;border-collapse:collapse;table-layout:fixed}
+  #pdfExport th,#pdfExport td{padding:6px 8px;border-bottom:1px solid #d6deeb;text-align:start;font-size:13px;color:#111!important;background:transparent!important}
+  #pdfExport th{background:#eef3fb!important;color:#14264f!important}
+  #pdfExport .word-link{border:0;background:transparent!important;color:#14264f!important;padding:0;font-weight:800;text-decoration:none;font-family:inherit;font-size:13px}
+  #pdfExport .grammar-card{background:#f7f9fd!important;border-inline-start:3px solid #d28d2d;border-radius:8px;padding:8px 10px;margin:8px 0}
+  #pdfExport .grammar-card h4{margin:0 0 5px;color:#1f4da8!important;font-size:14px}
+  #pdfExport .grammar-card p{margin:0 0 6px;color:#111!important}
+  #pdfExport .grammar-example{background:#fff!important;color:#111!important;padding:6px 8px;border-radius:6px;direction:ltr;text-align:left}
+  #pdfExport .grammar-translation{color:#6c4b16!important;padding:4px 8px}
+`;
 async function downloadLessonPdf(l, btn) {
   const old = btn.textContent;
   btn.disabled = true; btn.textContent = "⏳ جاري تجهيز الملف...";
+  let host = null;
   try {
-    const h2p = await loadHtml2Pdf();
+    await Promise.all([
+      loadPdfScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js", () => !!window.html2canvas),
+      loadPdfScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", () => !!(window.jspdf && window.jspdf.jsPDF))
+    ]);
+    if (document.fonts && document.fonts.ready) await document.fonts.ready.catch(() => {});
+    host = document.createElement("div");
+    host.style.cssText = "position:absolute;left:-10000px;top:0;width:718px;background:#fff;pointer-events:none";
     const root = document.createElement("div");
-    root.id = "pdfExport";
-    root.innerHTML = `<style>
-      #pdfExport{width:718px;background:#fff;color:#111;font-family:Cairo,Arial,sans-serif;line-height:1.7;box-sizing:border-box}
-      #pdfExport *{box-shadow:none!important;animation:none!important;transition:none!important}
-      #pdfExport .pdf-title{font-size:26px;margin:0 0 6px;color:#14264f;direction:ltr;text-align:left;font-family:Fraunces,Georgia,serif}
-      #pdfExport .pdf-title::after{content:"";display:block;width:60px;height:3px;margin-top:8px;background:#1f4da8}
-      #pdfExport .text{background:#fff!important;border:0!important;padding:0!important;margin:0!important;font-size:14px!important;line-height:1.8!important;color:#111!important;white-space:normal!important}
-      #pdfExport .lsec+.lsec{margin-top:14px;padding-top:12px;border-top:1px solid #d5deed}
-      #pdfExport .lh1{font-size:20px;margin:6px 0 8px;color:#14264f}
-      #pdfExport .lh1::after{display:none}
-      #pdfExport .lh2{font-size:16px;margin:10px 0 6px;color:#1f4da8}
-      #pdfExport .lp,#pdfExport .ll{background:#fff!important;border:0!important;padding:0!important;margin:0 0 8px!important;font-size:13.5px}
-      #pdfExport .ll{padding-inline-start:22px!important}
-      #pdfExport .bilingual-pair{display:block!important}
-      #pdfExport .bilingual-row{display:grid!important;grid-template-columns:1fr 1fr;gap:0;border:1px solid #d5deed;border-radius:6px;margin:0 0 6px;overflow:hidden}
-      #pdfExport .bilingual-side{background:#f7f9fd!important;color:#18233d!important;font-size:12.5px!important;line-height:1.75!important;padding:6px 9px!important;margin:0!important;border-radius:0!important}
-      #pdfExport .bilingual-side.ar{background:#fffaf0!important;border-inline-start:3px solid #d28d2d!important}
-      #pdfExport .bilingual-side.fr{border-inline-start:3px solid #1f4da8!important}
-      #pdfExport .pair-word,#pdfExport .w{background:transparent!important;color:inherit!important}
-      #pdfExport .limg{margin:10px 0;text-align:center}
-      #pdfExport .limg img{max-width:100%;max-height:260px;border-radius:6px}
-      #pdfExport .important-words,#pdfExport .grammar-points{background:#fff!important;border:1px solid #cbd7ea!important;border-radius:8px;padding:10px 12px!important;margin:16px 0 0!important}
-      #pdfExport .important-words h3,#pdfExport .grammar-points h3{font-size:16px;margin:0 0 8px;color:#14264f}
-      #pdfExport table{width:100%;border-collapse:collapse;table-layout:fixed}
-      #pdfExport th,#pdfExport td{padding:6px 8px;border-bottom:1px solid #d6deeb;text-align:start;font-size:13px;color:#111!important}
-      #pdfExport th{background:#eef3fb!important;color:#14264f!important}
-      #pdfExport .word-link{border:0;background:transparent!important;color:#14264f!important;padding:0;font-weight:800;text-decoration:none;font-family:inherit;font-size:13px}
-      #pdfExport .grammar-card{background:#f7f9fd!important;border-inline-start:3px solid #d28d2d;border-radius:8px;padding:8px 10px;margin:8px 0}
-      #pdfExport .grammar-card h4{margin:0 0 5px;color:#1f4da8;font-size:14px}
-      #pdfExport .grammar-card p{margin:0 0 6px;color:#111}
-      #pdfExport .grammar-example{background:#fff!important;color:#111!important;padding:6px 8px;border-radius:6px;direction:ltr;text-align:left}
-      #pdfExport .grammar-translation{color:#6c4b16!important;padding:4px 8px}
-    </style><h1 class="pdf-title">${esc(l.title)}</h1>`;
+    root.id = "pdfExport"; root.dir = "rtl";
+    root.innerHTML = `<style>${PDF_CSS}</style><h1 class="pdf-title">${esc(l.title)}</h1>`;
     const body = $("#txt").cloneNode(true);
     body.removeAttribute("id");
     body.querySelectorAll(".sti,.pti,.paragraph-tools").forEach(x => x.remove());
@@ -1550,19 +1593,50 @@ async function downloadLessonPdf(l, btn) {
       const el = app.querySelector("." + c);
       if (el && !el.querySelector("p.mut")) root.appendChild(el.cloneNode(true));
     });
+    host.appendChild(root); document.body.appendChild(host);
+
+    // نقسّم الدرس لوحدات صغيرة عشان كل وحدة تتصور لوحدها (يمنع الصفحات الفاضية والمقطوعة)
+    const units = [root.querySelector(".pdf-title")];
+    body.querySelectorAll(":scope > .lsec > *").forEach(c => {
+      const rows = c.querySelectorAll(".bilingual-row");
+      if (rows.length && !c.classList.contains("lans")) rows.forEach(r => units.push(r)); else units.push(c);
+    });
+    root.querySelectorAll(":scope > .important-words").forEach(el => units.push(el));
+    root.querySelectorAll(":scope > .grammar-points").forEach(el => { const h = el.querySelector("h3"); if (h) units.push(h); el.querySelectorAll(".grammar-card,p.mut").forEach(x => units.push(x)); });
+
+    const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    const M = 10, W = 190, PH = 277, GAP = 1.5, mmPerPx = W / 718 / 2;
+    let y = M, drawn = 0;
+    for (let i = 0; i < units.length; i++) {
+      btn.textContent = `⏳ ${i + 1} / ${units.length}`;
+      const cv = await window.html2canvas(units[i], { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false });
+      if (!cv.width || !cv.height) continue;
+      const w = Math.min(W, cv.width * mmPerPx), h = cv.height * mmPerPx;
+      if (h <= PH) {
+        if (y + h > M + PH) { pdf.addPage(); y = M; }
+        pdf.addImage(cv.toDataURL("image/jpeg", 0.92), "JPEG", M, y, w, h); y += h + GAP; drawn++;
+      } else {
+        if (y > M) { pdf.addPage(); y = M; }
+        const slice = Math.floor(PH / mmPerPx);
+        for (let sy = 0; sy < cv.height; sy += slice) {
+          const sh = Math.min(slice, cv.height - sy), tmp = document.createElement("canvas");
+          tmp.width = cv.width; tmp.height = sh;
+          tmp.getContext("2d").drawImage(cv, 0, sy, cv.width, sh, 0, 0, cv.width, sh);
+          if (sy > 0) pdf.addPage();
+          pdf.addImage(tmp.toDataURL("image/jpeg", 0.92), "JPEG", M, M, w, sh * mmPerPx);
+          y = M + sh * mmPerPx + GAP;
+        }
+        drawn++;
+      }
+    }
+    if (!drawn) throw new Error("لم يتم تجهيز أي محتوى للملف");
     const safeName = String(l.title || "lesson").replace(/[\\/:*?"<>|]+/g, " ").trim() || "lesson";
-    await h2p().set({
-      margin: [10, 10, 10, 10],
-      filename: safeName + ".pdf",
-      image: { type: "jpeg", quality: 0.95 },
-      html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", scrollY: 0 },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-      pagebreak: { mode: ["css", "legacy"], avoid: [".bilingual-row", ".lp", ".grammar-card", "tr", "h3", "h4", ".limg"] }
-    }).from(root).save();
+    pdf.save(safeName + ".pdf");
   } catch (e) {
     console.error(e);
     alert("تعذر تحميل الملف: " + (e.message || e.code || ""));
   } finally {
+    if (host) host.remove();
     btn.disabled = false; btn.textContent = old;
   }
 }
