@@ -1536,34 +1536,44 @@ function loadPdfScript(src, test) {
 const PDF_CSS = `
   #pdfExport{width:718px;background:#fff;color:#111;font-family:Cairo,Arial,sans-serif;line-height:1.7;box-sizing:border-box;padding:0;margin:0}
   #pdfExport *{box-shadow:none!important;animation:none!important;transition:none!important;backdrop-filter:none!important;text-shadow:none!important}
-  #pdfExport .pdf-title{font-size:26px;margin:0 0 10px;color:#14264f;direction:ltr;text-align:left;font-family:Fraunces,Georgia,serif;padding-bottom:8px;border-bottom:3px solid #1f4da8}
+  #pdfExport .pdf-banner{background:linear-gradient(135deg,#0d1a38 0%,#14264f 55%,#1f4da8 100%);border:3px solid #c19a4b;border-radius:16px;padding:10px;margin:0 0 14px}
+  #pdfExport .pdf-frame{border:1px solid #e3c476;border-radius:10px;padding:20px 24px 18px;text-align:center}
+  #pdfExport .pdf-orn{display:flex;align-items:center;justify-content:center;gap:10px;height:14px}
+  #pdfExport .pdf-orn b{display:block;height:2px;width:110px;background:linear-gradient(90deg,rgba(227,196,118,0),#e3c476)}
+  #pdfExport .pdf-orn b.r{background:linear-gradient(270deg,rgba(227,196,118,0),#e3c476)}
+  #pdfExport .pdf-orn i{display:block;width:9px;height:9px;background:#e3c476;transform:rotate(45deg)}
+  #pdfExport .pdf-orn i.s{width:6px;height:6px}
+  #pdfExport .pdf-title{font-size:32px;font-weight:700;line-height:1.35;margin:12px 0 8px;color:#fff!important;text-align:center;font-family:Fraunces,Georgia,Cairo,serif;border:0;padding:0;letter-spacing:.3px}
+  #pdfExport .pdf-sub{font-size:12.5px;color:#e3c476;margin:0 0 12px;font-family:Cairo,Arial,sans-serif;letter-spacing:.4px}
+  #pdfExport .pdf-flag{display:flex;justify-content:center;gap:0;height:5px;width:130px;margin:0 auto;border-radius:3px;overflow:hidden}
+  #pdfExport .pdf-flag i{display:block;flex:1}
   #pdfExport .text{background:#fff!important;border:0!important;padding:0!important;margin:0!important;font-size:14px!important;line-height:1.8!important;color:#111!important;white-space:normal!important;overflow:visible!important;position:static!important}
-  #pdfExport .lsec{margin:0 0 6px;padding:0}
-  #pdfExport .lsec+.lsec{margin-top:10px;padding-top:0;border-top:0}
+  #pdfExport .lsec{margin:0 0 4px;padding:0}
+  #pdfExport .lsec+.lsec{margin-top:6px;padding-top:0;border-top:0}
   #pdfExport .lh1{font-size:20px;margin:6px 0 8px;color:#14264f!important}
   #pdfExport .lh1::after{display:none}
-  #pdfExport .lh2{font-size:16px;margin:10px 0 6px;color:#1f4da8!important;border-inline-start:0!important;padding-inline-start:0!important}
-  #pdfExport .lp,#pdfExport .ll{background:#fff!important;border:0!important;padding:0!important;margin:0 0 8px!important;font-size:13.5px;color:#111!important;overflow:visible!important}
+  #pdfExport .lh2{font-size:16px;margin:8px 0 6px;color:#1f4da8!important;border-inline-start:0!important;padding-inline-start:0!important}
+  #pdfExport .lp,#pdfExport .ll{background:#fff!important;border:0!important;padding:0!important;margin:0 0 6px!important;font-size:13.5px;color:#111!important;overflow:visible!important}
   #pdfExport .ll{padding-inline-start:22px!important}
   #pdfExport .bilingual-pair{display:block!important}
-  #pdfExport .bilingual-row{display:grid!important;grid-template-columns:1fr 1fr;gap:0;border:1px solid #d5deed;border-radius:6px;margin:0 0 6px;overflow:hidden}
+  #pdfExport .bilingual-row{display:grid!important;grid-template-columns:1fr 1fr;gap:0;border:1px solid #d5deed;border-radius:6px;margin:0 0 5px;overflow:hidden}
   #pdfExport .bilingual-side{background:#f7f9fd!important;color:#18233d!important;font-size:12.5px!important;line-height:1.75!important;padding:6px 9px!important;margin:0!important;border-radius:0!important;border-top:0!important}
   #pdfExport .bilingual-side.ar{background:#fffaf0!important;border-inline-start:3px solid #d28d2d!important}
   #pdfExport .bilingual-side.fr{border-inline-start:3px solid #1f4da8!important}
-  #pdfExport .pair-word,#pdfExport .w,#pdfExport .tts-sentence{background:transparent!important;color:inherit!important;box-shadow:none!important}
-  #pdfExport .limg{margin:10px 0;text-align:center}
-  #pdfExport .limg img{max-width:100%;max-height:260px;border-radius:6px;box-shadow:none}
-  #pdfExport .lans{margin:8px 0 10px;padding:8px 12px;border-radius:8px;background:#effaf3!important;border:1px solid #9fdcb8!important;border-inline-start:5px solid #17a05d!important;color:#0b3d26!important;overflow:visible!important;position:static!important}
+  #pdfExport .pair-word,#pdfExport .w,#pdfExport .tts-sentence{background:transparent!important;color:inherit!important}
+  #pdfExport .limg{margin:8px 0;text-align:center}
+  #pdfExport .limg img{max-width:100%;max-height:260px;border-radius:6px}
+  #pdfExport .lans{margin:6px 0 8px;padding:8px 12px;border-radius:8px;background:#effaf3!important;border:1px solid #9fdcb8!important;border-inline-start:5px solid #17a05d!important;color:#0b3d26!important;overflow:visible!important;position:static!important}
   #pdfExport .lans::before{content:"✅ حل الذكاء الاصطناعي";display:block;font-weight:800;font-size:12px;color:#0e7a44!important;margin-bottom:4px;direction:rtl;text-align:right}
   #pdfExport .lans .lp{background:transparent!important;color:#0b3d26!important;margin:0!important}
   #pdfExport .lans .bilingual-side{background:transparent!important;color:#0b3d26!important}
-  #pdfExport .important-words,#pdfExport .grammar-points{background:#fff!important;border:1px solid #cbd7ea!important;border-radius:8px;padding:10px 12px!important;margin:12px 0 0!important}
+  #pdfExport .important-words,#pdfExport .grammar-points{background:#fff!important;border:1px solid #cbd7ea!important;border-radius:8px;padding:10px 12px!important;margin:10px 0 0!important}
   #pdfExport .important-words h3,#pdfExport .grammar-points h3{font-size:16px;margin:0 0 8px;color:#14264f!important}
   #pdfExport table{width:100%;border-collapse:collapse;table-layout:fixed}
   #pdfExport th,#pdfExport td{padding:6px 8px;border-bottom:1px solid #d6deeb;text-align:start;font-size:13px;color:#111!important;background:transparent!important}
   #pdfExport th{background:#eef3fb!important;color:#14264f!important}
   #pdfExport .word-link{border:0;background:transparent!important;color:#14264f!important;padding:0;font-weight:800;text-decoration:none;font-family:inherit;font-size:13px}
-  #pdfExport .grammar-card{background:#f7f9fd!important;border-inline-start:3px solid #d28d2d;border-radius:8px;padding:8px 10px;margin:8px 0}
+  #pdfExport .grammar-card{background:#f7f9fd!important;border-inline-start:3px solid #d28d2d;border-radius:8px;padding:8px 10px;margin:6px 0}
   #pdfExport .grammar-card h4{margin:0 0 5px;color:#1f4da8!important;font-size:14px}
   #pdfExport .grammar-card p{margin:0 0 6px;color:#111!important}
   #pdfExport .grammar-example{background:#fff!important;color:#111!important;padding:6px 8px;border-radius:6px;direction:ltr;text-align:left}
@@ -1583,7 +1593,7 @@ async function downloadLessonPdf(l, btn) {
     host.style.cssText = "position:absolute;left:-10000px;top:0;width:718px;background:#fff;pointer-events:none";
     const root = document.createElement("div");
     root.id = "pdfExport"; root.dir = "rtl";
-    root.innerHTML = `<style>${PDF_CSS}</style><h1 class="pdf-title">${esc(l.title)}</h1>`;
+    root.innerHTML = `<style>${PDF_CSS}</style><div class="pdf-banner"><div class="pdf-frame"><div class="pdf-orn"><b></b><i class="s"></i><i></i><i class="s"></i><b class="r"></b></div><h1 class="pdf-title">${esc(l.title)}</h1><div class="pdf-sub">Département de français · قسم اللغة الفرنسية</div><div class="pdf-flag"><i style="background:#4a7be0"></i><i style="background:#fff"></i><i style="background:#e0444d"></i></div></div></div>`;
     const body = $("#txt").cloneNode(true);
     body.removeAttribute("id");
     body.querySelectorAll(".sti,.pti,.paragraph-tools").forEach(x => x.remove());
@@ -1595,39 +1605,44 @@ async function downloadLessonPdf(l, btn) {
     });
     host.appendChild(root); document.body.appendChild(host);
 
-    // نقسّم الدرس لوحدات صغيرة عشان كل وحدة تتصور لوحدها (يمنع الصفحات الفاضية والمقطوعة)
-    const units = [root.querySelector(".pdf-title")];
+    const units = [root.querySelector(".pdf-banner")];
     body.querySelectorAll(":scope > .lsec > *").forEach(c => {
       const rows = c.querySelectorAll(".bilingual-row");
       if (rows.length && !c.classList.contains("lans")) rows.forEach(r => units.push(r)); else units.push(c);
     });
     root.querySelectorAll(":scope > .important-words").forEach(el => units.push(el));
-    root.querySelectorAll(":scope > .grammar-points").forEach(el => { const h = el.querySelector("h3"); if (h) units.push(h); el.querySelectorAll(".grammar-card,p.mut").forEach(x => units.push(x)); });
+    root.querySelectorAll(":scope > .grammar-points").forEach(el => { const h = el.querySelector("h3"); if (h) units.push(h); el.querySelectorAll(".grammar-card").forEach(x => units.push(x)); });
 
     const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-    const M = 10, W = 190, PH = 277, GAP = 1.5, mmPerPx = W / 718 / 2;
+    const M = 10, W = 190, PH = 277, GAP = 1, MIN_FILL = 30, mmPerPx = W / 718 / 2;
     let y = M, drawn = 0;
+    const isHead = el => !!el.closest(".lh1,.lh2") || el.tagName === "H3";
+    const noSplit = el => el.matches(".pdf-banner,.bilingual-row,.limg,.grammar-card") || isHead(el);
+    // يدوّر على سطر أبيض تمامًا قرب نقطة القص عشان ما يقطعش في نص سطر
+    const rowBlank = (ctx, w, yy) => { const d = ctx.getImageData(14, yy, Math.max(1, w - 28), 1).data; for (let i = 0; i < d.length; i += 4) if (d[i] < 242 || d[i + 1] < 242 || d[i + 2] < 242) return false; return true; };
+    const draw = (cv, sy, sh) => {
+      const w = Math.min(W, cv.width * mmPerPx), h = sh * mmPerPx;
+      let data;
+      if (sy === 0 && sh === cv.height) data = cv.toDataURL("image/jpeg", 0.92);
+      else { const t = document.createElement("canvas"); t.width = cv.width; t.height = sh; t.getContext("2d").drawImage(cv, 0, sy, cv.width, sh, 0, 0, cv.width, sh); data = t.toDataURL("image/jpeg", 0.92); }
+      pdf.addImage(data, "JPEG", M, y, w, h); y += h + GAP;
+    };
     for (let i = 0; i < units.length; i++) {
       btn.textContent = `⏳ ${i + 1} / ${units.length}`;
-      const cv = await window.html2canvas(units[i], { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false });
+      const el = units[i], cv = await window.html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false });
       if (!cv.width || !cv.height) continue;
-      const w = Math.min(W, cv.width * mmPerPx), h = cv.height * mmPerPx;
-      if (h <= PH) {
-        if (y + h > M + PH) { pdf.addPage(); y = M; }
-        pdf.addImage(cv.toDataURL("image/jpeg", 0.92), "JPEG", M, y, w, h); y += h + GAP; drawn++;
-      } else {
-        if (y > M) { pdf.addPage(); y = M; }
-        const slice = Math.floor(PH / mmPerPx);
-        for (let sy = 0; sy < cv.height; sy += slice) {
-          const sh = Math.min(slice, cv.height - sy), tmp = document.createElement("canvas");
-          tmp.width = cv.width; tmp.height = sh;
-          tmp.getContext("2d").drawImage(cv, 0, sy, cv.width, sh, 0, 0, cv.width, sh);
-          if (sy > 0) pdf.addPage();
-          pdf.addImage(tmp.toDataURL("image/jpeg", 0.92), "JPEG", M, M, w, sh * mmPerPx);
-          y = M + sh * mmPerPx + GAP;
-        }
-        drawn++;
+      const ctx = cv.getContext("2d"), fullH = cv.height * mmPerPx, nosplit = noSplit(el);
+      if (isHead(el) && y > M && (M + PH - y) < fullH + 25) { pdf.addPage(); y = M; }
+      let sy = 0, guard = 0;
+      while (sy < cv.height && guard++ < 200) {
+        const remPx = Math.floor((M + PH - y) / mmPerPx), left = cv.height - sy;
+        if (left <= remPx) { draw(cv, sy, left); sy = cv.height; break; }
+        if (y > M && (nosplit || remPx * mmPerPx < MIN_FILL)) { pdf.addPage(); y = M; continue; }
+        let cut = remPx;
+        if (!nosplit) for (let c = remPx; c > remPx * 0.6; c--) { if (rowBlank(ctx, cv.width, sy + c)) { cut = c; break; } }
+        draw(cv, sy, cut); sy += cut; pdf.addPage(); y = M;
       }
+      drawn++;
     }
     if (!drawn) throw new Error("لم يتم تجهيز أي محتوى للملف");
     const safeName = String(l.title || "lesson").replace(/[\\/:*?"<>|]+/g, " ").trim() || "lesson";
