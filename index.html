@@ -1490,6 +1490,83 @@ function speakLesson(text, button) {
 }
 
 /* ---------- الدرس ---------- */
+/* ---------- تحميل الدرس PDF مباشرة (بدون طباعة) ---------- */
+let html2pdfPromise = null;
+function loadHtml2Pdf() {
+  return html2pdfPromise || (html2pdfPromise = new Promise((res, rej) => {
+    if (window.html2pdf) return res(window.html2pdf);
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+    s.onload = () => window.html2pdf ? res(window.html2pdf) : rej(new Error("تعذر تحميل مكتبة PDF"));
+    s.onerror = () => { html2pdfPromise = null; rej(new Error("تعذر تحميل مكتبة PDF. تأكد من الإنترنت.")); };
+    document.head.appendChild(s);
+  }));
+}
+async function downloadLessonPdf(l, btn) {
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = "⏳ جاري تجهيز الملف...";
+  try {
+    const h2p = await loadHtml2Pdf();
+    const root = document.createElement("div");
+    root.id = "pdfExport";
+    root.innerHTML = `<style>
+      #pdfExport{width:718px;background:#fff;color:#111;font-family:Cairo,Arial,sans-serif;line-height:1.7;box-sizing:border-box}
+      #pdfExport *{box-shadow:none!important;animation:none!important;transition:none!important}
+      #pdfExport .pdf-title{font-size:26px;margin:0 0 6px;color:#14264f;direction:ltr;text-align:left;font-family:Fraunces,Georgia,serif}
+      #pdfExport .pdf-title::after{content:"";display:block;width:60px;height:3px;margin-top:8px;background:#1f4da8}
+      #pdfExport .text{background:#fff!important;border:0!important;padding:0!important;margin:0!important;font-size:14px!important;line-height:1.8!important;color:#111!important;white-space:normal!important}
+      #pdfExport .lsec+.lsec{margin-top:14px;padding-top:12px;border-top:1px solid #d5deed}
+      #pdfExport .lh1{font-size:20px;margin:6px 0 8px;color:#14264f}
+      #pdfExport .lh1::after{display:none}
+      #pdfExport .lh2{font-size:16px;margin:10px 0 6px;color:#1f4da8}
+      #pdfExport .lp,#pdfExport .ll{background:#fff!important;border:0!important;padding:0!important;margin:0 0 8px!important;font-size:13.5px}
+      #pdfExport .ll{padding-inline-start:22px!important}
+      #pdfExport .bilingual-pair{display:block!important}
+      #pdfExport .bilingual-row{display:grid!important;grid-template-columns:1fr 1fr;gap:0;border:1px solid #d5deed;border-radius:6px;margin:0 0 6px;overflow:hidden}
+      #pdfExport .bilingual-side{background:#f7f9fd!important;color:#18233d!important;font-size:12.5px!important;line-height:1.75!important;padding:6px 9px!important;margin:0!important;border-radius:0!important}
+      #pdfExport .bilingual-side.ar{background:#fffaf0!important;border-inline-start:3px solid #d28d2d!important}
+      #pdfExport .bilingual-side.fr{border-inline-start:3px solid #1f4da8!important}
+      #pdfExport .pair-word,#pdfExport .w{background:transparent!important;color:inherit!important}
+      #pdfExport .limg{margin:10px 0;text-align:center}
+      #pdfExport .limg img{max-width:100%;max-height:260px;border-radius:6px}
+      #pdfExport .important-words,#pdfExport .grammar-points{background:#fff!important;border:1px solid #cbd7ea!important;border-radius:8px;padding:10px 12px!important;margin:16px 0 0!important}
+      #pdfExport .important-words h3,#pdfExport .grammar-points h3{font-size:16px;margin:0 0 8px;color:#14264f}
+      #pdfExport table{width:100%;border-collapse:collapse;table-layout:fixed}
+      #pdfExport th,#pdfExport td{padding:6px 8px;border-bottom:1px solid #d6deeb;text-align:start;font-size:13px;color:#111!important}
+      #pdfExport th{background:#eef3fb!important;color:#14264f!important}
+      #pdfExport .word-link{border:0;background:transparent!important;color:#14264f!important;padding:0;font-weight:800;text-decoration:none;font-family:inherit;font-size:13px}
+      #pdfExport .grammar-card{background:#f7f9fd!important;border-inline-start:3px solid #d28d2d;border-radius:8px;padding:8px 10px;margin:8px 0}
+      #pdfExport .grammar-card h4{margin:0 0 5px;color:#1f4da8;font-size:14px}
+      #pdfExport .grammar-card p{margin:0 0 6px;color:#111}
+      #pdfExport .grammar-example{background:#fff!important;color:#111!important;padding:6px 8px;border-radius:6px;direction:ltr;text-align:left}
+      #pdfExport .grammar-translation{color:#6c4b16!important;padding:4px 8px}
+    </style><h1 class="pdf-title">${esc(l.title)}</h1>`;
+    const body = $("#txt").cloneNode(true);
+    body.removeAttribute("id");
+    body.querySelectorAll(".sti,.pti,.paragraph-tools").forEach(x => x.remove());
+    body.querySelectorAll(".reading,.pair-active,.word-focus").forEach(x => x.classList.remove("reading", "pair-active", "word-focus"));
+    root.appendChild(body);
+    ["important-words", "grammar-points"].forEach(c => {
+      const el = app.querySelector("." + c);
+      if (el && !el.querySelector("p.mut")) root.appendChild(el.cloneNode(true));
+    });
+    const safeName = String(l.title || "lesson").replace(/[\\/:*?"<>|]+/g, " ").trim() || "lesson";
+    await h2p().set({
+      margin: [10, 10, 10, 10],
+      filename: safeName + ".pdf",
+      image: { type: "jpeg", quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", scrollY: 0 },
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      pagebreak: { mode: ["css", "legacy"], avoid: [".bilingual-row", ".lp", ".grammar-card", "tr", "h3", "h4", ".limg"] }
+    }).from(root).save();
+  } catch (e) {
+    console.error(e);
+    alert("تعذر تحميل الملف: " + (e.message || e.code || ""));
+  } finally {
+    btn.disabled = false; btn.textContent = old;
+  }
+}
+
 async function lesson(l, sub, startKey) {
   try { Object.assign(l, await getContent(l)); } catch (e) { return alert("الدرس مقفول 🔒 — لازم تنجح في اختبار الدرس اللي قبله الأول"); }
   const rawQs = await list(`lessons/${l.id}/questions`), yt = ytId(l.youtube), ytA = ytId(l.youtubeAr), myAtts = user ? (await list("attempts", "uid", user.uid)).filter(a => a.lessonId === l.id) : [];
@@ -1511,7 +1588,7 @@ async function lesson(l, sub, startKey) {
     <section class="pane" id="p_grammar">${grammarHtml}<div class="lesson-nav-actions"><button type="button" data-next="1">التالي: الاختبار ←</button></div></section>
     <section class="pane" id="p_exam"><h3>الاختبار</h3><div class="q" id="quizBar"><span id="quizStatus">${qs.length ? `الاختبار: ${qs.length} سؤال — الدرجة الكلية ${totalPts} — المدة ${Math.round(examSecs / 60)} دقيقة — النجاح من ${passPct}%` : "مفيش اختبار للدرس ده لسه."}</span><span id="quizTimer" class="score" style="display:none"></span><div class="question-progress" style="flex:1;min-width:120px"><div class="progress-track"><div id="quizFill" class="progress-fill" style="width:0%"></div></div></div><button id="startQuiz">ابدأ الاختبار</button><button id="finishQuiz" class="sec" style="display:none">إنهاء الاختبار</button></div><div id="quizResult"></div><div id="qs" style="display:none"></div></section>`;
   $("#back").onclick = () => { stopLessonSpeech(); window.lessonCtx = null; clearInterval(quizTimer); lessons(sub); };
-  $("#exportPdf").onclick = () => { document.body.classList.add("printing"); setTimeout(() => { window.print(); setTimeout(() => document.body.classList.remove("printing"), 500); }, 30); };
+  $("#exportPdf").onclick = () => downloadLessonPdf(l, $("#exportPdf"));
   $("#speakLesson").onclick = () => speakLesson(l.text || "", $("#speakLesson"));
   if (user) await setDoc(doc(db, "progress", `${user.uid}_${l.id}`), { uid:user.uid, lessonId:l.id, subjectId:sub.id, lastOpened:serverTimestamp() }, {merge:true});
   app.querySelectorAll(".completeLessonBtn").forEach(btn => btn.onclick = async () => { if(user){ await setDoc(doc(db,"progress",`${user.uid}_${l.id}`), {uid:user.uid, lessonId:l.id, subjectId:sub.id, completed:true, completedAt:serverTimestamp()}, {merge:true}); app.querySelectorAll(".completeLessonBtn").forEach(x => x.textContent="✓ تم إتمام الدرس"); } });
