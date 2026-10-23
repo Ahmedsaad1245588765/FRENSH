@@ -2361,7 +2361,7 @@ async function createGraduationProject(g){
   const directory=await groupStudents().catch(()=>[]), nameOf=uid=>directory.find(x=>x.id===uid)?.name||uid.slice(0,8);
   form("إنشاء مساحة مشروع التخرج",[{n:"title",l:"اسم المشروع",v:g.name||""}],async v=>{
     const title=String(v.title||"").trim();if(!title)return alert("اكتب اسم المشروع.");
-    const minutesPerStudent=3, project={groupId:g.id,groupName:g.name||"",title,presentationMinutes:members.length*minutesPerStudent,minutesPerStudent,members,managerUid:user.uid,createdBy:user.uid,createdAt:serverTimestamp(),updatedAt:serverTimestamp(),fixedTeamParts:true};
+    const minutesPerStudent=3, project={groupId:g.id,groupName:g.name||"",title,presentationMinutes:members.length*minutesPerStudent,minutesPerStudent,members,managerUid:user.uid,createdBy:user.uid,pdfUrl:"",summary:"",createdAt:serverTimestamp(),updatedAt:serverTimestamp()};
     let stage="";
     try{
       stage="حفظ بيانات المشروع";
