@@ -1639,16 +1639,15 @@ function loadPdfScript(src, test) {
 const PDF_CSS = `
   #pdfExport{width:718px;background:#fff;color:#111;font-family:Cairo,Arial,sans-serif;line-height:1.7;box-sizing:border-box;padding:0;margin:0}
   #pdfExport *{box-shadow:none!important;animation:none!important;transition:none!important;backdrop-filter:none!important;text-shadow:none!important}
-  #pdfExport .pdf-banner{background:linear-gradient(135deg,#0d1a38 0%,#14264f 55%,#1f4da8 100%);border:3px solid #c19a4b;border-radius:16px;padding:10px;margin:0 0 14px}
-  #pdfExport .pdf-frame{border:1px solid #e3c476;border-radius:10px;padding:20px 24px 18px;text-align:center}
+  #pdfExport .pdf-banner{background:linear-gradient(135deg,#eef3fd 0%,#ffffff 55%,#fdf4de 100%);border:2px solid #c19a4b;border-radius:16px;padding:7px;margin:0 0 14px}
+  #pdfExport .pdf-frame{border:1px solid #b9c9ec;border-radius:11px;padding:16px 22px 14px;text-align:center}
   #pdfExport .pdf-orn{display:flex;align-items:center;justify-content:center;gap:10px;height:14px}
-  #pdfExport .pdf-orn b{display:block;height:2px;width:110px;background:linear-gradient(90deg,rgba(227,196,118,0),#e3c476)}
-  #pdfExport .pdf-orn b.r{background:linear-gradient(270deg,rgba(227,196,118,0),#e3c476)}
-  #pdfExport .pdf-orn i{display:block;width:9px;height:9px;background:#e3c476;transform:rotate(45deg)}
-  #pdfExport .pdf-orn i.s{width:6px;height:6px}
-  #pdfExport .pdf-title{font-size:32px;font-weight:700;line-height:1.35;margin:12px 0 8px;color:#fff!important;text-align:center;font-family:Fraunces,Georgia,Cairo,serif;border:0;padding:0;letter-spacing:.3px}
-  #pdfExport .pdf-sub{font-size:12.5px;color:#e3c476;margin:0 0 12px;font-family:Cairo,Arial,sans-serif;letter-spacing:.4px}
-  #pdfExport .pdf-flag{display:flex;justify-content:center;gap:0;height:5px;width:130px;margin:0 auto;border-radius:3px;overflow:hidden}
+  #pdfExport .pdf-orn b{display:block;height:2px;width:110px;background:linear-gradient(90deg,rgba(193,154,75,0),#c19a4b)}
+  #pdfExport .pdf-orn b.r{background:linear-gradient(270deg,rgba(193,154,75,0),#c19a4b)}
+  #pdfExport .pdf-orn i{display:block;width:9px;height:9px;background:#c19a4b;transform:rotate(45deg)}
+  #pdfExport .pdf-orn i.s{width:6px;height:6px;background:#2456bd}
+  #pdfExport .pdf-title{font-size:30px;font-weight:700;line-height:1.4;margin:10px 0 10px;color:#14264f!important;text-align:center;font-family:Fraunces,Georgia,Cairo,serif;border:0;padding:0;letter-spacing:0}
+  #pdfExport .pdf-flag{display:flex;justify-content:center;gap:0;height:5px;width:130px;margin:0 auto;border-radius:3px;overflow:hidden;border:1px solid #cdd8ef}
   #pdfExport .pdf-flag i{display:block;flex:1}
   #pdfExport .text{background:#fff!important;border:0!important;padding:0!important;margin:0!important;font-size:14px!important;line-height:1.8!important;color:#111!important;white-space:normal!important;overflow:visible!important;position:static!important}
   #pdfExport .lsec{margin:0 0 4px;padding:0}
@@ -1685,18 +1684,16 @@ const PDF_CSS = `
 async function downloadLessonPdf(l, btn) {
   const old = btn.textContent;
   btn.disabled = true; btn.textContent = "⏳ جاري تجهيز الملف...";
-  let host = null;
+  let frame = null;
   try {
     await Promise.all([
       loadPdfScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js", () => !!window.html2canvas),
       loadPdfScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", () => !!(window.jspdf && window.jspdf.jsPDF))
     ]);
-    if (document.fonts && document.fonts.ready) await document.fonts.ready.catch(() => {});
-    host = document.createElement("div");
-    host.style.cssText = "position:absolute;left:-10000px;top:0;width:718px;background:#fff;pointer-events:none";
+    // نجهّز محتوى الملف
     const root = document.createElement("div");
-    root.id = "pdfExport"; root.dir = "rtl";
-    root.innerHTML = `<style>${PDF_CSS}</style><div class="pdf-banner"><div class="pdf-frame"><div class="pdf-orn"><b></b><i class="s"></i><i></i><i class="s"></i><b class="r"></b></div><h1 class="pdf-title">${esc(l.title)}</h1><div class="pdf-sub">Département de français · قسم اللغة الفرنسية</div><div class="pdf-flag"><i style="background:#4a7be0"></i><i style="background:#fff"></i><i style="background:#e0444d"></i></div></div></div>`;
+    root.id = "pdfExport";
+    root.innerHTML = `<div class="pdf-banner"><div class="pdf-frame"><div class="pdf-orn"><b></b><i class="s"></i><i></i><i class="s"></i><b class="r"></b></div><h1 class="pdf-title" dir="auto">${esc(l.title)}</h1><div class="pdf-flag"><i style="background:#2456bd"></i><i style="background:#fff"></i><i style="background:#e0444d"></i></div></div></div>`;
     const body = $("#txt").cloneNode(true);
     body.removeAttribute("id");
     body.querySelectorAll(".sti,.pti,.paragraph-tools").forEach(x => x.remove());
@@ -1706,46 +1703,88 @@ async function downloadLessonPdf(l, btn) {
       const el = app.querySelector("." + c);
       if (el && !el.querySelector("p.mut")) root.appendChild(el.cloneNode(true));
     });
-    host.appendChild(root); document.body.appendChild(host);
 
-    const units = [root.querySelector(".pdf-banner")];
-    body.querySelectorAll(":scope > .lsec > *").forEach(c => {
+    // نصوّر الملف داخل iframe خفيف (أسرع بكتير من تصوير الصفحة الكاملة)
+    const pageCss = [...document.querySelectorAll("style")].map(x => x.textContent).join("\n");
+    frame = document.createElement("iframe");
+    frame.style.cssText = "position:fixed;left:-10000px;top:0;width:718px;height:900px;border:0;pointer-events:none";
+    document.body.appendChild(frame);
+    const fd = frame.contentDocument;
+    fd.open();
+    fd.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&family=Fraunces:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet"><style>${pageCss}</style><style>html,body{margin:0!important;padding:0!important;background:#fff!important;overflow:visible!important;min-height:0!important;animation:none!important}body:before,body:after{display:none!important}${PDF_CSS}</style></head><body>${root.outerHTML}</body></html>`);
+    fd.close();
+    await new Promise(res => { let done = false; const fin = () => { if (!done) { done = true; res(); } }; if (fd.readyState === "complete") setTimeout(fin, 50); else frame.addEventListener("load", fin); setTimeout(fin, 5000); });
+    if (fd.fonts && fd.fonts.ready) await Promise.race([fd.fonts.ready, new Promise(r => setTimeout(r, 3000))]);
+    await Promise.all([...fd.images].map(im => im.decode ? im.decode().catch(() => {}) : null));
+    const rootEl = fd.getElementById("pdfExport");
+    frame.style.height = Math.max(900, rootEl.scrollHeight) + "px";
+
+    // وحدات الصفحة (كل وحدة بتتحط كاملة في الصفحة)
+    const units = [rootEl.querySelector(".pdf-banner")];
+    rootEl.querySelectorAll(":scope > .text > .lsec > *").forEach(c => {
       const rows = c.querySelectorAll(".bilingual-row");
       if (rows.length && !c.classList.contains("lans")) rows.forEach(r => units.push(r)); else units.push(c);
     });
-    root.querySelectorAll(":scope > .important-words").forEach(el => units.push(el));
-    root.querySelectorAll(":scope > .grammar-points").forEach(el => { const h = el.querySelector("h3"); if (h) units.push(h); el.querySelectorAll(".grammar-card").forEach(x => units.push(x)); });
+    rootEl.querySelectorAll(":scope > .important-words").forEach(el => units.push(el));
+    rootEl.querySelectorAll(":scope > .grammar-points").forEach(el => { const h = el.querySelector("h3"); if (h) units.push(h); el.querySelectorAll(".grammar-card").forEach(x => units.push(x)); });
 
     const pdf = new window.jspdf.jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-    const M = 10, W = 190, PH = 277, GAP = 1, MIN_FILL = 30, mmPerPx = W / 718 / 2;
+    const M = 10, W = 190, PH = 277, GAP = 1.5, MIN_FILL = 30;
     let y = M, drawn = 0;
     const isHead = el => !!el.closest(".lh1,.lh2") || el.tagName === "H3";
     const noSplit = el => el.matches(".pdf-banner,.bilingual-row,.limg,.grammar-card") || isHead(el);
     // يدوّر على سطر أبيض تمامًا قرب نقطة القص عشان ما يقطعش في نص سطر
     const rowBlank = (ctx, w, yy) => { const d = ctx.getImageData(14, yy, Math.max(1, w - 28), 1).data; for (let i = 0; i < d.length; i += 4) if (d[i] < 242 || d[i + 1] < 242 || d[i + 2] < 242) return false; return true; };
-    const draw = (cv, sy, sh) => {
-      const w = Math.min(W, cv.width * mmPerPx), h = sh * mmPerPx;
-      let data;
-      if (sy === 0 && sh === cv.height) data = cv.toDataURL("image/jpeg", 0.92);
-      else { const t = document.createElement("canvas"); t.width = cv.width; t.height = sh; t.getContext("2d").drawImage(cv, 0, sy, cv.width, sh, 0, 0, cv.width, sh); data = t.toDataURL("image/jpeg", 0.92); }
-      pdf.addImage(data, "JPEG", M, y, w, h); y += h + GAP;
-    };
-    for (let i = 0; i < units.length; i++) {
-      btn.textContent = `⏳ ${i + 1} / ${units.length}`;
-      const el = units[i], cv = await window.html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false });
-      if (!cv.width || !cv.height) continue;
-      const ctx = cv.getContext("2d"), fullH = cv.height * mmPerPx, nosplit = noSplit(el);
+    const place = (el, cv, scale) => {
+      if (!cv.width || !cv.height) return;
+      const mm = W / 718 / scale, ctx = cv.getContext("2d"), fullH = cv.height * mm, nosplit = noSplit(el);
+      const draw = (sy, sh) => {
+        const w = Math.min(W, cv.width * mm), h = sh * mm;
+        let data;
+        if (sy === 0 && sh === cv.height) data = cv.toDataURL("image/jpeg", 0.9);
+        else { const t = document.createElement("canvas"); t.width = cv.width; t.height = sh; t.getContext("2d").drawImage(cv, 0, sy, cv.width, sh, 0, 0, cv.width, sh); data = t.toDataURL("image/jpeg", 0.9); }
+        pdf.addImage(data, "JPEG", M, y, w, h); y += h + GAP;
+      };
       if (isHead(el) && y > M && (M + PH - y) < fullH + 25) { pdf.addPage(); y = M; }
       let sy = 0, guard = 0;
-      while (sy < cv.height && guard++ < 200) {
-        const remPx = Math.floor((M + PH - y) / mmPerPx), left = cv.height - sy;
-        if (left <= remPx) { draw(cv, sy, left); sy = cv.height; break; }
-        if (y > M && (nosplit || remPx * mmPerPx < MIN_FILL)) { pdf.addPage(); y = M; continue; }
+      while (sy < cv.height && guard++ < 300) {
+        const remPx = Math.floor((M + PH - y) / mm), left = cv.height - sy;
+        if (left <= remPx) { draw(sy, left); sy = cv.height; break; }
+        if (y > M && (nosplit || remPx * mm < MIN_FILL)) { pdf.addPage(); y = M; continue; }
         let cut = remPx;
         if (!nosplit) for (let c = remPx; c > remPx * 0.6; c--) { if (rowBlank(ctx, cv.width, sy + c)) { cut = c; break; } }
-        draw(cv, sy, cut); sy += cut; pdf.addPage(); y = M;
+        draw(sy, cut); sy += cut; pdf.addPage(); y = M;
       }
       drawn++;
+    };
+
+    // نصوّر مجموعات من الوحدات في لقطة واحدة (أسرع بكتير) ونقص كل وحدة منها
+    const rr = rootEl.getBoundingClientRect();
+    const geom = units.map(el => { const r = el.getBoundingClientRect(); return { el, top: r.top - rr.top, h: r.height }; });
+    const BAND = 1800, SC = 2;
+    const shot = (el, opts) => window.html2canvas(el, { backgroundColor: "#ffffff", useCORS: true, logging: false, windowWidth: 718, ...opts });
+    let i = 0;
+    while (i < geom.length) {
+      btn.textContent = `⏳ ${Math.min(i + 1, geom.length)} / ${geom.length}`;
+      const g0 = geom[i];
+      if (g0.h < 2) { i++; continue; }
+      if (g0.h > BAND) { const sc = g0.h > 5000 ? 1.2 : SC; place(g0.el, await shot(g0.el, { scale: sc }), sc); i++; continue; }
+      let j = i;
+      while (j + 1 < geom.length && geom[j + 1].h <= BAND && geom[j + 1].top + geom[j + 1].h - g0.top <= BAND) j++;
+      const bandTop = Math.floor(g0.top), bandH = Math.ceil(geom[j].top + geom[j].h) - bandTop;
+      const big = await shot(rootEl, { scale: SC, x: 0, y: bandTop, width: 718, height: bandH });
+      const okBand = big.width >= 718 * SC - 4 && Math.abs(big.height - bandH * SC) <= 6;
+      for (let k = i; k <= j; k++) {
+        const g = geom[k]; if (g.h < 2) continue;
+        let cv;
+        if (okBand) {
+          const sy = Math.max(0, Math.round((g.top - bandTop) * SC)), sh = Math.min(big.height - sy, Math.max(1, Math.round(g.h * SC)));
+          cv = document.createElement("canvas"); cv.width = big.width; cv.height = sh;
+          cv.getContext("2d").drawImage(big, 0, sy, big.width, sh, 0, 0, big.width, sh);
+        } else cv = await shot(g.el, { scale: SC });
+        place(g.el, cv, SC);
+      }
+      i = j + 1;
     }
     if (!drawn) throw new Error("لم يتم تجهيز أي محتوى للملف");
     const safeName = String(l.title || "lesson").replace(/[\\/:*?"<>|]+/g, " ").trim() || "lesson";
@@ -1754,7 +1793,7 @@ async function downloadLessonPdf(l, btn) {
     console.error(e);
     alert("تعذر تحميل الملف: " + (e.message || e.code || ""));
   } finally {
-    if (host) host.remove();
+    if (frame) frame.remove();
     btn.disabled = false; btn.textContent = old;
   }
 }
