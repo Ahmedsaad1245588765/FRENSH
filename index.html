@@ -368,7 +368,7 @@ body.night .pen-stroke{mix-blend-mode:normal;opacity:.5}
 #penFab{position:fixed;top:50%;left:12px;transform:translateY(-50%);z-index:40;width:48px;height:48px;border-radius:50%;padding:0;font-size:1.3rem;display:none;place-items:center}
 #penFab.on{background:linear-gradient(135deg,#f5b400,#e08a00);box-shadow:0 0 0 4px rgba(255,200,40,.35),0 10px 24px rgba(224,138,0,.4)}
 ::highlight(pen){background-color:#ffd84d;color:#111}
-body.pen-on #app,body.pen-on #app *{user-select:text}
+body.pen-on #app,body.pen-on #app *{user-select:none;-webkit-user-select:none}body.pen-on #app{touch-action:none}
 
 /* ===== Mobile compact layout ===== */
 @media(max-width:760px){
@@ -3084,7 +3084,7 @@ $("#penFab").onclick = () => {
   penOn = !penOn;
   $("#penFab").classList.toggle("on", penOn);
   document.body.classList.toggle("pen-on", penOn);
-  penStyle.textContent = penOn ? `body.pen-on #app, body.pen-on #app *{cursor:${penCursor} !important}` : "";
+  penStyle.textContent = penOn ? `body.pen-on #app, body.pen-on #app *{cursor:${penCursor} !important}body.pen-painting #app, body.pen-painting #app *{cursor:none !important}` : "";
   if (!penOn) clearPen();
 };
 document.addEventListener("click", e => { if (penOn && e.target.closest("#app")) { e.stopPropagation(); e.preventDefault(); } }, true);
@@ -3170,8 +3170,101 @@ const penDone = () => {
     askTutor();
   }, 30);
 };
-document.addEventListener("mouseup", penDone);
-document.addEventListener("touchend", penDone);
+/* ---------- فرشاة: امسح بالفرشاة على الكلام فيتلوّن (من غير تحديد) ---------- */
+let penDrag = null;
+const penNodeIds = new WeakMap(); let penNodeSeq = 0;
+const penIsWordChar = ch => /[\p{L}\p{M}\p{N}'’\-]/u.test(ch || "");
+function penCaretAt(x, y) {
+  let node = null, off = 0;
+  if (document.caretPositionFromPoint) { const c = document.caretPositionFromPoint(x, y); if (c) { node = c.offsetNode; off = c.offset; } }
+  else if (document.caretRangeFromPoint) { const r = document.caretRangeFromPoint(x, y); if (r) { node = r.startContainer; off = r.startOffset; } }
+  return node && node.nodeType === 3 ? { node, off } : null;
+}
+function penWordAt(x, y) {
+  const c = penCaretAt(x, y); if (!c) return null;
+  const pe = c.node.parentElement; if (!pe || !pe.closest("#app") || pe.closest(".sti,.pti,button,select,textarea,summary")) return null;
+  const t = c.node.nodeValue; let s0 = c.off, e0 = c.off;
+  while (s0 > 0 && penIsWordChar(t[s0 - 1])) s0--;
+  while (e0 < t.length && penIsWordChar(t[e0])) e0++;
+  if (s0 === e0) return null;
+  const r = document.createRange(); r.setStart(c.node, s0); r.setEnd(c.node, e0);
+  if (![...r.getClientRects()].some(b => x >= b.left - 3 && x <= b.right + 3 && y >= b.top - 3 && y <= b.bottom + 3)) return null;
+  if (!penNodeIds.has(c.node)) penNodeIds.set(c.node, ++penNodeSeq);
+  return { key: penNodeIds.get(c.node) + ":" + s0, range: r, node: c.node, start: s0, end: e0, text: t.slice(s0, e0) };
+}
+function penDrip(layer, x, y) {
+  const drip = document.createElement("div"); drip.className = "pen-drip"; drip.style.left = (x - 3) + "px"; drip.style.top = (y - 2) + "px"; layer.appendChild(drip);
+  drip.animate([{ transform: "translateY(0) scaleY(.4)", opacity: 1 }, { transform: "translateY(8px) scaleY(1)", opacity: 1, offset: .35 }, { transform: "translateY(26px) scaleY(1.3)", opacity: 0 }], { duration: 750, easing: "ease-in", fill: "forwards" });
+  setTimeout(() => drip.remove(), 800);
+}
+function penPaintWord(w, rtl) {
+  const d = penDrag; if (!d || d.words.has(w.key)) return;
+  d.words.set(w.key, w);
+  const sx = window.scrollX, sy = window.scrollY;
+  for (const b of w.range.getClientRects()) {
+    if (b.width < 2) continue;
+    const el = document.createElement("div"); el.className = "pen-stroke";
+    el.style.cssText = `left:${b.left + sx - 2}px;top:${b.top + sy - 1}px;width:${b.width + 4}px;height:${b.height + 2}px;transform-origin:${rtl ? "right" : "left"} center;transform:scaleX(0)`;
+    d.layer.insertBefore(el, d.brush);
+    el.animate([{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], { duration: 170, easing: "ease-out", fill: "forwards" });
+    if (Math.random() < 0.1) penDrip(d.layer, rtl ? b.left + sx : b.right + sx, b.bottom + sy);
+  }
+}
+function penMoveBrush(x, y, dx) {
+  const d = penDrag; if (!d) return;
+  d.rot = Math.max(-38, Math.min(6, d.rot * 0.8 + (-14 + dx * 0.8) * 0.2));
+  d.brush.style.transform = `translate(${x + window.scrollX - 2.7}px,${y + window.scrollY - 31.3}px) rotate(${d.rot}deg)`;
+}
+function penSample(x, y, dir) { const w = penWordAt(x, y); if (w) penPaintWord(w, dir < 0); }
+function penMove(e) {
+  const d = penDrag; if (!d || e.pointerId !== d.id) return;
+  e.preventDefault();
+  const dx = e.clientX - d.x, dy = e.clientY - d.y, steps = Math.min(80, Math.max(1, Math.ceil(Math.hypot(dx, dy) / 5)));
+  for (let i = 1; i <= steps; i++) penSample(d.x + dx * i / steps, d.y + dy * i / steps, dx >= 0 ? 1 : -1);
+  d.x = e.clientX; d.y = e.clientY; penMoveBrush(e.clientX, e.clientY, dx);
+}
+function penUp(e) {
+  const d = penDrag; if (!d || (e && e.pointerId !== undefined && e.pointerId !== d.id)) return;
+  penDrag = null;
+  document.removeEventListener("pointermove", penMove); document.removeEventListener("pointerup", penUp); document.removeEventListener("pointercancel", penUp);
+  document.body.classList.remove("pen-painting");
+  const cur = d.brush.style.transform; d.brush.style.transition = "none";
+  d.brush.animate([{ transform: cur, opacity: 1 }, { transform: cur + " translate(36px,-30px)", opacity: 0 }], { duration: 380, easing: "ease-out", fill: "forwards" });
+  const words = [...d.words.values()];
+  if (!words.length) { setTimeout(() => { d.layer.remove(); penLayers = penLayers.filter(x => x !== d.layer); }, 450); return; }
+  const sorted = words.slice().sort((a, b) => a.range.compareBoundaryPoints(Range.START_TO_START, b.range));
+  let text = "";
+  sorted.forEach((w, i) => {
+    if (!i) { text = w.text; return; }
+    const prev = sorted[i - 1]; let gap = "";
+    try { const g = document.createRange(); g.setStart(prev.node, prev.end); g.setEnd(w.node, w.start); gap = g.toString(); } catch {}
+    text += /[\p{L}\p{N}]/u.test(gap) ? " … " + w.text : " " + w.text;
+  });
+  if (window.CSS && CSS.highlights) {
+    const h = CSS.highlights.get("pen") || new Highlight(); sorted.forEach(w => h.add(w.range)); CSS.highlights.set("pen", h);
+    d.layer.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 450, delay: 150, fill: "forwards" });
+    setTimeout(() => { d.layer.remove(); penLayers = penLayers.filter(x => x !== d.layer); }, 800);
+  } else setTimeout(() => d.brush.remove(), 450);
+  if (text.trim().length >= 2) {
+    $("#aiPanel").style.display = "flex";
+    if (!aiBusy) { $("#aiIn").value = "اشرحلي الجزء ده ببساطة شديدة (معنى + مثال + ترجمة): «" + text.slice(0, 700) + "»"; askTutor(); }
+  }
+}
+document.addEventListener("pointerdown", e => {
+  if (!penOn || !user || penDrag || (e.button !== undefined && e.button !== 0)) return;
+  const t = e.target; if (!t.closest || !t.closest("#app") || t.closest("button,input,textarea,select,a,summary,label,.sti,.pti")) return;
+  e.preventDefault();
+  try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch {}
+  ensurePenFilter();
+  const layer = document.createElement("div"); layer.className = "pen-layer"; document.body.appendChild(layer); penLayers.push(layer);
+  const brush = document.createElement("div"); brush.className = "pen-brush"; brush.innerHTML = brushSvg(34);
+  brush.style.cssText = "transform-origin:2.7px 31.3px;transition:transform .06s linear"; layer.appendChild(brush);
+  penDrag = { id: e.pointerId, layer, brush, words: new Map(), x: e.clientX, y: e.clientY, rot: -14 };
+  document.body.classList.add("pen-painting");
+  penMoveBrush(e.clientX, e.clientY, 0); penSample(e.clientX, e.clientY, 1);
+  document.addEventListener("pointermove", penMove, { passive: false });
+  document.addEventListener("pointerup", penUp); document.addEventListener("pointercancel", penUp);
+}, true);
 
 /* ---------- قواعد الفرنسية A1 → B1 ---------- */
 const GR = {
