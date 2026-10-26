@@ -524,7 +524,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/fireba
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider, linkWithCredential } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp, deleteField, arrayUnion, arrayRemove, onSnapshot, runTransaction, writeBatch } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app-check.js";
-import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-ai.js";
+import { getAI, getGenerativeModel, GoogleAIBackend, ResponseModality } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-ai.js";
 
 /* ===== غيّر دول بعد ما نعمل مشروع Firebase ===== */
 const firebaseConfig = {
@@ -551,6 +551,7 @@ startAppCheck();
 const auth = getAuth(fb), db = getFirestore(fb);
 const gem = getGenerativeModel(getAI(fb, { backend: new GoogleAIBackend() }), { model: "gemini-3.5-flash-lite", generationConfig: { responseMimeType: "application/json", temperature: 0.2 } });
 const examModel = getGenerativeModel(getAI(fb, { backend: new GoogleAIBackend() }), { model: "gemini-3.5-flash-lite", generationConfig: { responseMimeType: "application/json", temperature: 0.4, maxOutputTokens: 16384 } });
+const lessonImageModel = getGenerativeModel(getAI(fb, { backend: new GoogleAIBackend() }), { model: "gemini-3.1-flash-image", generationConfig: { responseModalities: [ResponseModality.IMAGE], imageConfig: { aspectRatio: "16:9", imageSize: "1K" } } });
 async function askJSON(prompt, tries = 2, parts = null) {
   let last;
   for (let i = 0; i < tries; i++) {
@@ -903,6 +904,68 @@ async function compressImage(file) {
   }
   throw new Error("الصورة كبيرة جدًا، جرّب صورة أصغر");
 }
+async function compressImageDataUrl(dataUrl) {
+  const img = new Image();
+  await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error("الصورة المولدة غير صالحة")); img.src = dataUrl; });
+  for (const [maxW, q0] of [[1000, 0.72], [800, 0.58], [600, 0.48]]) {
+    const sc = Math.min(1, maxW / img.naturalWidth), w = Math.max(1, Math.round(img.naturalWidth * sc)), h = Math.max(1, Math.round(img.naturalHeight * sc));
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+    const out = c.toDataURL("image/jpeg", q0);
+    if (out.length < 750000) return out;
+  }
+  throw new Error("الصورة المولدة أكبر من الحد المسموح");
+}
+function generatedImageFromResponse(response) {
+  const part = response?.inlineDataParts?.()?.[0] || response?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+  const data = part?.inlineData;
+  if (!data?.data) throw new Error("لم يتم إنشاء صورة");
+  return `data:${data.mimeType || "image/png"};base64,${data.data}`;
+}
+async function createLessonImages(l, setStatus) {
+  if (!editor) throw new Error("لا تملك صلاحية إنشاء صور الدروس");
+  const c = await getContent(l), original = (c.blocks && c.blocks.length) ? c.blocks.map(b => ({ ...b })) : (String(c.text || "").trim() ? [{ t: "p", v: c.text, a: "", pairs: [] }] : []);
+  const blocks = original.filter(b => !b.aiGeneratedImage);
+  const targets = blocks.map((b, index) => ({ b, index })).filter(x => ["p", "ans"].includes(x.b.t) && String(x.b.v || "").trim().length >= 50);
+  if (!targets.length) throw new Error("مفيش فقرات نصية طويلة كفاية لإنشاء صور");
+  if (targets.length > 12) targets.splice(12);
+  const prompt = `أنت مصمم رسوم تعليمية لدرس لغة فرنسية. اقرأ الفقرات التالية، واقترح لكل فقرة وصفًا بصريًا مستقلًا لصورة تعليمية تساعد الطالب على فهم المعنى. لا تضع أي كتابة أو حروف أو كلمات داخل الصور، ولا تخترع معلومات غير موجودة. حافظ على أسلوب موحد: clean modern educational illustration, soft navy and gold palette, French classroom mood, high contrast, no watermark. أعد JSON فقط بالشكل {"items":[{"index":0,"prompt":"..."}]}. أرقام index هي أرقام الفقرات في القائمة كما هي. الفقرات:\n${targets.map((x, i) => `${i}: ${String(x.b.v).slice(0, 1800)}`).join("\n\n")}`;
+  const plan = await askJSON(prompt, 2), items = Array.isArray(plan.items) ? plan.items : [];
+  if (!items.length) throw new Error("الذكاء الاصطناعي لم يقترح صورًا للفقرات");
+  const generated = new Map();
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i], target = targets[Number(item.index)];
+    if (!target || generated.has(target.index)) continue;
+    setStatus(`🎨 إنشاء الصورة ${i + 1} / ${Math.min(items.length, targets.length)}...`);
+    const imagePrompt = `${String(item.prompt || "").trim()}\nEducational illustration for a French language lesson. No text, no labels, no watermark. Landscape 16:9.`;
+    const result = await lessonImageModel.generateContent(imagePrompt);
+    const raw = generatedImageFromResponse(result.response);
+    generated.set(target.index, { data: await compressImageDataUrl(raw), prompt: imagePrompt });
+  }
+  if (!generated.size) throw new Error("لم يتم إنشاء أي صورة");
+  const oldGenerated = original.filter(b => b.aiGeneratedImage && b.v).map(b => b.v);
+  for (const id of oldGenerated) { try { await deleteDoc(doc(db, `lessons/${l.id}/images`, id)); } catch {} }
+  const out = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i]; out.push(b);
+    const made = generated.get(i); if (!made) continue;
+    const ref = await addDoc(collection(db, `lessons/${l.id}/images`), { data: made.data, prompt: made.prompt, aiGenerated: true, created: serverTimestamp() });
+    out.push({ t: "img", v: ref.id, aiGeneratedImage: true, alt: `صورة تعليمية للفقرة ${i + 1}` });
+  }
+  const text = out.filter(b => b.t !== "img" && b.t !== "ans").map(b => b.v).join("\n");
+  await setDoc(doc(db, "lessonContent", l.id), { text, blocks: out, youtube: c.youtube || "", youtubeAr: c.youtubeAr || "", importantWords: c.importantWords || [], grammarPoints: c.grammarPoints || [] }, { merge: true });
+  l.blocks = out; setStatus(`✅ تم إنشاء وربط ${generated.size} صورة بالفقرات`); return out;
+}
+async function deleteLessonGeneratedImages(l) {
+  if (!editor) throw new Error("لا تملك صلاحية حذف صور الدروس");
+  const c = await getContent(l), blocks = (c.blocks && c.blocks.length) ? c.blocks.map(b => ({ ...b })) : [];
+  const ids = blocks.filter(b => b.aiGeneratedImage && b.v).map(b => b.v);
+  if (!ids.length) return { count: 0, blocks };
+  for (const id of ids) await deleteDoc(doc(db, `lessons/${l.id}/images`, id));
+  const kept = blocks.filter(b => !b.aiGeneratedImage);
+  await setDoc(doc(db, "lessonContent", l.id), { text: kept.filter(b => b.t !== "img" && b.t !== "ans").map(b => b.v).join("\n"), blocks: kept }, { merge: true });
+  l.blocks = kept; return { count: ids.length, blocks: kept };
+}
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const aiReason = e => {
   const m = String(e?.message || e?.code || e || "");
@@ -1086,7 +1149,7 @@ async function lessonEditor(x, sub, done) {
   x = x || {};
   const c = x.id ? await getContent(x) : {};
   const imgMap = {}; if (x.id) (await list(`lessons/${x.id}/images`)).forEach(i => imgMap[i.id] = i.data);
-  const blocks = (c.blocks && c.blocks.length) ? c.blocks.map(b => ({ t: b.t, v: b.v, a: b.ar || "", pairs: b.pairs || [], d: b.t === "img" ? (imgMap[b.v] || "") : "" })) : [{ t: "p", v: c.text || "", a: "", pairs: [], d: "" }];
+  const blocks = (c.blocks && c.blocks.length) ? c.blocks.map(b => ({ t: b.t, v: b.v, a: b.ar || "", pairs: b.pairs || [], d: b.t === "img" ? (imgMap[b.v] || "") : "", ...(b.aiGeneratedImage ? { aiGeneratedImage: true, alt: b.alt || "" } : {}) })) : [{ t: "p", v: c.text || "", a: "", pairs: [], d: "" }];
   let importantWords = Array.isArray(c.importantWords) ? c.importantWords : [];
   let grammarPoints = Array.isArray(c.grammarPoints) ? c.grammarPoints : [];
   const removed = []; let pending = null;
@@ -1250,7 +1313,7 @@ async function lessonEditor(x, sub, done) {
       const ref = x.id ? doc(db, "lessons", x.id) : doc(collection(db, "lessons"));
       for (const b of kept) if (b.t === "img" && b.d && !b.v) b.v = (await addDoc(collection(db, `lessons/${ref.id}/images`), { data: b.d, created: serverTimestamp() })).id;
       for (const id of removed) { try { await deleteDoc(doc(db, `lessons/${ref.id}/images`, id)); } catch {} }
-      const out = kept.map(b => b.t === "img" ? ({ t: b.t, v: b.v }) : ({ t: b.t, v: b.v.trim(), ...(b.a && b.a.trim() ? { ar: b.a.trim(), pairs: Array.isArray(b.pairs) ? b.pairs : [] } : {}) }));
+      const out = kept.map(b => b.t === "img" ? ({ t: b.t, v: b.v, ...(b.aiGeneratedImage ? { aiGeneratedImage: true, alt: b.alt || "" } : {}) }) : ({ t: b.t, v: b.v.trim(), ...(b.a && b.a.trim() ? { ar: b.a.trim(), pairs: Array.isArray(b.pairs) ? b.pairs : [] } : {}) }));
       const content = { text: out.filter(b => b.t !== "img" && b.t !== "ans").map(b => b.v).join("\n"), blocks: out, importantWords, grammarPoints, youtube: f.querySelector('[name="yt"]').value.trim(), youtubeAr: f.querySelector('[name="ytAr"]').value.trim() };
       await setDoc(doc(db, "lessonContent", ref.id), content);
       if (x.id) { await updateDoc(ref, { title, v2: true, text: deleteField(), blocks: deleteField(), youtube: deleteField(), youtubeAr: deleteField() }); x.title = title; }
@@ -1854,7 +1917,7 @@ async function lesson(l, sub, startKey) {
   app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2><button class="sec important-print-hide" id="exportPdf">📄 PDF</button>${editor ? `<button id="examSetup">📊 لوحة الاختبار</button>` : ""}</div>
     <div class="stepper" id="stepper">${steps.map((s, i) => `<button type="button" class="stp" data-step="${i}"><b>${i + 1}</b> ${s.i} ${s.t}</button>`).join("")}</div>
     ${hasVideo ? `<section class="pane" id="p_video"><div class="vsw">${yt ? `<button type="button" class="vbtn on" data-v="fr" title="الفيديو بالفرنسية"><span class="vi">FR</span> فرنسي</button>` : ""}${ytA ? `<button type="button" class="vbtn${yt ? "" : " on"}" data-v="ar" title="الفيديو بالعربي"><span class="vi">ع</span> عربي</button>` : ""}</div><iframe id="vid" src="about:blank" allowfullscreen></iframe><div class="row"><button type="button" data-next="1">التالي: الدرس ←</button></div></section>` : ""}
-    <section class="pane" id="p_lesson"><div class="row"><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button>${admin ? `<button class="sec important-print-hide" id="alignLesson">🧩 تنظيم ومحاذاة الدرس</button><button class="important-print-hide" id="solveLesson" style="background:linear-gradient(135deg,#17a05d,#0e7a44)">🧠 حل أسئلة الدرس</button>` : ""}<span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div><div id="ttsStatus" class="mut" style="margin:-4px 0 10px;font-size:.88rem"></div><div class="lesson-nav-actions lesson-top"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: أهم الكلمات ←</button></div><div class="text fr" id="txt"></div><div class="lesson-nav-actions bottom"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: أهم الكلمات ←</button></div></section>
+    <section class="pane" id="p_lesson"><div class="row"><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button>${editor ? `<button class="sec important-print-hide" id="makeLessonImages">🎨 أنشئ صور الفقرات</button><button class="del important-print-hide" id="deleteLessonImages">🗑 احذف الصور المولدة</button>` : ""}${admin ? `<button class="sec important-print-hide" id="alignLesson">🧩 تنظيم ومحاذاة الدرس</button><button class="important-print-hide" id="solveLesson" style="background:linear-gradient(135deg,#17a05d,#0e7a44)">🧠 حل أسئلة الدرس</button>` : ""}<span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div><div id="ttsStatus" class="mut" style="margin:-4px 0 10px;font-size:.88rem"></div><div class="lesson-nav-actions lesson-top"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: أهم الكلمات ←</button></div><div class="text fr" id="txt"></div><div class="lesson-nav-actions bottom"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: أهم الكلمات ←</button></div></section>
     <section class="pane" id="p_words"><h3>⭐ أهم الكلمات</h3>${importantWordsHtml || `<p class="mut">لم تتم إضافة أهم الكلمات لهذا الدرس بعد.</p>`}<div class="lesson-nav-actions"><button type="button" data-next="1">التالي: القواعد ←</button></div></section>
     <section class="pane" id="p_grammar">${grammarHtml}<div class="lesson-nav-actions"><button type="button" data-next="1">التالي: الاختبار ←</button></div></section>
     <section class="pane" id="p_exam"><h3>الاختبار</h3><div class="q" id="quizBar"><span id="quizStatus">${qs.length ? `الاختبار: ${qs.length} سؤال — الدرجة الكلية ${totalPts} — المدة ${Math.round(examSecs / 60)} دقيقة — النجاح من ${passPct}%` : "مفيش اختبار للدرس ده لسه."}</span><span id="quizTimer" class="score" style="display:none"></span><div class="question-progress" style="flex:1;min-width:120px"><div class="progress-track"><div id="quizFill" class="progress-fill" style="width:0%"></div></div></div><button id="startQuiz">ابدأ الاختبار</button><button id="finishQuiz" class="sec" style="display:none">إنهاء الاختبار</button></div><div id="quizResult"></div><div id="qs" style="display:none"></div></section>`;
@@ -1899,6 +1962,30 @@ async function lesson(l, sub, startKey) {
       alert(`تم تنظيم ${fixed} فقرة${failed ? ` وتعذر ${failed} (اضغط تاني لإعادة المحاولة)` : ""}.`);
     } catch (e) { console.error(e); alert("تعذر التنظيم: " + String(e.code || e.message || "").slice(0, 120)); }
     finally { alignBtn.disabled = false; alignBtn.textContent = oldText; }
+  };
+  const imageBtn = $("#makeLessonImages");
+  if (imageBtn) imageBtn.onclick = async () => {
+    if (!confirm("هيتم قراءة فقرات الدرس وإنشاء صورة تعليمية بعد كل فقرة. الصور المولدة سابقًا هتتحدث، والصور اليدوية هتفضل كما هي. تكمل؟")) return;
+    const oldText = imageBtn.textContent; imageBtn.disabled = true;
+    try {
+      await createLessonImages(l, s => { imageBtn.textContent = s; });
+      const freshImages = {}; (await list(`lessons/${l.id}/images`)).forEach(i => freshImages[i.id] = i.data);
+      renderLessonBody($("#txt"), l, freshImages);
+      alert("تم إنشاء الصور وربطها بالفقرات ✅");
+    } catch (e) { console.error(e); alert("تعذر إنشاء صور الدرس: " + aiReason(e)); }
+    finally { imageBtn.disabled = false; imageBtn.textContent = oldText; }
+  };
+  const deleteImageBtn = $("#deleteLessonImages");
+  if (deleteImageBtn) deleteImageBtn.onclick = async () => {
+    if (!confirm("هيتم حذف الصور التي أنشأها الذكاء الاصطناعي فقط، والصور اليدوية والنصوص مش هتتأثر. تكمل؟")) return;
+    const oldText = deleteImageBtn.textContent; deleteImageBtn.disabled = true;
+    try {
+      const result = await deleteLessonGeneratedImages(l);
+      const freshImages = {}; (await list(`lessons/${l.id}/images`)).forEach(i => freshImages[i.id] = i.data);
+      renderLessonBody($("#txt"), l, freshImages);
+      alert(result.count ? `تم حذف ${result.count} صورة مولدة ✅` : "مفيش صور مولدة للحذف.");
+    } catch (e) { console.error(e); alert("تعذر حذف الصور: " + (e.code || e.message || "خطأ غير معروف")); }
+    finally { deleteImageBtn.disabled = false; deleteImageBtn.textContent = oldText; }
   };
   const solveBtn = $("#solveLesson");
   if (solveBtn && admin) solveBtn.onclick = async () => {
