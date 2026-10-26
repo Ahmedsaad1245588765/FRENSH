@@ -451,6 +451,18 @@ iframe{border-radius:10px;margin:8px 0}
 .wa-groups-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:8px 0 16px}.wa-groups-head h2{margin:4px 0}.wa-search{margin:12px 0 18px}.wa-search input{width:100%;border-radius:999px;padding:12px 18px}.wa-group-list{display:grid;gap:8px}.wa-group-card{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid #e1e8f2;border-radius:18px;background:#fff;box-shadow:0 5px 17px rgba(35,63,115,.07);transition:.2s}.wa-group-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(35,63,115,.12)}.wa-avatar,.wa-preview-avatar{width:52px;height:52px;flex:none;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:1.3rem;font-weight:800;background:linear-gradient(135deg,#1f64a7,#31ad85)}.wa-group-copy{min-width:0;flex:1;cursor:pointer}.wa-group-copy b,.wa-group-copy small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wa-group-copy small{margin-top:5px;color:#74819a}.wa-group-side{display:flex;align-items:flex-end;flex-direction:column;gap:5px;color:#77839b;font-size:.78rem}.request-badge{background:#fff0d8;color:#8d5b00;padding:4px 8px;border-radius:99px;font-size:.72rem}.wa-join-btn{font-size:.76rem;padding:6px 10px;white-space:nowrap}.wa-preview{text-align:center;max-width:640px;margin:50px auto;padding:32px;border-radius:24px;background:#fff;border:1px solid #e1e8f2;box-shadow:0 16px 40px rgba(35,63,115,.12)}.wa-preview-avatar{width:88px;height:88px;margin:24px auto 12px;font-size:2rem}.wa-preview-meta{color:#6f7b94;margin:16px}.wa-chat-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:12px;background:#fff;border:1px solid #e1e8f2;border-radius:18px}.wa-chat-title{flex:1;min-width:0}.wa-chat-title b,.wa-chat-title small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wa-chat-title small{font-size:.78rem;color:#72809a;margin-top:4px}.wa-manage{margin:12px 0;padding:16px;border-radius:18px;background:#f4f7fb;border:1px solid #dde5ef}.wa-manage-head,.wa-manage-grid{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.wa-manage-head h3{flex:1}.wa-manage-grid{align-items:flex-start}.wa-manage-grid>div{flex:1;min-width:240px}.wa-member-row{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:9px 4px;border-bottom:1px solid #e4eaf2}.wa-member-row span{flex:1}.wa-admin-tag{font-size:.7rem;color:#147a52;background:#ddf6e8;border-radius:99px;padding:3px 7px}body.night .wa-group-card,body.night .wa-preview,body.night .wa-chat-head{background:#17233d;color:#eef3ff;border-color:#34435f}body.night .wa-group-copy small,body.night .wa-chat-title small{color:#b5c1d7}body.night .wa-manage{background:#111d35;border-color:#34435f}body.night .wa-member-row{border-color:#34435f}@media(max-width:650px){.wa-groups-head{align-items:flex-start}.wa-chat-head{flex-wrap:wrap}.wa-chat-title{min-width:calc(100% - 90px)}.wa-chat-head button{font-size:.72rem;padding:7px 9px}.wa-group-card{padding:11px}.wa-avatar{width:44px;height:44px}.wa-manage-grid{display:block}.wa-preview{margin:24px auto;padding:22px 14px}#voiceBar{gap:4px;padding:8px;font-size:.78rem}#voiceBar button{font-size:.72rem;padding:6px 8px}}
 #aiFab,#penFab{touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}#aiFab.dragging,#penFab.dragging{cursor:grabbing;transition:none!important;z-index:90}@media(max-width:600px){#aiFab,#penFab{z-index:80}}
 
+
+dialog.pron{border:none;border-radius:16px;padding:0;max-width:760px;width:94vw;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+dialog.pron::backdrop{background:rgba(10,20,45,.55)}
+.pron-box{padding:16px;max-height:88vh;overflow:auto}
+.pron-text{max-height:42vh;overflow:auto;line-height:2.1;font-size:1.1rem;padding:10px;border:1px solid rgba(33,74,155,.2);border-radius:10px;margin-bottom:10px;background:rgba(33,74,155,.03)}
+.pron-w{padding:1px 3px;border-radius:5px;cursor:pointer}
+.pron-w.ok{background:rgba(23,160,93,.15);color:#0e7a44}
+.pron-w.cur{background:#ffe9a8;outline:2px solid #e0b23a}
+.pron-w.bad{background:#ffd5d9;color:#b3202f}
+.pron-w.hard{background:#ffe0b3;color:#8a4b00}
+.pron-msg{min-height:1.6em;margin:6px 0 10px;font-weight:600}
+.pron-res{margin-top:10px;padding:10px;border-radius:10px;background:rgba(33,74,155,.06)}
 .lsum{margin:18px 0;padding:14px;border:1px solid rgba(33,74,155,.18);border-radius:14px;background:rgba(33,74,155,.04)}
 .lsum-part{margin-top:12px}
 .sm-list{margin:8px 0 0;padding-inline-start:22px}.sm-list li{margin:8px 0;line-height:1.7}
@@ -948,6 +960,27 @@ async function urlToDataUrl(url) {
   const blob = await r.blob();
   return await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error("تعذر قراءة الصورة")); fr.readAsDataURL(blob); });
 }
+async function wikiEntitySearch(name, lang) {
+  const u = `https://${lang}.wikipedia.org/w/api.php?` + new URLSearchParams({
+    action: "query", format: "json", origin: "*", generator: "search", gsrsearch: name, gsrlimit: "4", gsrnamespace: "0",
+    prop: "pageimages|description", piprop: "thumbnail|name", pithumbsize: "900", pilicense: "free", pilimit: "4"
+  });
+  const r = await fetch(u); if (!r.ok) return [];
+  const j = await r.json();
+  return Object.values(j.query?.pages || {}).sort((a, b) => (a.index || 0) - (b.index || 0)).map(p => {
+    if (!p.thumbnail?.source || (p.thumbnail.width || 0) < 300) return null;
+    return { kind: "entity", lang, title: p.title, desc: smClean(p.description, 120), thumb: p.thumbnail.source, file: p.pageimage || "", page: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(String(p.title).replace(/ /g, "_"))}`, artist: "", license: "" };
+  }).filter(Boolean);
+}
+async function commonsFileCredit(file) {
+  if (!file) return null;
+  try {
+    const r = await fetch("https://commons.wikimedia.org/w/api.php?" + new URLSearchParams({ action: "query", format: "json", origin: "*", titles: "File:" + file, prop: "imageinfo", iiprop: "url|extmetadata", iiextmetadatafilter: "Artist|LicenseShortName" }));
+    const j = await r.json(), ii = Object.values(j.query?.pages || {})[0]?.imageinfo?.[0]; if (!ii) return null;
+    const strip = h => String(h || "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+    return { artist: strip(ii.extmetadata?.Artist?.value).slice(0, 60), license: strip(ii.extmetadata?.LicenseShortName?.value), page: ii.descriptionurl || "" };
+  } catch { return null; }
+}
 async function createLessonImages(l, setStatus) {
   if (!editor) throw new Error("لا تملك صلاحية إضافة صور للدروس");
   const c = await getContent(l), original = (c.blocks && c.blocks.length) ? c.blocks.map(b => ({ ...b })) : (String(c.text || "").trim() ? [{ t: "p", v: c.text, a: "", pairs: [] }] : []);
@@ -955,45 +988,60 @@ async function createLessonImages(l, setStatus) {
   const targets = blocks.map((b, index) => ({ b, index })).filter(x => ["p", "ans"].includes(x.b.t) && String(x.b.v || "").trim().length >= 50);
   if (!targets.length) throw new Error("مفيش فقرات نصية طويلة كفاية للبحث عن صور");
   if (targets.length > 12) targets.splice(12);
+  const ctx = `عنوان الدرس: ${l.title || ""}\nبداية الدرس: ${blocks.filter(b => ["h1", "h2", "p"].includes(b.t)).map(b => String(b.v || "")).join(" ").slice(0, 700)}`;
   const list_ = targets.map((x, i) => `${i}: ${String(x.b.v).slice(0, 1200)}`).join("\n\n");
-  setStatus("🔎 الذكاء الاصطناعي بيقرا الدرس...");
-  const plan = await askJSON(`أنت مساعد بيدوّر على صور حقيقية لدرس لغة فرنسية. اقرا الفقرات دي، ولكل فقرة اكتب 2 استعلام بحث قصير بالإنجليزية (2 إلى 4 كلمات) لصور فوتوغرافية حقيقية على Wikimedia Commons تدل على موضوع الفقرة (أماكن، أشياء، أشخاص مشهورين، أنشطة، طعام...). لو الفقرة مجردة أو قواعد ومفيش صورة مناسبة لها، رجّع queries فاضية. أعد JSON فقط بالشكل {"items":[{"index":0,"queries":["...","..."]}]}. index هو رقم الفقرة. الفقرات:\n${list_}`, 2);
+  setStatus("🔎 الذكاء الاصطناعي بيقرا الدرس ويحدد الأسماء المذكورة...");
+  const plan = await askJSON(`أنت مساعد بيدوّر على صور دقيقة لدرس لغة فرنسية/أدب. اقرا الفقرات، ولكل فقرة حدّد الكيانات المسماة المحددة اللي الفقرة بتتكلم عنها فعلًا: كاتب، شاعر، شخصية تاريخية، مكان أو معلم معين، أو عمل أدبي. استخدم عنوان الدرس وبدايته لتحديد مين المقصود لو الفقرة بتستخدم ضمير (هو/il/elle). اكتب اسم كل كيان بالحروف اللاتينية بالشكل المعروف في ويكيبيديا (مثال: Gamal al-Ghitani)، وأضف الاسم بالعربي لو معروف. لو الفقرة ملهاش كيان محدد، سيب entities فاضية، ولو ليها موضوع مادي ملموس اكتب queries من استعلامين بالإنجليزية (2-4 كلمات) لصور على Wikimedia Commons. لو فيه رواية أو مسرحية أو ديوان مذكور بالاسم اكتبه ككيان kind=work مع اسم مؤلفه في author ونوعه في form. متخترعش أسماء مش في النص. أعد JSON فقط بالشكل {"items":[{"index":0,"entities":[{"name":"...","kind":"person|place|work","ar":"...","author":"مؤلف العمل لو kind=work","form":"novel|play|poem|other"}],"queries":["..."]}]}. index هو رقم الفقرة.\n${ctx}\n\nالفقرات:\n${list_}`, 2);
   const items = Array.isArray(plan.items) ? plan.items : [];
-  const cands = new Map();
+  const cands = new Map(), wanted = new Map();
   for (let i = 0; i < items.length; i++) {
-    const it = items[i], t = targets[Number(it.index)]; if (!t || !Array.isArray(it.queries) || !it.queries.length) continue;
+    const it = items[i], idx = Number(it.index), t = targets[idx]; if (!t) continue;
     setStatus(`🔎 بحث عن صور ${i + 1} / ${items.length}...`);
-    const seen = new Set(), found = [];
-    for (const q of it.queries.slice(0, 2)) {
-      try { for (const r of await commonsSearch(String(q).slice(0, 80), 6)) if (!seen.has(r.thumb)) { seen.add(r.thumb); found.push(r); } } catch (e) { console.warn("commons", e); }
+    const seen = new Set(), found = [], ents = (Array.isArray(it.entities) ? it.entities : []).filter(e => e && e.name).slice(0, 2);
+    wanted.set(idx, ents.map(e => smClean(e.name, 80)).join("، "));
+    for (const e of ents) {
+      const langs = /[\u0600-\u06FF]/.test(e.name) ? ["ar"] : ["fr", "en"];
+      const res = await Promise.all([...langs.map(lg => wikiEntitySearch(smClean(e.name, 80), lg).catch(() => [])), ...(e.ar && !/[\u0600-\u06FF]/.test(e.name) ? [wikiEntitySearch(smClean(e.ar, 80), "ar").catch(() => [])] : [])]);
+      for (const r of res.flat()) if (!seen.has(r.thumb)) { seen.add(r.thumb); found.push(r); }
+      if (e.kind === "work") {
+        const au = smClean(e.author, 80), nm = smClean(e.name, 80), form = String(e.form || "");
+        const qs = form === "play" ? [`${nm} ${au} play theatre`, `${nm} ${au}`] : form === "novel" ? [`${nm} ${au} book cover`, `${nm} ${au}`] : [`${nm} ${au}`];
+        for (const q of qs) { try { for (const r of await commonsSearch(q.trim(), 5)) if (!seen.has(r.thumb)) { seen.add(r.thumb); found.push({ ...r, kind: "commons" }); } } catch {} }
+        if (au) { try { for (const r of await wikiEntitySearch(au, /[\u0600-\u06FF]/.test(au) ? "ar" : "fr")) if (!seen.has(r.thumb)) { seen.add(r.thumb); found.push({ ...r, role: "author" }); } } catch {} }
+      }
     }
-    if (found.length) cands.set(Number(it.index), found.slice(0, 8));
+    if (!found.length && Array.isArray(it.queries)) {
+      for (const q of it.queries.slice(0, 2)) { try { for (const r of await commonsSearch(String(q).slice(0, 80), 6)) if (!seen.has(r.thumb)) { seen.add(r.thumb); found.push({ ...r, kind: "commons" }); } } catch (e) { console.warn("commons", e); } }
+    }
+    if (found.length) cands.set(idx, found.slice(0, 12));
   }
   if (!cands.size) throw new Error("ملقيتش صور مناسبة لفقرات الدرس");
-  setStatus("🧠 اختيار أنسب الصور...");
-  const pickList = [...cands.entries()].map(([i, arr]) => `فقرة ${i}: ${String(targets[i].b.v).slice(0, 300)}\nالصور:\n${arr.map((r, j) => `${j}: ${r.title}${r.desc ? " — " + r.desc : ""}`).join("\n")}`).join("\n\n");
-  const pick = await askJSON(`لكل فقرة اختار رقم الصورة الأنسب لمعناها من القايمة، ولو ولا واحدة مناسبة بجد اكتب -1. متختارش صورة غير مرتبطة. أعد JSON فقط بالشكل {"items":[{"index":0,"choice":2}]}.\n${pickList}`, 2);
+  setStatus("🧠 التأكد من إن كل صورة هي الشخص أو المكان المقصود...");
+  const pickList = [...cands.entries()].map(([i, arr]) => `فقرة ${i}: ${String(targets[i].b.v).slice(0, 300)}\nالمطلوب: ${wanted.get(i) || "صورة معبرة عن موضوع الفقرة"}\nالصور:\n${arr.map((r, j) => `${j}: ${r.title}${r.desc ? " — " + r.desc : ""}${r.kind === "entity" ? " [مقالة ويكيبيديا " + r.lang + "]" : ""}${r.role === "author" ? " [صورة مؤلف العمل]" : ""}`).join("\n")}`).join("\n\n");
+  const pick = await askJSON(`لكل فقرة اختار رقم الصورة اللي بتمثل نفس الشخص أو المكان أو العمل المطلوب بالاسم تحديدًا. متختارش صورة لشخص تاني بنفس الاسم أو من نفس العيلة أو مقالة عن موضوع قريب. لو الفقرة عن شخص فاختار صورته الشخصية. لو المطلوب رواية أو مسرحية فالأفضل صورة غلاف أو طبعة أو عرض مسرحي للعمل نفسه، ولو مفيش اختار صورة مؤلفها (المكتوب عليها [صورة مؤلف العمل]). لو مفيش تأكيد إن الصورة هي المطلوب بالظبط اكتب -1. أعد JSON فقط بالشكل {"items":[{"index":0,"choice":2}]}.\n${pickList}`, 2);
   const generated = new Map(), usedThumbs = new Set();
-  const choices = Array.isArray(pick.items) ? pick.items : [];
+  const choices = (Array.isArray(pick.items) ? pick.items : []).sort((a, b) => Number(a.index) - Number(b.index));
   for (let k = 0; k < choices.length; k++) {
     const ch = choices[k], idx = Number(ch.index), arr = cands.get(idx), r = arr && arr[Number(ch.choice)];
-    if (!r || usedThumbs.has(r.thumb) || generated.has(targets[idx].index)) continue;
+    if (!r || usedThumbs.has(r.thumb) || !targets[idx] || generated.has(targets[idx].index)) continue;
     setStatus(`⬇️ تحميل الصورة ${k + 1} / ${choices.length}...`);
     try {
       const data = await compressImageDataUrl(await urlToDataUrl(r.thumb));
       usedThumbs.add(r.thumb);
-      generated.set(targets[idx].index, { data, r, credit: [r.title, r.artist, r.license].filter(Boolean).join(" — ").slice(0, 220) });
+      let artist = r.artist, license = r.license, page = r.page;
+      if (r.kind === "entity") { const cr = await commonsFileCredit(r.file); if (cr) { artist = cr.artist; license = cr.license; page = cr.page || page; } }
+      generated.set(targets[idx].index, { data, r, page, credit: [r.title, artist, license].filter(Boolean).join(" — ").slice(0, 220) });
     } catch (e) { console.warn("img", e); }
   }
-  if (!generated.size) throw new Error("ملقيتش صور مناسبة تتحمل");
+  if (!generated.size) throw new Error("ملقيتش صورة متأكد إنها المقصودة، جرّب تضيف أسماء أوضح في النص");
   const oldGenerated = original.filter(b => b.aiGeneratedImage && b.v).map(b => b.v);
   for (const id of oldGenerated) { try { await deleteDoc(doc(db, `lessons/${l.id}/images`, id)); } catch {} }
   const out = [];
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i]; out.push(b);
     const made = generated.get(i); if (!made) continue;
-    const ref = await addDoc(collection(db, `lessons/${l.id}/images`), { data: made.data, credit: made.credit, source: made.r.page, aiGenerated: true, created: serverTimestamp() });
-    out.push({ t: "img", v: ref.id, aiGeneratedImage: true, alt: made.r.title, credit: made.credit, src: made.r.page });
+    const ref = await addDoc(collection(db, `lessons/${l.id}/images`), { data: made.data, credit: made.credit, source: made.page, aiGenerated: true, created: serverTimestamp() });
+    out.push({ t: "img", v: ref.id, aiGeneratedImage: true, alt: made.r.title, credit: made.credit, src: made.page });
   }
   const text = out.filter(b => b.t !== "img" && b.t !== "ans").map(b => b.v).join("\n");
   await setDoc(doc(db, "lessonContent", l.id), { text, blocks: out, youtube: c.youtube || "", youtubeAr: c.youtubeAr || "", importantWords: c.importantWords || [], grammarPoints: c.grammarPoints || [] }, { merge: true });
@@ -2015,6 +2063,106 @@ function renderLessonSummary(l) {
   const d1 = box.querySelector("#sumDelPts"); if (d1) d1.onclick = () => delPart("summaryPoints", "summaryPoints", "تحذف النقاط الرئيسية؟");
   const d2 = box.querySelector("#sumDelMap"); if (d2) d2.onclick = () => delPart("summaryMap", "summaryMap", "تحذف خريطة الأفكار؟");
 }
+
+/* ===== اختبر نطقك: قراءة النص كلمة بكلمة مع إيقاف عند أول غلطة ===== */
+const pronNorm = w => String(w || "").toLowerCase().replace(/œ/g, "oe").replace(/æ/g, "ae").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+function pronTokens(text) {
+  return String(text || "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean).slice(0, 4000).map(raw => { const norm = pronNorm(raw); return { raw, norm, skip: !norm || /\d/.test(norm) }; });
+}
+function pronLev(a, b) {
+  const m = a.length, n = b.length, d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 1; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[m][n];
+}
+function pronMatch(exp, heard) {
+  if (!exp || !heard) return false;
+  if (exp === heard) return true;
+  if (exp.length <= 3 && heard.length <= 3) return true; // كلمات قصيرة (le/les/la/de) المتصفح بيلخبطها كتير
+  const lim = exp.length >= 9 ? 2 : exp.length >= 5 ? 1 : 0;
+  return lim > 0 && pronLev(exp, heard) <= lim;
+}
+function lessonFrenchText(l) {
+  const blocks = (l.blocks && l.blocks.length) ? l.blocks : [{ t: "p", v: l.text || "" }];
+  return blocks.filter(b => ["h1", "h2", "p"].includes(b.t)).map(b => String(b.v || "")).join("\n");
+}
+function openPronunciationTest(title, text) {
+  const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Rec) return alert("اختبار النطق شغال على Chrome أو Edge. افتح الموقع منهم واسمح بالميكروفون.");
+  const toks = pronTokens(text);
+  if (toks.filter(t => !t.skip).length < 2) return alert("مفيش نص فرنسي كفاية للاختبار.");
+  const d = document.createElement("dialog"); d.className = "pron";
+  d.innerHTML = `<div class="pron-box"><h3>🎤 اختبر نطقك — ${esc(String(title || "").slice(0, 80))}</h3><p class="mut" style="margin:0 0 8px">اضغط «ابدأ» واقرا النص بصوت واضح. لو غلطت في كلمة هوقفك وأقولك الكلمة الصح، وتقولها تاني. تقدر تضغط على أي كلمة عشان تبدأ منها.</p><div id="pnText" class="pron-text fr" dir="ltr">${toks.map((t, i) => `<span class="pron-w" data-i="${i}">${esc(t.raw)}</span>`).join(" ")}</div><div id="pnMsg" class="pron-msg">جاهز؟ اضغط ابدأ.</div><div class="row"><button type="button" id="pnStart">🎤 ابدأ</button><button type="button" class="sec" id="pnReset">↺ من الأول</button><button type="button" class="sec" id="pnClose">إغلاق</button></div><div id="pnRes"></div></div>`;
+  document.body.appendChild(d); d.showModal();
+  const spans = [...d.querySelectorAll(".pron-w")], msg = d.querySelector("#pnMsg"), res = d.querySelector("#pnRes"), startBtn = d.querySelector("#pnStart");
+  let ptr = 0, rec = null, running = false, consumed = 0, attempts = {}, retried = new Set(), hard = new Set(), restartT = null, gen = 0;
+  const skipAhead = () => { while (ptr < toks.length && toks[ptr].skip) { spans[ptr].classList.add("ok"); ptr++; } };
+  const paint = () => { spans.forEach((sp, i) => sp.classList.toggle("cur", i === ptr)); const c = spans[ptr]; if (c) c.scrollIntoView({ block: "center", behavior: "smooth" }); };
+  const say = (word, cb) => {
+    if (!("speechSynthesis" in window)) return cb();
+    speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(word); u.lang = "fr-FR"; u.rate = .8; const v = frVoice(); if (v) u.voice = v;
+    let done = false; const fin = () => { if (!done) { done = true; cb(); } }; u.onend = fin; u.onerror = fin; setTimeout(fin, 3500); speechSynthesis.speak(u);
+  };
+  const killRec = () => { gen++; clearTimeout(restartT); if (rec) { rec.onresult = rec.onend = rec.onerror = null; try { rec.abort(); } catch {} rec = null; } };
+  const finish = () => {
+    running = false; killRec(); startBtn.textContent = "🎤 ابدأ"; spans.forEach(sp => sp.classList.remove("cur"));
+    const total = toks.filter(t => !t.skip).length, clean = total - retried.size - hard.size, pct = Math.round(clean / total * 100);
+    msg.textContent = "🎉 خلصت النص!";
+    const w = i => `<b class="fr">${esc(toks[i].raw)}</b>`;
+    res.innerHTML = `<div class="pron-res"><h4>النتيجة: ${pct}% من الكلمات من أول مرة</h4>${retried.size ? `<p>كلمات غلطت فيها وصحّحتها: ${[...retried].filter(i => !hard.has(i)).map(w).join("، ") || "—"}</p>` : ""}${hard.size ? `<p>كلمات محتاجة تدريب: ${[...hard].map(w).join("، ")}</p>` : ""}<p class="mut" style="font-size:.85rem">النتيجة تقدير من تعرّف المتصفح على الكلام، مش تقييم نهائي للنطق.</p></div>`;
+  };
+  const onWrong = (heardRaw) => {
+    killRec(); running = false;
+    const i = ptr, t = toks[i]; attempts[i] = (attempts[i] || 0) + 1; retried.add(i);
+    spans[i].classList.remove("cur"); spans[i].classList.add("bad");
+    if (attempts[i] >= 3) {
+      hard.add(i); spans[i].classList.remove("bad"); spans[i].classList.add("hard");
+      msg.innerHTML = `الكلمة <b class="fr">${esc(t.raw)}</b> لسه محتاجة تدريب، هنعدّيها ونكمّل.`; ptr++; skipAhead();
+      if (ptr >= toks.length) return finish();
+      return say(t.raw, () => { paint(); begin(); });
+    }
+    msg.innerHTML = `⛔ قلت «<b class="fr">${esc(heardRaw)}</b>» والصح <b class="fr">${esc(t.raw)}</b> — اسمعها وقولها تاني`;
+    say(t.raw, () => { if (!d.open) return; spans[i].classList.remove("bad"); paint(); msg.innerHTML = `🎤 قول تاني من الكلمة: <b class="fr">${esc(t.raw)}</b>`; begin(); });
+  };
+  const handle = (heardWords, isFinal) => {
+    const limit = isFinal ? heardWords.length : heardWords.length - 1;
+    while (consumed < limit && running) {
+      skipAhead(); if (ptr >= toks.length) return finish();
+      const hw = heardWords[consumed], hn = pronNorm(hw.raw ?? hw), e = toks[ptr];
+      const hraw = hw.raw ?? hw;
+      if (!hn || /^(euh|heu|hum|hmm|ben|bah)$/.test(hn)) { consumed++; continue; }
+      if (pronMatch(e.norm, hn)) { spans[ptr].classList.add("ok"); ptr++; consumed++; continue; }
+      const nx = heardWords[consumed + 1];
+      if (nx && consumed + 1 < limit + (isFinal ? 0 : 0) && pronMatch(e.norm, pronNorm(hn + pronNorm(nx.raw ?? nx)))) { spans[ptr].classList.add("ok"); ptr++; consumed += 2; continue; }
+      if (e.norm.length <= 3 && ptr + 1 < toks.length && pronMatch(toks[ptr + 1].norm, hn)) { spans[ptr].classList.add("ok"); ptr++; continue; } // كلمة قصيرة اتبلعت
+      return onWrong(hraw);
+    }
+    skipAhead(); paint(); if (ptr >= toks.length) finish();
+  };
+  function begin() {
+    if (!d.open) return; killRec(); skipAhead(); if (ptr >= toks.length) return finish();
+    running = true; consumed = 0; startBtn.textContent = "⏹ إيقاف"; paint();
+    const my = ++gen, r = new Rec(); rec = r; r.lang = "fr-FR"; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
+    r.onresult = e => {
+      if (my !== gen || !running) return;
+      let words = [], last = false;
+      for (let i = 0; i < e.results.length; i++) { const tr = String(e.results[i][0]?.transcript || "").trim(); if (tr) tr.split(/\s+/).forEach(w => words.push({ raw: w })); last = e.results[i].isFinal; }
+      handle(words, last);
+    };
+    r.onerror = e => {
+      if (my !== gen) return;
+      if (["not-allowed", "service-not-allowed", "audio-capture"].includes(e.error)) { running = false; killRec(); startBtn.textContent = "🎤 ابدأ"; msg.textContent = e.error === "audio-capture" ? "مش لاقي ميكروفون." : "اسمح للمتصفح باستخدام الميكروفون وجرّب تاني."; }
+    };
+    r.onend = () => { if (my !== gen || !running) return; restartT = setTimeout(() => { if (my === gen && running) begin(); }, 300); };
+    try { r.start(); msg.innerHTML = `🎤 اقرا من: <b class="fr">${esc(toks[ptr].raw)}</b>`; } catch { running = false; startBtn.textContent = "🎤 ابدأ"; msg.textContent = "تعذر تشغيل الميكروفون."; }
+  }
+  startBtn.onclick = () => { if (running) { running = false; killRec(); startBtn.textContent = "🎤 كمّل"; msg.textContent = "اتوقف. اضغط كمّل لما تحب."; return; } res.innerHTML = ""; if (ptr >= toks.length) { ptr = 0; spans.forEach(sp => sp.className = "pron-w"); attempts = {}; retried = new Set(); hard = new Set(); } speechSynthesis.cancel(); begin(); };
+  d.querySelector("#pnReset").onclick = () => { running = false; killRec(); speechSynthesis.cancel(); ptr = 0; attempts = {}; retried = new Set(); hard = new Set(); res.innerHTML = ""; spans.forEach(sp => sp.className = "pron-w"); startBtn.textContent = "🎤 ابدأ"; msg.textContent = "جاهز؟ اضغط ابدأ."; paint(); };
+  d.querySelector("#pnText").onclick = e => { const sp = e.target.closest(".pron-w"); if (!sp) return; running = false; killRec(); speechSynthesis.cancel(); ptr = Number(sp.dataset.i); spans.forEach((x, i) => { x.classList.remove("bad", "hard", "cur"); if (i >= ptr) x.classList.remove("ok"); }); res.innerHTML = ""; startBtn.textContent = "🎤 ابدأ"; msg.textContent = "هتبدأ من الكلمة اللي اخترتها. اضغط ابدأ."; paint(); };
+  const close = () => { running = false; killRec(); try { speechSynthesis.cancel(); } catch {} d.close(); d.remove(); };
+  d.querySelector("#pnClose").onclick = close; d.addEventListener("cancel", e => { e.preventDefault(); close(); });
+  paint();
+}
 async function lesson(l, sub, startKey) {
   try { Object.assign(l, await getContent(l)); } catch (e) { return alert("الدرس مقفول 🔒 — لازم تنجح في اختبار الدرس اللي قبله الأول"); }
   const rawQs = await list(`lessons/${l.id}/questions`), yt = ytId(l.youtube), ytA = ytId(l.youtubeAr), myAtts = user ? (await list("attempts", "uid", user.uid)).filter(a => a.lessonId === l.id) : [];
@@ -2032,12 +2180,13 @@ async function lesson(l, sub, startKey) {
   app.innerHTML = `<div class="row"><button class="sec" id="back">← ${esc(sub.name)}</button><h2 class="fr" style="flex:1;margin:0">${esc(l.title)}</h2><button class="sec important-print-hide" id="exportPdf">📄 PDF</button>${editor ? `<button id="examSetup">📊 لوحة الاختبار</button>` : ""}</div>
     <div class="stepper" id="stepper">${steps.map((s, i) => `<button type="button" class="stp" data-step="${i}"><b>${i + 1}</b> ${s.i} ${s.t}</button>`).join("")}</div>
     ${hasVideo ? `<section class="pane" id="p_video"><div class="vsw">${yt ? `<button type="button" class="vbtn on" data-v="fr" title="الفيديو بالفرنسية"><span class="vi">FR</span> فرنسي</button>` : ""}${ytA ? `<button type="button" class="vbtn${yt ? "" : " on"}" data-v="ar" title="الفيديو بالعربي"><span class="vi">ع</span> عربي</button>` : ""}</div><iframe id="vid" src="about:blank" allowfullscreen></iframe><div class="row"><button type="button" data-next="1">التالي: الدرس ←</button></div></section>` : ""}
-    <section class="pane" id="p_lesson"><div class="row"><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button>${editor ? `<button class="sec important-print-hide" id="makeLessonImages">🔎 دوّر على صور للدرس</button><button class="del important-print-hide" id="deleteLessonImages">🗑 احذف كل الصور المقترحة</button>` : ""}${admin ? `<button class="sec important-print-hide" id="alignLesson">🧩 تنظيم ومحاذاة الدرس</button><button class="important-print-hide" id="solveLesson" style="background:linear-gradient(135deg,#17a05d,#0e7a44)">🧠 حل أسئلة الدرس</button>` : ""}<span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div><div id="ttsStatus" class="mut" style="margin:-4px 0 10px;font-size:.88rem"></div><div class="lesson-nav-actions lesson-top"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: ${hasSummary ? "الملخص" : "أهم الكلمات"} ←</button></div><div class="text fr" id="txt"></div><div class="lesson-nav-actions bottom"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: ${hasSummary ? "الملخص" : "أهم الكلمات"} ←</button></div></section>
+    <section class="pane" id="p_lesson"><div class="row"><button class="sec" id="speakLesson">🔊 تشغيل الدرس</button><button class="sec important-print-hide" id="pronLesson">🎤 اختبر نطقك</button>${editor ? `<button class="sec important-print-hide" id="makeLessonImages">🔎 دوّر على صور للدرس</button><button class="del important-print-hide" id="deleteLessonImages">🗑 احذف كل الصور المقترحة</button>` : ""}${admin ? `<button class="sec important-print-hide" id="alignLesson">🧩 تنظيم ومحاذاة الدرس</button><button class="important-print-hide" id="solveLesson" style="background:linear-gradient(135deg,#17a05d,#0e7a44)">🧠 حل أسئلة الدرس</button>` : ""}<span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div><div id="ttsStatus" class="mut" style="margin:-4px 0 10px;font-size:.88rem"></div><div class="lesson-nav-actions lesson-top"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: ${hasSummary ? "الملخص" : "أهم الكلمات"} ←</button></div><div class="text fr" id="txt"></div><div class="lesson-nav-actions bottom"><button type="button" class="sec completeLessonBtn">✓ إتمام الدرس</button><button type="button" data-next="1">التالي: ${hasSummary ? "الملخص" : "أهم الكلمات"} ←</button></div></section>
     ${hasSummary ? `<section class="pane" id="p_summary"><div id="lessonSummary"></div><div class="lesson-nav-actions"><button type="button" data-next="1">التالي: أهم الكلمات ←</button></div></section>` : ""}
     <section class="pane" id="p_words"><h3>⭐ أهم الكلمات</h3>${importantWordsHtml || `<p class="mut">لم تتم إضافة أهم الكلمات لهذا الدرس بعد.</p>`}<div class="lesson-nav-actions"><button type="button" data-next="1">التالي: القواعد ←</button></div></section>
     <section class="pane" id="p_grammar">${grammarHtml}<div class="lesson-nav-actions"><button type="button" data-next="1">التالي: الاختبار ←</button></div></section>
     <section class="pane" id="p_exam"><h3>الاختبار</h3><div class="q" id="quizBar"><span id="quizStatus">${qs.length ? `الاختبار: ${qs.length} سؤال — الدرجة الكلية ${totalPts} — المدة ${Math.round(examSecs / 60)} دقيقة — النجاح من ${passPct}%` : "مفيش اختبار للدرس ده لسه."}</span><span id="quizTimer" class="score" style="display:none"></span><div class="question-progress" style="flex:1;min-width:120px"><div class="progress-track"><div id="quizFill" class="progress-fill" style="width:0%"></div></div></div><button id="startQuiz">ابدأ الاختبار</button><button id="finishQuiz" class="sec" style="display:none">إنهاء الاختبار</button></div><div id="quizResult"></div><div id="qs" style="display:none"></div></section>`;
   renderLessonSummary(l);
+  { const pb = $("#pronLesson"); if (pb) pb.onclick = () => openPronunciationTest(l.title, lessonFrenchText(l)); }
   $("#back").onclick = () => { stopLessonSpeech(); window.lessonCtx = null; clearInterval(quizTimer); lessons(sub); };
   $("#exportPdf").onclick = () => downloadLessonPdf(l, $("#exportPdf"));
   $("#speakLesson").onclick = () => speakLesson(l.text || "", $("#speakLesson"));
@@ -2842,7 +2991,7 @@ async function graduationProjectRoom(g,p){
   tasks.forEach(t=>t.memberName=nameOf(t.memberUid));
   const mgr=groupManager(g),done=tasks.filter(t=>t.status==="done").length,percent=tasks.length?Math.round(done/tasks.length*100):0;
   if(!document.getElementById("graduation-flow-style")){const st=document.createElement("style");st.id="graduation-flow-style";st.textContent=`.gp-inline-panel{margin-top:14px;background:#f7f9ff;color:#18213a;border:1px solid #9cc8ef;border-radius:14px;padding:14px}.gp-inline-view{color:#18213a}.gp-inline-block{background:#fff;border:1px solid #d7dbe6;border-radius:10px;padding:10px;margin-top:10px}.gp-inline-block h4{color:#1d3a8a;margin:0 0 8px}.gp-inline-fr{direction:ltr;text-align:left;color:#18213a;background:#fff;line-height:1.9;white-space:pre-wrap}.gp-inline-fr .w{color:#18213a}.gp-inline-fr .w:hover{background:#dbeafe;color:#0f3d71}.gp-inline-ar{color:#18213a;background:#eef4ff;padding:9px;border-radius:8px;margin-top:8px;white-space:pre-wrap}.gp-inline-transition{color:#18213a;background:#fff8dc;border:1px solid #e7c65d;padding:10px;border-radius:8px;white-space:pre-wrap}.gp-flow{position:relative;display:grid;gap:18px;padding:12px 0}.gp-flow:before{content:"";position:absolute;top:28px;bottom:28px;right:25px;width:4px;border-radius:9px;background:linear-gradient(#5ee7f7,#9b8cff,#ffd166)}.gp-node{position:relative;display:flex;gap:14px;align-items:flex-start;z-index:1}.gp-node-dot{flex:0 0 54px;height:54px;border-radius:50%;border:3px solid #ffd166;background:linear-gradient(135deg,#5d68ef,#30266f);color:#fff;font-weight:800;cursor:pointer;box-shadow:0 0 0 5px rgba(94,231,247,.12),0 8px 22px rgba(0,0,0,.25)}.gp-node-dot:hover{transform:scale(1.08)}.gp-node-card{flex:1;min-width:0;cursor:pointer}.gp-node-card:hover{border-color:#5ee7f7}.gp-node-card h3{margin:0}.gp-node-card .gp-node-owner{color:#ffd166;font-weight:700}.gp-node-card .gp-node-status{font-size:.9rem}.gp-node-card .gp-node-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}`;document.head.appendChild(st);}
-  app.innerHTML=`<div class="gp-head"><div><small>${esc(g.name||"جروب")}</small><h2 class="sh">${esc(p.title||"مشروع التخرج")}</h2><p class="mut">مسار العرض — ${members.length} أعضاء · جزء ثابت لكل عضو · ${Math.max(members.length,Number(p.presentationMinutes)||members.length*3)} دقيقة مبدئيًا</p></div><div class="row" style="margin:0">${mgr?`<button class="del" id="deleteGradProject">🗑 حذف المشروع بالكامل</button>`:""}${admin?`<button class="sec" id="organizeGradProject">تنظيم المشروع</button><button class="sec" id="translateGradProject">🌐 ترجمة المشروع</button><button class="sec" id="refreshGradTransitions">🔗 تحديث الانتقالات</button><button class="sec" id="reviewGradProject">✅ مراجعة نهائية</button>`:""}<button id="downloadGradProject">📄 PDF كامل للمشروع</button><button class="sec" id="backGraduation">← رجوع</button></div></div>${(p.openingOptions?.length||p.closingOptions?.length)?`<section class="gp-card gp-section"><h3>مقدمة وخاتمة المشروع</h3><div class="gp-card"><b>المقدمة المختارة:</b><p dir="ltr">${esc(p.selectedOpening||p.openingOptions?.[0]||"لم يتم الاختيار بعد")}</p><button class="sec" id="chooseGpOpening" type="button">اختيار مقدمة</button></div><div class="gp-card"><b>الخاتمة المختارة:</b><p dir="ltr">${esc(p.selectedClosing||p.closingOptions?.[0]||"لم يتم الاختيار بعد")}</p><button class="sec" id="chooseGpClosing" type="button">اختيار خاتمة</button></div></section>`:""}<section class="gp-card gp-section"><h3>مسار مشروع التخرج</h3><p class="gp-note">كل دائرة تمثل عضوًا واحدًا وجزءًا واحدًا فقط. اضغط على دائرة الشخص لإضافة ملف الجزء الخاص به، ثم اضغط «تنظيم بالذكاء الاصطناعي». الذكاء الاصطناعي ينظم النص ويقترح فقرة انتقالية وأسئلة اللجنة وإجاباتها، ولا يكتب مشروعًا من عنده.</p><div class="gp-progress"><i style="width:${percent}%"></i></div><small class="mut">إنجاز الفريق: ${done}/${tasks.length} (${percent}%)</small><div class="gp-flow">${tasks.map((t,i)=>{const mine=t.memberUid===user.uid,ready=!!String(t.fullText||"").trim(),organized=!!String(t.script||"").trim();return `<article class="gp-node"><button class="gp-node-dot" data-grad-edit="${esc(t.id)}" title="فتح جزء ${i+1}">${i+1}</button><div class="gp-card gp-node-card" data-grad-edit="${esc(t.id)}"><h3>${esc(t.title||`جزء ${i+1}`)}</h3><div class="gp-node-owner">${esc(nameOf(t.memberUid))}${mine?" · جزئي":""}</div><p class="gp-node-status">${organized?"✅ تم تنظيم الجزء":ready?"📄 تم رفع الملف — جاهز للتنظيم":"⚪ لم يُضف ملف الجزء بعد"} · ${Math.max(1,Math.min(8,Number(t.suggestedMinutes)||3))} دقائق</p><div class="gp-node-actions"><button class="sec" data-grad-show="${esc(t.id)}" type="button">👁 إظهار الجزء</button>${mine||mgr?`<button class="sec" data-grad-edit="${esc(t.id)}" type="button">${ready?"تعديل الملف":"إضافة ملف الجزء"}</button>${ready?`<button data-grad-organize="${esc(t.id)}" type="button">🤖 نظّم الجزء بالذكاء الاصطناعي</button>`:""}`:""}${(mine||mgr)&&organized?`<button class="sec" data-grad-pdf="${esc(t.id)}" type="button">📄 PDF</button>`:""}${mine&&organized?`<button class="sec" data-grad-voice="${esc(t.id)}" type="button">🎙 تدريب</button>`:""}${mine?`<button class="sec" data-grad-done="${esc(t.id)}" type="button">${t.status==="done"?"إعادة فتح الجزء":"تم إنجاز الجزء"}</button>`:""}</div><div class="gp-inline-panel" data-grad-panel="${esc(t.id)}" hidden></div></div></article>`;}).join("")}</div></section>`;
+  app.innerHTML=`<div class="gp-head"><div><small>${esc(g.name||"جروب")}</small><h2 class="sh">${esc(p.title||"مشروع التخرج")}</h2><p class="mut">مسار العرض — ${members.length} أعضاء · جزء ثابت لكل عضو · ${Math.max(members.length,Number(p.presentationMinutes)||members.length*3)} دقيقة مبدئيًا</p></div><div class="row" style="margin:0">${mgr?`<button class="del" id="deleteGradProject">🗑 حذف المشروع بالكامل</button>`:""}${admin?`<button class="sec" id="organizeGradProject">تنظيم المشروع</button><button class="sec" id="translateGradProject">🌐 ترجمة المشروع</button><button class="sec" id="refreshGradTransitions">🔗 تحديث الانتقالات</button><button class="sec" id="reviewGradProject">✅ مراجعة نهائية</button>`:""}<button id="downloadGradProject">📄 PDF كامل للمشروع</button><button class="sec" id="backGraduation">← رجوع</button></div></div>${(p.openingOptions?.length||p.closingOptions?.length)?`<section class="gp-card gp-section"><h3>مقدمة وخاتمة المشروع</h3><div class="gp-card"><b>المقدمة المختارة:</b><p dir="ltr">${esc(p.selectedOpening||p.openingOptions?.[0]||"لم يتم الاختيار بعد")}</p><button class="sec" id="chooseGpOpening" type="button">اختيار مقدمة</button></div><div class="gp-card"><b>الخاتمة المختارة:</b><p dir="ltr">${esc(p.selectedClosing||p.closingOptions?.[0]||"لم يتم الاختيار بعد")}</p><button class="sec" id="chooseGpClosing" type="button">اختيار خاتمة</button></div></section>`:""}<section class="gp-card gp-section"><h3>مسار مشروع التخرج</h3><p class="gp-note">كل دائرة تمثل عضوًا واحدًا وجزءًا واحدًا فقط. اضغط على دائرة الشخص لإضافة ملف الجزء الخاص به، ثم اضغط «تنظيم بالذكاء الاصطناعي». الذكاء الاصطناعي ينظم النص ويقترح فقرة انتقالية وأسئلة اللجنة وإجاباتها، ولا يكتب مشروعًا من عنده.</p><div class="gp-progress"><i style="width:${percent}%"></i></div><small class="mut">إنجاز الفريق: ${done}/${tasks.length} (${percent}%)</small><div class="gp-flow">${tasks.map((t,i)=>{const mine=t.memberUid===user.uid,ready=!!String(t.fullText||"").trim(),organized=!!String(t.script||"").trim();return `<article class="gp-node"><button class="gp-node-dot" data-grad-edit="${esc(t.id)}" title="فتح جزء ${i+1}">${i+1}</button><div class="gp-card gp-node-card" data-grad-edit="${esc(t.id)}"><h3>${esc(t.title||`جزء ${i+1}`)}</h3><div class="gp-node-owner">${esc(nameOf(t.memberUid))}${mine?" · جزئي":""}</div><p class="gp-node-status">${organized?"✅ تم تنظيم الجزء":ready?"📄 تم رفع الملف — جاهز للتنظيم":"⚪ لم يُضف ملف الجزء بعد"} · ${Math.max(1,Math.min(8,Number(t.suggestedMinutes)||3))} دقائق</p><div class="gp-node-actions"><button class="sec" data-grad-show="${esc(t.id)}" type="button">👁 إظهار الجزء</button>${mine||mgr?`<button class="sec" data-grad-edit="${esc(t.id)}" type="button">${ready?"تعديل الملف":"إضافة ملف الجزء"}</button>${ready?`<button data-grad-organize="${esc(t.id)}" type="button">🤖 نظّم الجزء بالذكاء الاصطناعي</button>`:""}`:""}${(mine||mgr)&&organized?`<button class="sec" data-grad-pdf="${esc(t.id)}" type="button">📄 PDF</button>`:""}${mine&&organized?`<button class="sec" data-grad-voice="${esc(t.id)}" type="button">🎙 تدريب</button>`:""}${String(t.script||t.fullText||"").trim()?`<button class="sec" data-grad-pron="${esc(t.id)}" type="button">🎤 اختبر نطقك</button>`:""}${mine?`<button class="sec" data-grad-done="${esc(t.id)}" type="button">${t.status==="done"?"إعادة فتح الجزء":"تم إنجاز الجزء"}</button>`:""}</div><div class="gp-inline-panel" data-grad-panel="${esc(t.id)}" hidden></div></div></article>`;}).join("")}</div></section>`;
   const taskById=id=>tasks.find(t=>t.id===id);
   $("#backGraduation").onclick=graduationProjectsPage;
   if($("#deleteGradProject"))$("#deleteGradProject").onclick=()=>deleteGraduationProject(g,p);
@@ -2855,6 +3004,7 @@ async function graduationProjectRoom(g,p){
   app.querySelectorAll("[data-grad-organize]").forEach(el=>el.onclick=e=>{e.stopPropagation();const t=taskById(el.dataset.gradOrganize);if(t)organizeGraduationTask(g,p,t,tasks[tasks.findIndex(x=>x.id===t.id)+1]||null);});
   app.querySelectorAll("[data-grad-pdf]").forEach(el=>el.onclick=()=>{const t=taskById(el.dataset.gradPdf);if(t)downloadGraduationPartPdf(p,t,null,nameOf(t.memberUid),Number(t.sectionIndex||0)+1,tasks.length);});
   app.querySelectorAll("[data-grad-voice]").forEach(el=>el.onclick=()=>{const t=taskById(el.dataset.gradVoice);if(t)startGraduationVoicePractice(g,p,t);});
+  app.querySelectorAll("[data-grad-pron]").forEach(el=>el.onclick=()=>{const t=taskById(el.dataset.gradPron);if(t)openPronunciationTest(t.title||"جزء المشروع",String(t.script||t.fullText||""));});
   app.querySelectorAll("[data-grad-done]").forEach(el=>el.onclick=async()=>{const t=taskById(el.dataset.gradDone);if(!t)return;try{await updateDoc(doc(db,"graduationProjects",g.id,"tasks",t.id),{status:t.status==="done"?"todo":"done",updatedAt:serverTimestamp()});graduationProjectRoom(g,p);}catch(e){alert("تعذر تحديث حالة الجزء: "+(e.code||e.message));}});
   groupListUnsubs.push(onSnapshot(doc(db,"groups",g.id),snap=>{if(!snap.exists()||snap.data().deleted){graduationProjectsPage();return;}const fresh={id:g.id,...snap.data()};if(!groupMember(fresh)){graduationProjectsPage();return;}if(JSON.stringify(fresh.members||[])!==JSON.stringify(members))graduationProjectRoom(fresh,p);}));
 }
