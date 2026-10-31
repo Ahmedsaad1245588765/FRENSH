@@ -2722,7 +2722,17 @@ body.night .dm-in{background:#2a3942;color:#e9edef}
 .dm-li{display:flex;gap:12px;align-items:center;padding:10px 6px;border-bottom:1px solid rgba(128,128,128,.25);cursor:pointer}
 .dm-li .dm-av{background:#dfe5e7}.dm-li>div:nth-child(2){flex:1;min-width:0}
 .dm-li .pv{opacity:.75;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dm-dot{width:11px;height:11px;border-radius:50%;background:#00a884;flex:none}`;
+.dm-dot{width:11px;height:11px;border-radius:50%;background:#00a884;flex:none}
+.dm-li .dm-ic{background:transparent!important;border:0!important;box-shadow:none!important;color:inherit;padding:4px 8px!important;font-size:1.2rem;cursor:pointer;width:auto;min-width:0}
+.dm-call{position:fixed;inset:0;z-index:99999;background:#111b21;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;direction:rtl}
+.dm-call video.rv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+.dm-call video.lv{position:absolute;bottom:110px;left:14px;width:110px;height:150px;object-fit:cover;border-radius:12px;background:#222;border:2px solid rgba(255,255,255,.4);transform:scaleX(-1);z-index:2}
+.dm-call .ci{position:relative;z-index:2;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+.dm-call .cav{width:110px;height:110px;border-radius:50%;background:#dfe5e7;color:#54656f;display:grid;place-items:center;font-size:2.6rem;font-weight:700;margin:0 auto 10px}
+.dm-call.v.act .ci{position:absolute;top:14px}.dm-call.v.act .cav{display:none}
+.dm-call .cb{position:absolute;bottom:28px;left:0;right:0;display:flex;justify-content:center;gap:18px;z-index:3}
+.dm-call .cb button{width:58px;height:58px;border-radius:50%!important;border:0!important;font-size:1.5rem;padding:0!important;color:#fff!important;background:rgba(255,255,255,.22)!important;cursor:pointer;min-width:0;margin:0}
+.dm-call .cb .end{background:#e53935!important}.dm-call .cb .acc{background:#00a884!important}.dm-call .cb .off{background:#fff!important;color:#111!important}`;
   document.head.appendChild(s);
 }
 async function dmPopup(uid, lastRead) {
@@ -2732,6 +2742,7 @@ async function dmPopup(uid, lastRead) {
     const ms = await getDocs(collection(db, "dmThreads", uid, "messages"));
     const fresh = ms.docs.map(d => d.data()).filter(m => m.from !== "user" && !m.deleted && (m.created?.toMillis?.() || 0) > lastRead).sort((a, b) => (a.created?.seconds || 0) - (b.created?.seconds || 0));
     if (!fresh.length) { dmPopupOpen = false; return; }
+    dmSound("recv");
     const d = dmDialog(`<h3 class="fr">✉️ رسالة من الإدارة</h3>
       <div style="max-height:50vh;overflow:auto;display:flex;flex-direction:column;gap:8px">${fresh.map(m => dmBubble(dmText(m), m.created)).join("")}</div>
       <div class="row" style="margin-top:12px"><button type="button" id="dmPopOk">تمام</button><button type="button" class="sec" id="dmPopOpen">فتح الرسائل</button></div>`);
@@ -2741,32 +2752,234 @@ async function dmPopup(uid, lastRead) {
     d.querySelector("#dmPopOpen").onclick = () => { goOpen = true; d.close(); };
   } catch (e) { dmPopupOpen = false; console.warn("dm popup", e); }
 }
-function dmStop() { dmWatchUnsub?.(); dmWatchUnsub = null; clearInterval(dmTimer); dmTimer = null; dmUnlocked.clear(); }
+/* ---------- أصوات المحادثة ---------- */
+let dmViewingId = null, dmCall = null, dmRingTimer = null, dmAlertOpen = false, dmAC = null;
+const dmNotified = new Map(), dmAlertQ = [];
+const dmMuted = () => { try { return localStorage.getItem("dmMute") === "1"; } catch { return false; } };
+function dmAudio() {
+  if (!dmAC) { try { dmAC = new (window.AudioContext || window.webkitAudioContext)(); } catch {} }
+  if (dmAC && dmAC.state === "suspended") dmAC.resume().catch(() => {});
+  return dmAC;
+}
+document.addEventListener("pointerdown", () => dmAudio(), { once: true });
+function dmTone(freq, start, dur, vol = .16, type = "sine") {
+  const ac = dmAudio(); if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain(), t0 = ac.currentTime + start;
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(vol, t0 + .015); g.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
+  o.connect(g); g.connect(ac.destination); o.start(t0); o.stop(t0 + dur + .03);
+}
+function dmSound(kind) {
+  if (dmMuted()) return;
+  if (kind === "send") { dmTone(700, 0, .07, .12); dmTone(980, .07, .09, .12); }
+  else if (kind === "recv") { dmTone(660, 0, .12, .18); dmTone(880, .13, .2, .18); }
+  else if (kind === "callend") { dmTone(480, 0, .14, .15); dmTone(340, .16, .22, .15); }
+}
+function dmRing(kind) {
+  clearInterval(dmRingTimer); dmRingTimer = null; if (!kind) return;
+  const play = () => { if (kind === "in") { dmTone(880, 0, .22, .22); dmTone(660, .26, .22, .22); dmTone(880, .7, .22, .22); dmTone(660, .96, .22, .22); } else { dmTone(440, 0, .8, .1); } };
+  play(); dmRingTimer = setInterval(play, kind === "in" ? 2200 : 3000);
+}
+
+/* ---------- المكالمات (صوت / فيديو) ---------- */
+const DM_ICE = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }] };
+function dmCallUI(c, mode) {
+  c.el?.remove(); clearInterval(c.timer);
+  const el = c.el = document.createElement("div"), isV = c.type === "video";
+  el.className = "dm-call" + (isV ? " v" : "") + (mode === "active" ? " act" : "");
+  const label = mode === "ring-in" ? (isV ? "مكالمة فيديو واردة…" : "مكالمة صوتية واردة…") : mode === "ring-out" ? "جاري الاتصال…" : "00:00";
+  const btns = mode === "ring-in"
+    ? `<button class="acc" id="dmCAcc" title="رد">📞</button><button class="end" id="dmCEnd" title="رفض">✕</button>`
+    : `${mode === "active" ? `<button id="dmCMic" title="كتم">🎤</button>${isV ? `<button id="dmCCam" title="الكاميرا">📷</button>` : ""}` : ""}<button class="end" id="dmCEnd" title="إنهاء">✕</button>`;
+  el.innerHTML = `<video class="rv" id="dmRV" autoplay playsinline ${isV ? "" : 'style="position:absolute;width:1px;height:1px;opacity:0"'}></video>${isV && c.stream ? `<video class="lv" id="dmLV" autoplay playsinline muted></video>` : ""}
+    <div class="ci"><div class="cav">${esc(c.peer.trim().slice(0, 1))}</div><div style="font-size:1.4rem;font-weight:700">${esc(c.peer)}</div><div id="dmCT" style="opacity:.85;margin-top:4px">${label}</div></div><div class="cb">${btns}</div>`;
+  document.body.appendChild(el);
+  const rv = el.querySelector("#dmRV"); rv.srcObject = c.remote;
+  const lv = el.querySelector("#dmLV"); if (lv) lv.srcObject = c.stream;
+  el.querySelector("#dmCEnd").onclick = dmHangup;
+  const acc = el.querySelector("#dmCAcc"); if (acc) acc.onclick = dmAcceptCall;
+  const mic = el.querySelector("#dmCMic"); if (mic) mic.onclick = () => { const t = c.stream?.getAudioTracks() || []; const on = !(t[0]?.enabled); t.forEach(x => x.enabled = on); mic.classList.toggle("off", !on); mic.textContent = on ? "🎤" : "🔇"; };
+  const cam = el.querySelector("#dmCCam"); if (cam) cam.onclick = () => { const t = c.stream?.getVideoTracks() || []; const on = !(t[0]?.enabled); t.forEach(x => x.enabled = on); cam.classList.toggle("off", !on); };
+  if (mode === "active") c.timer = setInterval(() => {
+    const t = el.querySelector("#dmCT"); if (!t || !c.startedAt) return;
+    const s = Math.round((Date.now() - c.startedAt) / 1000); t.textContent = String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+  }, 1000);
+}
+function dmWirePc(c) {
+  const pc = c.pc, base = collection(db, "dmCalls", c.uid, "cands");
+  c.pending = []; c.remote = c.remote || new MediaStream();
+  pc.ontrack = e => { e.streams[0]?.getTracks().forEach(t => { if (!c.remote.getTracks().includes(t)) c.remote.addTrack(t); }); const rv = c.el?.querySelector("#dmRV"); if (rv && rv.srcObject !== c.remote) rv.srcObject = c.remote; };
+  pc.onicecandidate = e => { if (e.candidate) addDoc(base, { callId: c.id, from: c.role, c: JSON.stringify(e.candidate.toJSON()), createdAt: serverTimestamp() }).catch(() => {}); };
+  pc.onconnectionstatechange = () => { if (pc.connectionState === "failed" && dmCall === c) { alert("فشل الاتصال. ممكن الشبكة مش بتسمح بالمكالمات المباشرة."); dmHangup(); } };
+  c.unsubs.push(onSnapshot(query(base, where("callId", "==", c.id)), snap => {
+    snap.docChanges().forEach(ch => {
+      if (ch.type !== "added") return; const x = ch.doc.data(); if (x.from === c.role) return;
+      let cand; try { cand = JSON.parse(x.c); } catch { return; }
+      if (pc.remoteDescription) pc.addIceCandidate(cand).catch(() => {}); else c.pending.push(cand);
+    });
+  }, () => {}));
+}
+const dmFlush = c => c.pending.splice(0).forEach(x => c.pc.addIceCandidate(x).catch(() => {}));
+function dmHangup() {
+  const c = dmCall; if (!c) return;
+  updateDoc(c.ref, { state: c.role === "user" && !c.startedAt ? "declined" : "ended" }).catch(() => {});
+  dmCallEnd(c.role === "admin" ? (c.startedAt ? "ended" : "cancel") : (c.startedAt ? "ended" : "declined"));
+}
+function dmCallEnd(reason) {
+  const c = dmCall; if (!c) return; dmCall = null;
+  dmRing(null); clearInterval(c.timer); clearTimeout(c.ringTO);
+  c.unsubs.forEach(f => { try { f(); } catch {} });
+  try { c.pc?.close(); } catch {}
+  c.stream?.getTracks().forEach(t => t.stop()); c.el?.remove();
+  if (reason === "silent") return;
+  dmSound("callend");
+  if (c.role === "admin") {
+    const kind = c.type === "video" ? "فيديو" : "صوتية", dur = c.startedAt ? Math.round((Date.now() - c.startedAt) / 1000) : 0;
+    const mm = String(Math.floor(dur / 60)).padStart(2, "0") + ":" + String(dur % 60).padStart(2, "0");
+    const text = c.startedAt ? `📞 مكالمة ${kind} · ${mm}` : reason === "declined" ? `📞 مكالمة ${kind} مرفوضة` : reason === "missed" ? `📞 مكالمة ${kind} فائتة` : `📞 مكالمة ${kind} ملغية`;
+    addDoc(collection(db, "dmThreads", c.uid, "messages"), { from: "admin", text, created: serverTimestamp() }).catch(() => {});
+  }
+}
+async function dmStartCall(th, type) {
+  if (dmCall) return alert("فيه مكالمة شغالة دلوقتي.");
+  if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) return alert("المتصفح لا يدعم المكالمات. افتح الموقع عبر HTTPS وبمتصفح حديث.");
+  dmEnsureStyle(); dmAudio();
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === "video" }); }
+  catch (e) { return alert("تعذر فتح المايك/الكاميرا: " + (e.name || e.message)); }
+  const callId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()), ref = doc(db, "dmCalls", th.id);
+  const c = dmCall = { role: "admin", id: callId, uid: th.id, type, ref, stream, unsubs: [], peer: th.name || "الطالب", remote: new MediaStream() };
+  try {
+    const old = await getDocs(collection(db, "dmCalls", th.id, "cands"));
+    if (old.size) { const b = writeBatch(db); old.docs.slice(0, 400).forEach(x => b.delete(x.ref)); await b.commit(); }
+    const pc = c.pc = new RTCPeerConnection(DM_ICE);
+    stream.getTracks().forEach(t => pc.addTrack(t, stream));
+    dmCallUI(c, "ring-out"); dmWirePc(c);
+    const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+    await setDoc(ref, { callId, type, state: "ringing", offer: { type: offer.type, sdp: offer.sdp }, by: "admin", createdAt: serverTimestamp() });
+    dmRing("out");
+    c.ringTO = setTimeout(() => { if (dmCall === c && !c.startedAt) { updateDoc(ref, { state: "missed" }).catch(() => {}); dmCallEnd("missed"); } }, 45000);
+    c.unsubs.push(onSnapshot(ref, async snap => {
+      const d = snap.data(); if (!d || d.callId !== callId || dmCall !== c) return;
+      if (d.answer && !c.gotAnswer) {
+        c.gotAnswer = true; await pc.setRemoteDescription(d.answer); dmFlush(c);
+        c.startedAt = Date.now(); clearTimeout(c.ringTO); dmRing(null); dmCallUI(c, "active");
+      }
+      if (d.state === "declined") dmCallEnd("declined");
+      else if (d.state === "ended" || d.state === "missed") dmCallEnd(c.startedAt ? "ended" : "cancel");
+    }));
+  } catch (e) { alert("تعذر بدء المكالمة: " + (e.code || e.message)); dmCallEnd("silent"); }
+}
+function dmIncoming(u, d) {
+  if (dmCall) return;
+  dmEnsureStyle(); dmAudio();
+  const ref = doc(db, "dmCalls", u.uid);
+  const c = dmCall = { role: "user", id: d.callId, uid: u.uid, type: d.type, ref, unsubs: [], peer: "الإدارة", remote: new MediaStream(), offer: d.offer };
+  dmCallUI(c, "ring-in"); dmRing("in");
+  c.ringTO = setTimeout(() => { if (dmCall === c && !c.startedAt) dmCallEnd("missed"); }, 50000);
+  c.unsubs.push(onSnapshot(ref, snap => {
+    const x = snap.data(); if (!x || x.callId !== c.id || dmCall !== c) return;
+    if (x.state === "ended" || x.state === "missed") dmCallEnd(x.state);
+  }, () => {}));
+}
+async function dmAcceptCall() {
+  const c = dmCall; if (!c || c.role !== "user" || c.accepting) return; c.accepting = true;
+  dmRing(null); clearTimeout(c.ringTO);
+  try {
+    c.stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: c.type === "video" });
+    const pc = c.pc = new RTCPeerConnection(DM_ICE);
+    c.stream.getTracks().forEach(t => pc.addTrack(t, c.stream));
+    dmWirePc(c);
+    await pc.setRemoteDescription(c.offer); dmFlush(c);
+    const ans = await pc.createAnswer(); await pc.setLocalDescription(ans);
+    await updateDoc(c.ref, { state: "active", answer: { type: ans.type, sdp: ans.sdp } });
+    c.startedAt = Date.now(); dmCallUI(c, "active");
+  } catch (e) {
+    alert("تعذر الرد على المكالمة: " + (e.name || e.code || e.message));
+    updateDoc(c.ref, { state: "declined" }).catch(() => {}); dmCallEnd("silent");
+  }
+}
+function dmWatchCalls(u) {
+  if (admin) return () => {};
+  return onSnapshot(doc(db, "dmCalls", u.uid), snap => {
+    const d = snap.data(); if (!d || dmCall) return;
+    if (d.state === "ringing" && d.createdAt && Date.now() - d.createdAt.toMillis() < 60000) dmIncoming(u, d);
+  }, () => {});
+}
+
+/* ---------- إشعار الأدمن لما حد يبعت له ---------- */
+function dmAdminAlert(th) {
+  if (dmViewingId === th.id && $("#dmMsgs")) return;
+  dmAlertQ.push(th); dmNextAlert();
+}
+async function dmNextAlert() {
+  if (dmAlertOpen || !dmAlertQ.length) return;
+  const th = dmAlertQ.shift(); dmAlertOpen = true; dmEnsureStyle(); dmSound("recv");
+  const locked = th.locked && !dmUnlocked.has(th.id);
+  let items = [];
+  if (!locked) {
+    try {
+      const ms = await getDocs(collection(db, "dmThreads", th.id, "messages")), read = th.adminReadAt?.toMillis?.() || 0;
+      items = ms.docs.map(d => d.data()).filter(m => m.from === "user" && !m.deleted && (m.created?.toMillis?.() || 0) > read).sort((a, b) => (a.created?.seconds || 0) - (b.created?.seconds || 0)).slice(-5);
+    } catch {}
+  }
+  const d = dmDialog(`<h3 class="fr">💬 ${esc(th.name || "طالب")}</h3>
+    ${locked ? `<p class="mut">🔒 المحادثة محمية بباسورد. افتحها عشان تشوف الرسالة.</p>` : `<div style="max-height:40vh;overflow:auto;display:flex;flex-direction:column;gap:8px">${items.map(m => dmBubble(dmText(m), m.created)).join("") || `<p class="mut">رسالة جديدة</p>`}</div><textarea id="dmAIn" rows="2" placeholder="رد سريع…" style="width:100%;margin-top:8px"></textarea>`}
+    <div class="row" style="margin-top:8px">${locked ? "" : `<button type="button" id="dmASend">رد</button>`}<button type="button" class="sec" id="dmAOpen">فتح المحادثة</button><button type="button" class="sec" id="dmAX">إغلاق</button></div>`);
+  let goOpen = false;
+  d.addEventListener("close", () => {
+    dmAlertOpen = false;
+    if (!locked) updateDoc(doc(db, "dmThreads", th.id), { adminReadAt: serverTimestamp() }).catch(() => {});
+    if (goOpen) dmThreadView(th);
+    setTimeout(dmNextAlert, 300);
+  });
+  d.querySelector("#dmAX").onclick = () => d.close();
+  d.querySelector("#dmAOpen").onclick = () => { goOpen = true; d.close(); };
+  const sb = d.querySelector("#dmASend");
+  if (sb) sb.onclick = async () => {
+    const t = d.querySelector("#dmAIn").value.trim(); if (!t) return; sb.disabled = true;
+    try {
+      const b = writeBatch(db);
+      b.set(doc(collection(db, "dmThreads", th.id, "messages")), { from: "admin", text: t, created: serverTimestamp() });
+      b.update(doc(db, "dmThreads", th.id), { lastAt: serverTimestamp(), lastText: t.slice(0, 80) });
+      await b.commit(); dmSound("send"); d.close();
+    } catch (e) { alert("تعذر الإرسال: " + (e.code || e.message)); sb.disabled = false; }
+  };
+}
+
+function dmStop() { dmWatchUnsub?.(); dmWatchUnsub = null; clearInterval(dmTimer); dmTimer = null; dmUnlocked.clear(); dmNotified.clear(); dmAlertQ.length = 0; if (dmCall) dmCallEnd("silent"); dmViewingId = null; }
 function startDmWatch(u) {
   dmStop();
   const n = $("#n12"); if (!n) return;
+  n.style.display = "";
   if (admin) {
-    n.style.display = ""; n.textContent = "الرسائل";
+    n.textContent = "الرسائل";
     const ping = () => { if (document.visibilityState === "visible") setDoc(doc(db, "dmPresence", "admin"), { seen: serverTimestamp() }).catch(() => {}); };
     ping(); dmTimer = setInterval(ping, 40000);
     dmWatchUnsub = onSnapshot(collection(db, "dmThreads"), snap => {
       const un = snap.docs.some(d => { const x = d.data(); return (x.lastUserAt?.toMillis?.() || 0) > (x.adminReadAt?.toMillis?.() || 0); });
       n.textContent = un ? "الرسائل 🔴" : "الرسائل";
+      snap.docChanges().forEach(ch => {
+        if (ch.type === "removed") return;
+        const x = ch.doc.data(), ms = x.lastUserAt?.toMillis?.() || 0, read = x.adminReadAt?.toMillis?.() || 0;
+        if (ms > read && ms > (dmNotified.get(ch.doc.id) || 0)) { dmNotified.set(ch.doc.id, ms); dmAdminAlert({ id: ch.doc.id, ...x }); }
+      });
     }, () => {});
     return;
   }
-  n.style.display = "none";
   const ref = doc(db, "dmThreads", u.uid); let exists = false, pinged = false;
   const ping = () => { if (exists && document.visibilityState === "visible") updateDoc(ref, { seenUser: serverTimestamp() }).catch(() => {}); };
   dmTimer = setInterval(ping, 40000);
-  dmWatchUnsub = onSnapshot(ref, snap => {
+  const unT = onSnapshot(ref, snap => {
     exists = snap.exists();
-    if (!exists) { n.style.display = "none"; return; }
+    if (!exists) { n.textContent = "الرسائل"; return; }
     if (!pinged) { pinged = true; ping(); }
     const d = snap.data(), lastRead = d.lastReadAt?.toMillis?.() || 0, unread = (d.lastAt?.toMillis?.() || 0) > lastRead;
-    n.style.display = ""; n.textContent = unread ? "الرسائل 🔴" : "الرسائل";
+    n.textContent = unread ? "الرسائل 🔴" : "الرسائل";
     if (unread) dmPopup(u.uid, lastRead);
-  }, () => { n.style.display = "none"; });
+  }, () => {});
+  const unC = dmWatchCalls(u);
+  dmWatchUnsub = () => { unT(); unC(); };
 }
 async function dmPage() {
   if (!user) return needLogin();
@@ -2775,7 +2988,7 @@ async function dmPage() {
   if (!admin) {
     try {
       const s = await getDoc(doc(db, "dmThreads", user.uid));
-      if (!s.exists()) { app.innerHTML = `<div class="q" style="max-width:560px;margin:24px auto;text-align:center"><h2 class="sh">✉️ الرسائل</h2><p class="mut">مفيش رسائل لحد دلوقتي.</p></div>`; return; }
+      if (!s.exists()) return dmThreadView({ id: user.uid, name: currentStudentName || user.displayName || "طالب", locked: false, blocked: false, _new: true });
       return dmThreadView({ id: s.id, ...s.data() });
     } catch (e) { app.innerHTML = `<p class="danger" style="text-align:center">تعذر تحميل الرسائل: ${esc(e.code || e.message)}</p>`; return; }
   }
@@ -2788,9 +3001,10 @@ async function dmPage() {
     ${ths.length ? ths.map(t => {
       const un = (t.lastUserAt?.toMillis?.() || 0) > (t.adminReadAt?.toMillis?.() || 0), fromUser = (t.lastUserAt?.toMillis?.() || 0) > (t.lastAt?.toMillis?.() || 0);
       const pv = t.locked ? "🔒 محادثة محمية بكلمة مرور" : esc((fromUser ? t.lastUserText : t.lastText) || "");
-      return `<div class="dm-li" data-dm-open="${esc(t.id)}"><div class="dm-av">${esc((t.name || "ط").trim().slice(0, 1))}</div><div><b>${esc(t.name || "طالب")}</b> ${t.blocked ? "🚫" : ""}<div class="pv">${pv}</div></div><small class="mut">${dmFmt(fromUser ? t.lastUserAt : t.lastAt)}</small>${un ? `<span class="dm-dot"></span>` : ""}</div>`;
+      return `<div class="dm-li" data-dm-open="${esc(t.id)}"><div class="dm-av">${esc((t.name || "ط").trim().slice(0, 1))}</div><div><b>${esc(t.name || "طالب")}</b> ${t.blocked ? "🚫" : ""}<div class="pv">${pv}</div></div><small class="mut">${dmFmt(fromUser ? t.lastUserAt : t.lastAt)}</small><button class="dm-ic" data-call="audio" title="اتصال صوتي">📞</button><button class="dm-ic" data-call="video" title="اتصال فيديو">🎥</button>${un ? `<span class="dm-dot"></span>` : ""}</div>`;
     }).join("") : `<p class="mut">مفيش محادثات لسه. اضغط «رسالة جديدة».</p>`}`;
   app.querySelectorAll("[data-dm-open]").forEach(el => el.onclick = () => dmThreadView(ths.find(t => t.id === el.dataset.dmOpen)));
+  app.querySelectorAll("[data-call]").forEach(b => b.onclick = e => { e.stopPropagation(); const t = ths.find(x => x.id === b.closest("[data-dm-open]").dataset.dmOpen); dmStartCall(t, b.dataset.call); });
   $("#dmNew").onclick = async () => {
     let studs = [];
     try { studs = (await groupStudents()).filter(x => x.id !== user.uid).sort((a, b) => String(a.name).localeCompare(String(b.name), "ar")); } catch {}
@@ -2799,11 +3013,21 @@ async function dmPage() {
       <select id="dmWho" size="6" style="width:100%"></select>
       <label>باسورد لفتح المحادثة عندك إنت (اختياري، الشخص مش بيكتبه)<input id="dmPw" type="text" autocomplete="off"></label>
       <label>الرسالة<textarea id="dmFirst" rows="3"></textarea></label>
-      <div class="row"><button type="submit" id="dmGo">إرسال</button><button type="button" class="sec" id="dmX">إلغاء</button></div><p id="dmErr" class="danger"></p>`);
+      <div class="row"><button type="submit" id="dmGo">إرسال</button><button type="button" class="sec" id="dmCallA2">📞 اتصال صوت</button><button type="button" class="sec" id="dmCallV2">🎥 اتصال فيديو</button><button type="button" class="sec" id="dmX">إلغاء</button></div><p id="dmErr" class="danger"></p>`);
     const sel = d.querySelector("#dmWho"), err = d.querySelector("#dmErr");
     const fill = q => { const n = normalizeSearchText(q); sel.innerHTML = studs.filter(x => normalizeSearchText(x.name).includes(n)).map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join(""); if (sel.options.length) sel.selectedIndex = 0; };
     fill(""); d.querySelector("#dmSearch").oninput = e => fill(e.target.value);
     d.querySelector("#dmX").onclick = () => d.close();
+    const callNow = async type => {
+      err.textContent = ""; const uid = sel.value; if (!uid) return err.textContent = "اختار الشخص الأول";
+      try {
+        const ref = doc(db, "dmThreads", uid), ex = await getDoc(ref), name = studs.find(x => x.id === uid)?.name || "طالب";
+        if (!ex.exists()) await setDoc(ref, { uid, name, locked: false, blocked: false, createdAt: serverTimestamp() });
+        d.close(); dmStartCall({ id: uid, name: ex.exists() ? (ex.data().name || name) : name }, type);
+      } catch (e) { err.textContent = "تعذر بدء المكالمة: " + (e.code || e.message); }
+    };
+    d.querySelector("#dmCallA2").onclick = () => callNow("audio");
+    d.querySelector("#dmCallV2").onclick = () => callNow("video");
     d.querySelector("#dmGo").onclick = async () => {
       err.textContent = "";
       const uid = sel.value, text = d.querySelector("#dmFirst").value.trim(), pw = d.querySelector("#dmPw").value.trim();
@@ -2862,13 +3086,14 @@ async function dmThreadView(th) {
   if (admin && th.locked && !dmUnlocked.has(th.id)) return dmAdminUnlock(th);
   dmEnsureStyle();
   const role = admin ? "admin" : "user";
-  const S = { th, msgs: [], reply: null, edit: null, q: "", presence: null, typedAt: 0 };
+  dmViewingId = th.id;
+  const S = { th, exists: !th._new, loaded: false, msgs: [], reply: null, edit: null, q: "", presence: null, typedAt: 0 };
   const thRef = doc(db, "dmThreads", th.id), msgsCol = collection(db, "dmThreads", th.id, "messages");
   const otherName = () => admin ? (S.th.name || "الشخص") : "الإدارة";
   app.innerHTML = `<div class="dm-chat">
     <div class="dm-head">${admin ? `<button class="dm-ic" id="dmBack" title="رجوع">➜</button>` : ""}<div class="dm-av">${esc((admin ? (th.name || "ط") : "إ").trim().slice(0, 1))}</div>
       <div style="flex:1;min-width:0"><div class="dm-name">${esc(admin ? (th.name || "طالب") : "الإدارة")}${admin && th.locked ? " 🔒" : ""}</div><div class="dm-st" id="dmSt"></div></div>
-      <button class="dm-ic" id="dmSearchBtn" title="بحث">🔍</button>${admin ? `<button class="dm-ic" id="dmMenu" title="المزيد">⋮</button>` : ""}</div>
+      ${admin ? `<button class="dm-ic" id="dmCallA" title="اتصال صوتي">📞</button><button class="dm-ic" id="dmCallV" title="اتصال فيديو">🎥</button>` : ""}<button class="dm-ic" id="dmMute" title="صوت الإشعارات">${dmMuted() ? "🔕" : "🔔"}</button><button class="dm-ic" id="dmSearchBtn" title="بحث">🔍</button>${admin ? `<button class="dm-ic" id="dmMenu" title="المزيد">⋮</button>` : ""}</div>
     <div class="dm-search" id="dmSearchBar" style="display:none"><input id="dmQ" type="search" placeholder="ابحث في المحادثة…" autocomplete="off"><span id="dmQc" class="mut"></span></div>
     <div class="dm-body" id="dmMsgs"></div>
     <div class="dm-blk" id="dmBlk" style="display:none"></div>
@@ -2916,7 +3141,7 @@ async function dmThreadView(th) {
       const ticks = mine && !m.deleted ? `<span class="dm-tk ${read ? "rd" : ""}">${delivered ? "✓✓" : "✓"}</span>` : "";
       html += `<div class="dm-row ${mine ? "me" : "them"}" id="dm-${m.id}"><div class="dm-b">${m.deleted ? "" : `<button class="dm-dd" data-menu="${m.id}" title="خيارات">⌄</button>`}${quote}${body}<div class="dm-meta">${m.edited && !m.deleted ? "معدّلة · " : ""}${dmClock(m.cms)}${ticks}</div>${rx}</div></div>`;
     });
-    box.innerHTML = html || `<div class="dm-day">${q ? "مفيش نتائج" : "مفيش رسائل لسه"}</div>`;
+    box.innerHTML = html || `<div class="dm-day">${q ? "مفيش نتائج" : (admin ? "مفيش رسائل لسه" : "ابعت رسالتك للإدارة من هنا")}</div>`;
     if (first || near) box.scrollTop = box.scrollHeight;
   };
   const markRead = () => {
@@ -2926,12 +3151,15 @@ async function dmThreadView(th) {
   };
   unsubs.push(onSnapshot(thRef, snap => {
     if (!alive()) return;
-    if (!snap.exists()) { dmPage(); return; }
-    S.th = { id: snap.id, ...snap.data({ serverTimestamps: "estimate" }) };
+    S.exists = snap.exists();
+    if (!S.exists) { if (admin) { dmPage(); return; } S.th = { id: th.id, name: th.name, locked: false, blocked: false }; }
+    else S.th = { id: snap.id, ...snap.data({ serverTimestamps: "estimate" }) };
     setStatus(); updateBar(); renderMsgs();
   }, () => {}));
   unsubs.push(onSnapshot(msgsCol, snap => {
     if (!alive()) return;
+    if (S.loaded) snap.docChanges().forEach(ch => { if (ch.type !== "added" || ch.doc.metadata.hasPendingWrites) return; const x = ch.doc.data(); if (x.from !== role && !String(x.text || "").startsWith("📞")) dmSound("recv"); });
+    S.loaded = true;
     S.msgs = snap.docs.map(d => { const x = d.data({ serverTimestamps: "estimate" }); return { id: d.id, ...x, cms: x.created?.toMillis?.() ?? Date.now() }; }).sort((a, b) => a.cms - b.cms);
     renderMsgs(); markRead();
   }, e => { box.innerHTML = `<div class="dm-day">تعذر تحميل الرسائل: ${esc(e.code || e.message)}</div>`; }));
@@ -2950,10 +3178,11 @@ async function dmThreadView(th) {
         const data = { from: role, text, created: serverTimestamp() };
         if (S.reply) data.replyTo = { id: S.reply.id, text: S.reply.text, from: S.reply.from };
         const b = writeBatch(db); b.set(doc(msgsCol), data);
-        b.update(thRef, admin ? { lastAt: serverTimestamp(), lastText: text.slice(0, 80) } : { lastUserAt: serverTimestamp(), lastUserText: text.slice(0, 80) });
+        if (!admin && !S.exists) b.set(thRef, { uid: th.id, name: S.th.name || "طالب", locked: false, blocked: false, createdAt: serverTimestamp(), lastUserAt: serverTimestamp(), lastUserText: text.slice(0, 80) });
+        else b.update(thRef, admin ? { lastAt: serverTimestamp(), lastText: text.slice(0, 80) } : { lastUserAt: serverTimestamp(), lastUserText: text.slice(0, 80) });
         await b.commit();
       }
-      inp.value = ""; inp.style.height = "auto"; S.reply = null; updateCtx(); box.scrollTop = box.scrollHeight;
+      inp.value = ""; inp.style.height = "auto"; S.reply = null; updateCtx(); box.scrollTop = box.scrollHeight; dmSound("send");
     } catch (e) { alert("تعذر الإرسال: " + (e.code || e.message)); }
     btn.disabled = !admin && S.th.blocked === true; inp.focus();
   };
@@ -2967,6 +3196,8 @@ async function dmThreadView(th) {
   emo.innerHTML = DM_EMOJIS.map(e => `<button type="button" class="dm-ic" data-e="${e}">${e}</button>`).join("");
   $("#dmEmoBtn").onclick = () => { emo.style.display = emo.style.display === "none" ? "" : "none"; };
   emo.onclick = e => { const b = e.target.closest("[data-e]"); if (!b) return; const p = inp.selectionStart ?? inp.value.length; inp.value = inp.value.slice(0, p) + b.dataset.e + inp.value.slice(inp.selectionEnd ?? p); inp.focus(); inp.selectionStart = inp.selectionEnd = p + b.dataset.e.length; };
+  $("#dmMute").onclick = () => { const m = !dmMuted(); try { localStorage.setItem("dmMute", m ? "1" : "0"); } catch {} $("#dmMute").textContent = m ? "🔕" : "🔔"; if (!m) dmSound("recv"); };
+  if (admin) { $("#dmCallA").onclick = () => dmStartCall(S.th, "audio"); $("#dmCallV").onclick = () => dmStartCall(S.th, "video"); }
   $("#dmSearchBtn").onclick = () => { const bar = $("#dmSearchBar"), on = bar.style.display === "none"; bar.style.display = on ? "" : "none"; if (on) $("#dmQ").focus(); else { S.q = ""; $("#dmQ").value = ""; renderMsgs(); } };
   $("#dmQ").oninput = e => { S.q = e.target.value; renderMsgs(); };
 
