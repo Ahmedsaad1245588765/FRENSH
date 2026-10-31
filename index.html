@@ -2827,9 +2827,30 @@ async function dmPage() {
   };
 }
 function dmAdminUnlock(th) {
-  app.innerHTML = `<div class="q" style="max-width:420px;margin:24px auto;text-align:center"><h2 class="sh">🔒 ${esc(th.name || "محادثة")}</h2><p class="mut">اكتب الباسورد عشان تفتح المحادثة دي.</p><form id="dmUnlock"><label>الباسورد<input name="p" type="password" autocomplete="off" required></label><div class="row" style="justify-content:center"><button type="submit">فتح</button><button type="button" class="sec" id="dmUBack">رجوع</button></div><p id="dmUErr" class="danger"></p></form></div>`;
+  app.innerHTML = `<div class="q" style="max-width:420px;margin:24px auto;text-align:center"><h2 class="sh">🔒 ${esc(th.name || "محادثة")}</h2><p class="mut">اكتب الباسورد عشان تفتح المحادثة دي.</p><form id="dmUnlock"><label>الباسورد<input name="p" type="password" autocomplete="off" required></label><div class="row" style="justify-content:center"><button type="submit">فتح</button><button type="button" class="sec" id="dmUBack">رجوع</button></div><div class="row" style="justify-content:center"><button type="button" class="sec" id="dmUForgot" style="font-size:.85rem">نسيت الباسورد؟</button></div><p id="dmUErr" class="danger"></p></form></div>`;
   addPasswordToggles(app);
   $("#dmUBack").onclick = dmPage;
+  $("#dmUForgot").onclick = () => {
+    const d = dmDialog(`<h3 class="fr">استرجاع الوصول للمحادثة</h3>
+      <p class="mut">اكتب كلمة مرور حسابك إنت (الأدمن) عشان نشيل باسورد المحادثة دي. الرسايل مش هتتمسح، وتقدر تحط باسورد جديد بعد ما تفتحها.</p>
+      <label>كلمة مرور حسابك<input id="dmAcc" type="password" autocomplete="current-password"></label>
+      <div class="row"><button type="submit" id="dmAccGo">تأكيد</button><button type="button" class="sec" id="dmAccX">إلغاء</button></div><p id="dmAccMsg" class="danger"></p>`);
+    addPasswordToggles(d);
+    const msg = d.querySelector("#dmAccMsg"), go = d.querySelector("#dmAccGo");
+    d.querySelector("#dmAccX").onclick = () => d.close();
+    go.onclick = async () => {
+      const pw = d.querySelector("#dmAcc").value; if (!pw) return msg.textContent = "اكتب كلمة مرور حسابك";
+      msg.textContent = ""; go.disabled = true;
+      try {
+        await reauthenticateWithCredential(auth.currentUser, EmailAuthProvider.credential(auth.currentUser.email, pw));
+        const b = writeBatch(db); b.delete(doc(db, "dmSecrets", th.id)); b.update(doc(db, "dmThreads", th.id), { locked: false }); await b.commit();
+        d.close(); dmThreadView({ ...th, locked: false });
+      } catch (e) {
+        msg.textContent = (e.code === "auth/invalid-credential" || e.code === "auth/wrong-password") ? "كلمة مرور حسابك غلط." : "تعذر التنفيذ: " + (e.code || e.message);
+        go.disabled = false;
+      }
+    };
+  };
   $("#dmUnlock").onsubmit = async e => {
     e.preventDefault();
     const msg = $("#dmUErr"), btn = e.target.querySelector("button[type=submit]"); msg.textContent = ""; btn.disabled = true;
