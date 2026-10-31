@@ -751,7 +751,7 @@ onAuthStateChanged(auth, async u => {
   $("#aiFab").style.display = u ? "grid" : "none"; $("#penFab").style.display = u ? "grid" : "none"; if (!u && penOn) $("#penFab").click(); if (!u) { $("#aiPanel").style.display = "none"; tutorChat = null; $("#aiMsgs").innerHTML = ""; }
   $("#auth").textContent = "خروج"; $("#auth").style.display = (u || pendingVerifyUser) ? "" : "none";
   editor = admin; $("#n5").style.display = admin ? "" : "none"; $("#n5").textContent="المستخدمين";
-  dmWatchUnsub?.(); dmWatchUnsub=null; dmKeys.clear(); $("#n12").style.display="none";
+  dmStop(); $("#n12").style.display="none";
   if (!u) return needLogin();
   userRoleUnsub=onSnapshot(doc(db,"users",u.uid),snap=>{const profile=snap.data()||{};isAssistantUser=profile.role==="assistant";editor=admin||isAssistantUser;groupAdmin=admin||profile.groupsAdmin===true;$("#n5").style.display=admin||isAssistantUser?"":"none";$("#n5").textContent=admin?"المستخدمين":"إحصائيات المستخدمين";});
   startAppCheck();
@@ -2622,32 +2622,21 @@ async function usersPage() {
   $("#clearUserSearch").onclick=()=>{searchText="";selectedFilter="total";$("#userSearch").value="";renderUsers();};
   renderUsers();
 }
-/* ---------- الرسائل الخاصة (الأدمن بس هو اللي يبعت) ---------- */
-let dmWatchUnsub = null;
-const dmKeys = new Map();
-const dmEnc = new TextEncoder(), dmDec = new TextDecoder();
+/* ---------- الرسائل الخاصة (شات زي الواتساب، الأدمن بس هو اللي يبدأ) ---------- */
+let dmWatchUnsub = null, dmTimer = null, dmPopupOpen = false;
+const dmUnlocked = new Set();   // محادثات اتفتحت بالباسورد في الجلسة دي (بتتمسح مع تسجيل الخروج)
+const DM_EMOJIS = ["😀","😂","🤣","😊","😍","🥰","😘","😎","🤔","😢","😭","😡","👍","👎","👏","🙏","💪","🔥","❤️","💔","🎉","✅","❌","⭐","🌹","☕","📚","✍️","😴","🤝","👌","😅","🙈","😉","🥳","💯"];
+const DM_REACTS = ["👍","❤️","😂","😮","😢","🙏"];
+const dmEnc = new TextEncoder();
 const dmB64 = u8 => { let s = ""; for (let i = 0; i < u8.length; i += 8192) s += String.fromCharCode(...u8.subarray(i, i + 8192)); return btoa(s); };
 const dmUnb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 const dmNewSalt = () => dmB64(crypto.getRandomValues(new Uint8Array(16)));
-async function dmDerive(pass, saltB64) {
-  const base = await crypto.subtle.importKey("raw", dmEnc.encode(pass), "PBKDF2", false, ["deriveKey"]);
-  return crypto.subtle.deriveKey({ name: "PBKDF2", salt: dmUnb64(saltB64), iterations: 150000, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+async function dmHash(pass, saltB64) {
+  const base = await crypto.subtle.importKey("raw", dmEnc.encode(pass), "PBKDF2", false, ["deriveBits"]);
+  return dmB64(new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", salt: dmUnb64(saltB64), iterations: 150000, hash: "SHA-256" }, base, 256)));
 }
-async function dmEncrypt(key, text) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, dmEnc.encode(text)));
-  return { iv: dmB64(iv), ct: dmB64(ct) };
-}
-async function dmDecrypt(key, iv, ct) { return dmDec.decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: dmUnb64(iv) }, key, dmUnb64(ct))); }
-async function dmVerify(th, pass) {
-  try { const k = await dmDerive(pass, th.salt); return (await dmDecrypt(k, th.check.iv, th.check.ct)) === "ok" ? k : null; } catch { return null; }
-}
-async function dmAdminKey(th) {
-  if (!th.locked) return null;
-  const ck = th.id + ":" + th.salt; if (dmKeys.has(ck)) return dmKeys.get(ck);
-  const pass = (await getDoc(doc(db, "dmSecrets", th.id))).data()?.pass;
-  if (!pass) throw new Error("كلمة مرور المحادثة مش موجودة");
-  const k = await dmDerive(pass, th.salt); dmKeys.set(ck, k); return k;
+async function dmVerifyAdmin(uid, pass) {
+  try { const s = (await getDoc(doc(db, "dmSecrets", uid))).data(); return !!s && (await dmHash(pass, s.salt)) === s.hash; } catch { return false; }
 }
 function dmDialog(inner) {
   const d = document.createElement("dialog");
@@ -2657,21 +2646,132 @@ function dmDialog(inner) {
   d.addEventListener("close", () => d.remove());
   return d;
 }
+const dmMs = ts => ts?.toMillis?.() ?? null;
 const dmFmt = ts => ts?.toDate?.().toLocaleString("ar-EG", { dateStyle: "short", timeStyle: "short" }) || "";
+const dmClock = ms => new Date(ms).toLocaleTimeString("ar-EG", { hour: "numeric", minute: "2-digit" });
+const dmStartOfDay = ms => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
+function dmDayLabel(ms) {
+  const diff = Math.round((dmStartOfDay(Date.now()) - dmStartOfDay(ms)) / 86400000);
+  if (diff === 0) return "اليوم"; if (diff === 1) return "امبارح";
+  return new Date(ms).toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" });
+}
+function dmStatus(seenMs, typingMs) {
+  const now = Date.now();
+  if (typingMs && now - typingMs < 6000) return "بيكتب…";
+  if (seenMs && now - seenMs < 75000) return "متصل الآن";
+  if (seenMs) return "آخر ظهور " + dmDayLabel(seenMs) + " " + dmClock(seenMs);
+  return "";
+}
+const dmText = m => m.deleted ? "🚫 تم حذف هذه الرسالة" : m.ct ? "⚠️ رسالة قديمة مشفّرة" : (m.text || "");
+const dmBubble = (t, ts) => `<div style="align-self:flex-start;max-width:90%;background:rgba(80,120,255,.12);padding:8px 12px;border-radius:12px"><div style="white-space:pre-wrap;word-break:break-word">${esc(t)}</div><small class="mut">${dmFmt(ts)}</small></div>`;
+function dmEnsureStyle() {
+  if (document.getElementById("dmStyle")) return;
+  const s = document.createElement("style"); s.id = "dmStyle";
+  s.textContent = `
+.dm-chat{display:flex;flex-direction:column;height:calc(100vh - 150px);height:calc(100dvh - 150px);min-height:420px;max-width:760px;margin:0 auto;border-radius:14px;overflow:hidden;border:1px solid rgba(0,0,0,.14);background:#efeae2;color:#111b21}
+body.night .dm-chat{background:#0b141a;border-color:rgba(255,255,255,.12);color:#e9edef}
+.dm-chat button{margin:0}
+.dm-chat .dm-ic{background:transparent!important;border:0!important;box-shadow:none!important;color:inherit;padding:4px 9px!important;font-size:1.15rem;line-height:1.2;cursor:pointer;width:auto;min-width:0;border-radius:8px}
+.dm-head{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#008069;color:#fff}
+body.night .dm-head{background:#202c33}
+.dm-av{width:40px;height:40px;border-radius:50%;background:#dfe5e7;color:#54656f;display:grid;place-items:center;font-weight:700;flex:none}
+.dm-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dm-st{font-size:.76rem;opacity:.85;min-height:1em}
+.dm-search{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f0f2f5}
+body.night .dm-search{background:#202c33}
+.dm-search input{flex:1;border-radius:18px;border:0;padding:7px 12px;background:#fff;color:#111b21}
+body.night .dm-search input{background:#2a3942;color:#e9edef}
+.dm-body{flex:1;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:3px;direction:ltr}
+.dm-day{align-self:center;background:#fff;color:#54656f;font-size:.74rem;padding:3px 10px;border-radius:8px;margin:8px 0;box-shadow:0 1px 1px rgba(0,0,0,.1)}
+body.night .dm-day{background:#182229;color:#8696a0}
+.dm-row{display:flex;flex-direction:column}
+.dm-row.me{align-items:flex-end}.dm-row.them{align-items:flex-start}
+.dm-b{position:relative;max-width:84%;min-width:84px;padding:6px 9px 4px;border-radius:9px;box-shadow:0 1px .5px rgba(0,0,0,.13);direction:rtl;text-align:right;background:#fff;color:#111b21;word-break:break-word}
+.dm-row.me .dm-b{background:#d9fdd3}
+body.night .dm-b{background:#202c33;color:#e9edef}
+body.night .dm-row.me .dm-b{background:#005c4b}
+.dm-t{white-space:pre-wrap}
+.dm-del{opacity:.65;font-size:.9rem}
+.dm-meta{display:flex;justify-content:flex-end;gap:4px;align-items:center;font-size:.66rem;opacity:.7;margin-top:2px;direction:rtl}
+.dm-tk{letter-spacing:-3px;font-size:.8rem}.dm-tk.rd{color:#53bdeb;opacity:1}
+.dm-dd{position:absolute;top:0;left:2px;background:transparent!important;border:0!important;box-shadow:none!important;color:inherit;opacity:.5;font-size:.9rem;padding:0 5px!important;cursor:pointer;width:auto;min-width:0}
+.dm-q{border-right:4px solid #06cf9c;background:rgba(0,0,0,.06);border-radius:6px;padding:3px 8px;margin-bottom:4px;font-size:.82rem;cursor:pointer}
+.dm-q b{display:block;color:#06a07c;font-size:.76rem}
+.dm-q div{opacity:.85;max-height:2.6em;overflow:hidden}
+.dm-rx{position:absolute;bottom:-12px;right:8px;background:#fff;border-radius:12px;padding:0 6px;font-size:.82rem;box-shadow:0 1px 2px rgba(0,0,0,.25);display:flex;gap:4px}
+body.night .dm-rx{background:#2a3942}
+.dm-row:has(.dm-rx){margin-bottom:12px}
+.dm-flash .dm-b{outline:2px solid #06cf9c}
+.dm-chat mark{background:#ffe58a;color:#000;border-radius:3px}
+.dm-ctx{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f0f2f5;border-right:4px solid #06cf9c;font-size:.85rem}
+body.night .dm-ctx{background:#202c33}
+.dm-ctx>div{flex:1;min-width:0}.dm-ctx>div>div{opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dm-emo{display:flex;flex-wrap:wrap;gap:2px;padding:6px 8px;background:#f0f2f5;max-height:130px;overflow:auto}
+body.night .dm-emo{background:#202c33}
+.dm-blk{padding:6px 10px;text-align:center;font-size:.82rem;background:#fff3cd;color:#664d03}
+body.night .dm-blk{background:#3b3310;color:#ffe08a}
+.dm-bar{display:flex;gap:6px;align-items:flex-end;padding:8px;background:#f0f2f5}
+body.night .dm-bar{background:#202c33}
+.dm-in{flex:1;border-radius:20px;border:0;padding:9px 14px;resize:none;max-height:120px;background:#fff;color:#111b21;font:inherit;margin:0;min-height:40px}
+body.night .dm-in{background:#2a3942;color:#e9edef}
+.dm-chat .dm-send{width:42px;height:42px;flex:none;border-radius:50%!important;padding:0!important;background:#00a884!important;color:#fff!important;border:0!important;display:grid;place-items:center;font-size:1.1rem;transform:scaleX(-1);min-width:0;cursor:pointer}
+.dm-chat .dm-send:disabled{opacity:.5}
+.dm-rxrow{display:flex;justify-content:space-around;margin-bottom:8px}
+.dm-rxrow .dm-ic{font-size:1.5rem}.dm-rxrow .on{background:rgba(0,168,132,.25)!important}
+.dm-mlist{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.dm-li{display:flex;gap:12px;align-items:center;padding:10px 6px;border-bottom:1px solid rgba(128,128,128,.25);cursor:pointer}
+.dm-li .dm-av{background:#dfe5e7}.dm-li>div:nth-child(2){flex:1;min-width:0}
+.dm-li .pv{opacity:.75;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dm-dot{width:11px;height:11px;border-radius:50%;background:#00a884;flex:none}`;
+  document.head.appendChild(s);
+}
+async function dmPopup(uid, lastRead) {
+  if (dmPopupOpen || $("#dmMsgs")) return;
+  dmPopupOpen = true;
+  try {
+    const ms = await getDocs(collection(db, "dmThreads", uid, "messages"));
+    const fresh = ms.docs.map(d => d.data()).filter(m => m.from !== "user" && !m.deleted && (m.created?.toMillis?.() || 0) > lastRead).sort((a, b) => (a.created?.seconds || 0) - (b.created?.seconds || 0));
+    if (!fresh.length) { dmPopupOpen = false; return; }
+    const d = dmDialog(`<h3 class="fr">✉️ رسالة من الإدارة</h3>
+      <div style="max-height:50vh;overflow:auto;display:flex;flex-direction:column;gap:8px">${fresh.map(m => dmBubble(dmText(m), m.created)).join("")}</div>
+      <div class="row" style="margin-top:12px"><button type="button" id="dmPopOk">تمام</button><button type="button" class="sec" id="dmPopOpen">فتح الرسائل</button></div>`);
+    let goOpen = false;
+    d.addEventListener("close", () => { dmPopupOpen = false; updateDoc(doc(db, "dmThreads", uid), { lastReadAt: serverTimestamp() }).catch(() => {}); if (goOpen) dmPage(); });
+    d.querySelector("#dmPopOk").onclick = () => d.close();
+    d.querySelector("#dmPopOpen").onclick = () => { goOpen = true; d.close(); };
+  } catch (e) { dmPopupOpen = false; console.warn("dm popup", e); }
+}
+function dmStop() { dmWatchUnsub?.(); dmWatchUnsub = null; clearInterval(dmTimer); dmTimer = null; dmUnlocked.clear(); }
 function startDmWatch(u) {
-  dmWatchUnsub?.(); dmWatchUnsub = null;
+  dmStop();
   const n = $("#n12"); if (!n) return;
-  if (admin) { n.style.display = ""; n.textContent = "الرسائل"; return; }
+  if (admin) {
+    n.style.display = ""; n.textContent = "الرسائل";
+    const ping = () => { if (document.visibilityState === "visible") setDoc(doc(db, "dmPresence", "admin"), { seen: serverTimestamp() }).catch(() => {}); };
+    ping(); dmTimer = setInterval(ping, 40000);
+    dmWatchUnsub = onSnapshot(collection(db, "dmThreads"), snap => {
+      const un = snap.docs.some(d => { const x = d.data(); return (x.lastUserAt?.toMillis?.() || 0) > (x.adminReadAt?.toMillis?.() || 0); });
+      n.textContent = un ? "الرسائل 🔴" : "الرسائل";
+    }, () => {});
+    return;
+  }
   n.style.display = "none";
-  dmWatchUnsub = onSnapshot(doc(db, "dmThreads", u.uid), snap => {
-    if (!snap.exists()) { n.style.display = "none"; return; }
-    const d = snap.data(), unread = (d.lastAt?.toMillis?.() || 0) > (d.lastReadAt?.toMillis?.() || 0);
+  const ref = doc(db, "dmThreads", u.uid); let exists = false, pinged = false;
+  const ping = () => { if (exists && document.visibilityState === "visible") updateDoc(ref, { seenUser: serverTimestamp() }).catch(() => {}); };
+  dmTimer = setInterval(ping, 40000);
+  dmWatchUnsub = onSnapshot(ref, snap => {
+    exists = snap.exists();
+    if (!exists) { n.style.display = "none"; return; }
+    if (!pinged) { pinged = true; ping(); }
+    const d = snap.data(), lastRead = d.lastReadAt?.toMillis?.() || 0, unread = (d.lastAt?.toMillis?.() || 0) > lastRead;
     n.style.display = ""; n.textContent = unread ? "الرسائل 🔴" : "الرسائل";
+    if (unread) dmPopup(u.uid, lastRead);
   }, () => { n.style.display = "none"; });
 }
 async function dmPage() {
   if (!user) return needLogin();
   document.body.classList.remove("login-screen");
+  dmEnsureStyle();
   if (!admin) {
     try {
       const s = await getDoc(doc(db, "dmThreads", user.uid));
@@ -2682,9 +2782,14 @@ async function dmPage() {
   let ths = [];
   try { ths = (await getDocs(collection(db, "dmThreads"))).docs.map(d => ({ id: d.id, ...d.data() })); }
   catch (e) { app.innerHTML = `<p class="danger" style="text-align:center">تعذر تحميل الرسائل: ${esc(e.code || e.message)}</p>`; return; }
-  ths.sort((a, b) => (b.lastAt?.seconds || 0) - (a.lastAt?.seconds || 0));
-  app.innerHTML = `<div class="wa-groups-head"><div><small>رسائل خاصة</small><h2 class="sh">الرسائل</h2><p class="mut">إنت بس اللي تقدر تبعت. الشخص بيشوف الرسائل في تبويب «الرسائل».</p></div><div class="row"><button id="dmNew">＋ رسالة جديدة</button></div></div>
-    ${ths.length ? ths.map(t => `<article class="q" style="cursor:pointer" data-dm-open="${esc(t.id)}"><b>${esc(t.name || "طالب")}</b> ${t.locked ? "🔒" : ""}<div class="mut" style="margin-top:4px">${t.locked ? "محادثة محمية بكلمة مرور" : esc(t.lastText || "")}</div><small class="mut">${dmFmt(t.lastAt)}</small></article>`).join("") : `<p class="mut">مفيش محادثات لسه. اضغط «رسالة جديدة».</p>`}`;
+  const lastMs = t => Math.max(t.lastAt?.toMillis?.() || 0, t.lastUserAt?.toMillis?.() || 0);
+  ths.sort((a, b) => lastMs(b) - lastMs(a));
+  app.innerHTML = `<div class="wa-groups-head"><div><small>رسائل خاصة</small><h2 class="sh">الرسائل</h2><p class="mut">إنت بس اللي تبدأ المحادثة. الشخص بيشوف الرسالة كبوب أب ويقدر يرد جوه نفس المحادثة (إلا لو منعته).</p></div><div class="row"><button id="dmNew">＋ رسالة جديدة</button></div></div>
+    ${ths.length ? ths.map(t => {
+      const un = (t.lastUserAt?.toMillis?.() || 0) > (t.adminReadAt?.toMillis?.() || 0), fromUser = (t.lastUserAt?.toMillis?.() || 0) > (t.lastAt?.toMillis?.() || 0);
+      const pv = t.locked ? "🔒 محادثة محمية بكلمة مرور" : esc((fromUser ? t.lastUserText : t.lastText) || "");
+      return `<div class="dm-li" data-dm-open="${esc(t.id)}"><div class="dm-av">${esc((t.name || "ط").trim().slice(0, 1))}</div><div><b>${esc(t.name || "طالب")}</b> ${t.blocked ? "🚫" : ""}<div class="pv">${pv}</div></div><small class="mut">${dmFmt(fromUser ? t.lastUserAt : t.lastAt)}</small>${un ? `<span class="dm-dot"></span>` : ""}</div>`;
+    }).join("") : `<p class="mut">مفيش محادثات لسه. اضغط «رسالة جديدة».</p>`}`;
   app.querySelectorAll("[data-dm-open]").forEach(el => el.onclick = () => dmThreadView(ths.find(t => t.id === el.dataset.dmOpen)));
   $("#dmNew").onclick = async () => {
     let studs = [];
@@ -2692,7 +2797,7 @@ async function dmPage() {
     const d = dmDialog(`<h3 class="fr">رسالة جديدة</h3>
       <label>ابحث عن الشخص<input id="dmSearch" type="search" autocomplete="off"></label>
       <select id="dmWho" size="6" style="width:100%"></select>
-      <label>كلمة مرور للمحادثة (سيبها فاضية لو من غير)<input id="dmPw" type="text" autocomplete="off"></label>
+      <label>باسورد لفتح المحادثة عندك إنت (اختياري، الشخص مش بيكتبه)<input id="dmPw" type="text" autocomplete="off"></label>
       <label>الرسالة<textarea id="dmFirst" rows="3"></textarea></label>
       <div class="row"><button type="submit" id="dmGo">إرسال</button><button type="button" class="sec" id="dmX">إلغاء</button></div><p id="dmErr" class="danger"></p>`);
     const sel = d.querySelector("#dmWho"), err = d.querySelector("#dmErr");
@@ -2704,115 +2809,206 @@ async function dmPage() {
       const uid = sel.value, text = d.querySelector("#dmFirst").value.trim(), pw = d.querySelector("#dmPw").value.trim();
       if (!uid) return err.textContent = "اختار الشخص الأول";
       if (!text) return err.textContent = "اكتب الرسالة";
-      if (pw && pw.length < 4) return err.textContent = "كلمة المرور 4 خانات على الأقل";
+      if (pw && pw.length < 4) return err.textContent = "الباسورد 4 خانات على الأقل";
       const btn = d.querySelector("#dmGo"); btn.disabled = true; btn.textContent = "جاري الإرسال…";
       try {
         const ex = await getDoc(doc(db, "dmThreads", uid));
         if (ex.exists()) { d.close(); alert("فيه محادثة مفتوحة مع الشخص ده بالفعل. هفتحها لك."); return dmThreadView({ id: uid, ...ex.data() }); }
         const name = studs.find(x => x.id === uid)?.name || "طالب";
-        const base = { uid, name, locked: false, createdAt: serverTimestamp(), lastAt: serverTimestamp(), lastText: text.slice(0, 80) };
-        const b = writeBatch(db); let body = { text }, key = null;
-        if (pw) {
-          const salt = dmNewSalt(); key = await dmDerive(pw, salt);
-          base.locked = true; base.salt = salt; base.check = await dmEncrypt(key, "ok"); base.lastText = "";
-          body = await dmEncrypt(key, text);
-          b.set(doc(db, "dmSecrets", uid), { pass: pw, updatedAt: serverTimestamp() });
-          dmKeys.set(uid + ":" + salt, key);
-        }
+        const base = { uid, name, locked: !!pw, blocked: false, createdAt: serverTimestamp(), lastAt: serverTimestamp(), lastText: text.slice(0, 80) };
+        const b = writeBatch(db);
+        if (pw) { const salt = dmNewSalt(); b.set(doc(db, "dmSecrets", uid), { salt, hash: await dmHash(pw, salt), updatedAt: serverTimestamp() }); dmUnlocked.add(uid); }
         b.set(doc(db, "dmThreads", uid), base);
-        b.set(doc(collection(db, "dmThreads", uid, "messages")), { from: "admin", created: serverTimestamp(), ...body });
+        b.set(doc(collection(db, "dmThreads", uid, "messages")), { from: "admin", text, created: serverTimestamp() });
         await b.commit(); d.close();
-        dmThreadView({ id: uid, ...base, lastAt: null });
+        dmThreadView({ id: uid, name, locked: !!pw, blocked: false });
       } catch (e) { err.textContent = "تعذر الإرسال: " + (e.code || e.message); btn.disabled = false; btn.textContent = "إرسال"; }
     };
   };
 }
-function dmUnlockScreen(th) {
-  app.innerHTML = `<div class="q" style="max-width:420px;margin:24px auto;text-align:center"><h2 class="sh">🔒 محادثة محمية</h2><p class="mut">اكتب كلمة المرور اللي الإدارة إدتهالك عشان تفتح الرسائل.</p><form id="dmUnlock"><label>كلمة المرور<input name="p" type="password" autocomplete="off" required></label><div class="row" style="justify-content:center"><button type="submit">فتح</button></div><p id="dmUErr" class="danger"></p></form></div>`;
+function dmAdminUnlock(th) {
+  app.innerHTML = `<div class="q" style="max-width:420px;margin:24px auto;text-align:center"><h2 class="sh">🔒 ${esc(th.name || "محادثة")}</h2><p class="mut">اكتب الباسورد عشان تفتح المحادثة دي.</p><form id="dmUnlock"><label>الباسورد<input name="p" type="password" autocomplete="off" required></label><div class="row" style="justify-content:center"><button type="submit">فتح</button><button type="button" class="sec" id="dmUBack">رجوع</button></div><p id="dmUErr" class="danger"></p></form></div>`;
   addPasswordToggles(app);
+  $("#dmUBack").onclick = dmPage;
   $("#dmUnlock").onsubmit = async e => {
     e.preventDefault();
-    const msg = $("#dmUErr"), btn = e.target.querySelector("button"); msg.textContent = ""; btn.disabled = true;
-    const k = await dmVerify(th, String(new FormData(e.target).get("p")).trim());
-    if (!k) { msg.textContent = "كلمة المرور غلط."; btn.disabled = false; return; }
-    dmKeys.set(th.id + ":" + th.salt, k); dmThreadView(th);
+    const msg = $("#dmUErr"), btn = e.target.querySelector("button[type=submit]"); msg.textContent = ""; btn.disabled = true;
+    if (!(await dmVerifyAdmin(th.id, String(new FormData(e.target).get("p")).trim()))) { msg.textContent = "الباسورد غلط."; btn.disabled = false; return; }
+    dmUnlocked.add(th.id); dmThreadView(th);
   };
-}
-async function dmSetPassword(th, oldKey, pass) {
-  const ms = await getDocs(collection(db, "dmThreads", th.id, "messages"));
-  if (ms.size > 480) throw new Error("عدد الرسائل كبير (أكتر من 480)");
-  const docs = ms.docs.sort((a, b) => (a.data().created?.seconds ?? 1e12) - (b.data().created?.seconds ?? 1e12));
-  const plain = await Promise.all(docs.map(async d => { const m = d.data(); return m.ct ? await dmDecrypt(oldKey, m.iv, m.ct) : (m.text || ""); }));
-  const b = writeBatch(db), thRef = doc(db, "dmThreads", th.id);
-  if (pass) {
-    const salt = dmNewSalt(), key = await dmDerive(pass, salt), check = await dmEncrypt(key, "ok");
-    for (let i = 0; i < docs.length; i++) { const e = await dmEncrypt(key, plain[i]); b.update(docs[i].ref, { text: deleteField(), iv: e.iv, ct: e.ct }); }
-    b.update(thRef, { locked: true, salt, check, lastText: "" });
-    b.set(doc(db, "dmSecrets", th.id), { pass, updatedAt: serverTimestamp() });
-    await b.commit(); dmKeys.set(th.id + ":" + salt, key);
-  } else {
-    for (let i = 0; i < docs.length; i++) b.update(docs[i].ref, { text: plain[i], iv: deleteField(), ct: deleteField() });
-    b.update(thRef, { locked: false, salt: deleteField(), check: deleteField(), lastText: (plain[plain.length - 1] || "").slice(0, 80) });
-    b.delete(doc(db, "dmSecrets", th.id));
-    await b.commit();
-  }
 }
 async function dmThreadView(th) {
-  let key = null;
-  try {
-    if (admin) key = await dmAdminKey(th);
-    else if (th.locked) { key = dmKeys.get(th.id + ":" + th.salt) || null; if (!key) return dmUnlockScreen(th); }
-  } catch (e) { app.innerHTML = `<p class="danger" style="text-align:center">${esc(e.code || e.message)}</p>`; return; }
-  app.innerHTML = `<div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <div>${admin ? `<button class="sec" id="dmBack">← كل الرسائل</button>` : ""}<h2 class="sh" style="display:inline-block;margin:0 8px">${admin ? esc(th.name || "طالب") : "✉️ رسائل من الإدارة"} ${th.locked ? "🔒" : ""}</h2></div>
-      ${admin ? `<div class="row"><button class="sec" id="dmPass">🔑 كلمة المرور</button><button class="sec" id="dmDel">🗑 حذف المحادثة</button></div>` : ""}</div>
-    <div id="dmMsgs" class="q" style="margin-top:12px;max-height:60vh;overflow:auto;display:flex;flex-direction:column;gap:8px"><p class="mut">جاري التحميل…</p></div>
-    ${admin ? `<div class="row" style="margin-top:10px;align-items:flex-end"><textarea id="dmIn" rows="2" style="flex:1" placeholder="اكتب رسالتك…"></textarea><button id="dmSend">إرسال</button></div>` : ""}`;
-  const box = $("#dmMsgs");
-  const unsub = onSnapshot(collection(db, "dmThreads", th.id, "messages"), async snap => {
-    if (!box.isConnected) { unsub(); return; }
-    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.created?.seconds ?? 1e12) - (b.created?.seconds ?? 1e12));
-    const items = await Promise.all(rows.map(async m => { let t; try { t = m.ct ? (key ? await dmDecrypt(key, m.iv, m.ct) : "🔒") : (m.text || ""); } catch { t = "⚠️ تعذر فك التشفير"; } return { m, t }; }));
-    if (!box.isConnected) return;
-    box.innerHTML = items.length ? items.map(({ m, t }) => `<div style="align-self:flex-start;max-width:85%;background:rgba(80,120,255,.12);padding:8px 12px;border-radius:12px"><div style="white-space:pre-wrap;word-break:break-word">${esc(t)}</div><small class="mut">${dmFmt(m.created)}</small></div>`).join("") : `<p class="mut">مفيش رسائل لسه.</p>`;
-    box.scrollTop = box.scrollHeight;
-    if (!admin) updateDoc(doc(db, "dmThreads", th.id), { lastReadAt: serverTimestamp() }).catch(() => {});
-  }, e => { box.innerHTML = `<p class="danger">تعذر تحميل الرسائل: ${esc(e.code || e.message)}</p>`; });
-  if (!admin) return;
-  const reopen = async () => { const s = await getDoc(doc(db, "dmThreads", th.id)); s.exists() ? dmThreadView({ id: s.id, ...s.data() }) : dmPage(); };
-  $("#dmBack").onclick = dmPage;
-  $("#dmSend").onclick = async () => {
-    const inp = $("#dmIn"), text = inp.value.trim(); if (!text) return;
+  if (admin && th.locked && !dmUnlocked.has(th.id)) return dmAdminUnlock(th);
+  dmEnsureStyle();
+  const role = admin ? "admin" : "user";
+  const S = { th, msgs: [], reply: null, edit: null, q: "", presence: null, typedAt: 0 };
+  const thRef = doc(db, "dmThreads", th.id), msgsCol = collection(db, "dmThreads", th.id, "messages");
+  const otherName = () => admin ? (S.th.name || "الشخص") : "الإدارة";
+  app.innerHTML = `<div class="dm-chat">
+    <div class="dm-head">${admin ? `<button class="dm-ic" id="dmBack" title="رجوع">➜</button>` : ""}<div class="dm-av">${esc((admin ? (th.name || "ط") : "إ").trim().slice(0, 1))}</div>
+      <div style="flex:1;min-width:0"><div class="dm-name">${esc(admin ? (th.name || "طالب") : "الإدارة")}${admin && th.locked ? " 🔒" : ""}</div><div class="dm-st" id="dmSt"></div></div>
+      <button class="dm-ic" id="dmSearchBtn" title="بحث">🔍</button>${admin ? `<button class="dm-ic" id="dmMenu" title="المزيد">⋮</button>` : ""}</div>
+    <div class="dm-search" id="dmSearchBar" style="display:none"><input id="dmQ" type="search" placeholder="ابحث في المحادثة…" autocomplete="off"><span id="dmQc" class="mut"></span></div>
+    <div class="dm-body" id="dmMsgs"></div>
+    <div class="dm-blk" id="dmBlk" style="display:none"></div>
+    <div class="dm-ctx" id="dmCtx" style="display:none"></div>
+    <div class="dm-emo" id="dmEmo" style="display:none"></div>
+    <div class="dm-bar"><button class="dm-ic" id="dmEmoBtn" title="إيموجي">😊</button><textarea class="dm-in" id="dmIn" rows="1" placeholder="اكتب رسالة"></textarea><button class="dm-send" id="dmSend" title="إرسال">➤</button></div></div>`;
+  const box = $("#dmMsgs"), inp = $("#dmIn");
+  const unsubs = [];
+  const alive = () => { if (box.isConnected) return true; unsubs.forEach(f => f()); return false; };
+  const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const setStatus = () => {
+    const t = S.th, seen = admin ? dmMs(t.seenUser) : dmMs(S.presence?.seen), typing = dmMs(t[admin ? "typingUser" : "typingAdmin"]);
+    $("#dmSt").textContent = dmStatus(seen, typing);
+  };
+  const updateBar = () => {
+    const blocked = S.th.blocked === true, lock = !admin && blocked, b = $("#dmBlk");
+    b.style.display = blocked ? "" : "none"; b.textContent = admin ? "🚫 الرد موقوف على الشخص ده (إنت لسه تقدر تبعت له)" : "🚫 الإدارة أوقفت الرد على المحادثة دي";
+    inp.disabled = lock; $("#dmSend").disabled = lock; $("#dmEmoBtn").disabled = lock;
+    inp.placeholder = lock ? "الرد موقوف" : "اكتب رسالة";
+  };
+  const updateCtx = () => {
+    const c = $("#dmCtx");
+    if (S.reply) { c.style.display = ""; c.innerHTML = `<div><b>${S.reply.from === role ? "إنت" : esc(otherName())}</b><div>${esc(S.reply.text)}</div></div><button class="dm-ic" id="dmCtxX">✕</button>`; }
+    else if (S.edit) { c.style.display = ""; c.innerHTML = `<div><b>✏️ تعديل الرسالة</b></div><button class="dm-ic" id="dmCtxX">✕</button>`; }
+    else { c.style.display = "none"; c.innerHTML = ""; }
+    const x = $("#dmCtxX"); if (x) x.onclick = () => { S.reply = null; if (S.edit) { S.edit = null; inp.value = ""; } updateCtx(); };
+  };
+  const renderMsgs = () => {
+    if (!alive()) return;
+    const near = box.scrollHeight - box.scrollTop - box.clientHeight < 140, first = !box.dataset.init; box.dataset.init = "1";
+    const q = S.q.trim().toLowerCase();
+    const rows = q ? S.msgs.filter(m => !m.deleted && String(m.text || "").toLowerCase().includes(q)) : S.msgs;
+    $("#dmQc").textContent = q ? `${rows.length} نتيجة` : "";
+    const otherRead = dmMs(S.th[admin ? "lastReadAt" : "adminReadAt"]) || 0, otherSeen = (admin ? dmMs(S.th.seenUser) : dmMs(S.presence?.seen)) || 0;
+    const re = q ? new RegExp(reEsc(esc(S.q.trim())), "gi") : null;
+    let html = "", lastDay = "";
+    rows.forEach(m => {
+      const day = dmDayLabel(m.cms); if (day !== lastDay) { html += `<div class="dm-day">${esc(day)}</div>`; lastDay = day; }
+      const mine = m.from === role, read = m.cms <= otherRead, delivered = read || m.cms <= otherSeen;
+      const reacts = Object.values(m.reactions || {}).filter(Boolean);
+      const rx = reacts.length ? `<div class="dm-rx">${[...new Set(reacts)].map(e => { const c = reacts.filter(x => x === e).length; return `<span>${e}${c > 1 ? " " + c : ""}</span>`; }).join("")}</div>` : "";
+      const quote = m.replyTo ? `<div class="dm-q" data-goto="${esc(m.replyTo.id)}"><b>${m.replyTo.from === role ? "إنت" : esc(otherName())}</b><div>${esc(m.replyTo.text || "")}</div></div>` : "";
+      let txt = esc(m.text || ""); if (re) txt = txt.replace(re, x => `<mark>${x}</mark>`);
+      const body = m.deleted ? `<i class="dm-del">🚫 تم حذف هذه الرسالة</i>` : `<span class="dm-t">${txt}</span>`;
+      const ticks = mine && !m.deleted ? `<span class="dm-tk ${read ? "rd" : ""}">${delivered ? "✓✓" : "✓"}</span>` : "";
+      html += `<div class="dm-row ${mine ? "me" : "them"}" id="dm-${m.id}"><div class="dm-b">${m.deleted ? "" : `<button class="dm-dd" data-menu="${m.id}" title="خيارات">⌄</button>`}${quote}${body}<div class="dm-meta">${m.edited && !m.deleted ? "معدّلة · " : ""}${dmClock(m.cms)}${ticks}</div>${rx}</div></div>`;
+    });
+    box.innerHTML = html || `<div class="dm-day">${q ? "مفيش نتائج" : "مفيش رسائل لسه"}</div>`;
+    if (first || near) box.scrollTop = box.scrollHeight;
+  };
+  const markRead = () => {
+    if (document.visibilityState !== "visible") return;
+    const mine = dmMs(S.th[admin ? "adminReadAt" : "lastReadAt"]) || 0;
+    if (S.msgs.some(m => m.from !== role && m.cms > mine)) updateDoc(thRef, { [admin ? "adminReadAt" : "lastReadAt"]: serverTimestamp() }).catch(() => {});
+  };
+  unsubs.push(onSnapshot(thRef, snap => {
+    if (!alive()) return;
+    if (!snap.exists()) { dmPage(); return; }
+    S.th = { id: snap.id, ...snap.data({ serverTimestamps: "estimate" }) };
+    setStatus(); updateBar(); renderMsgs();
+  }, () => {}));
+  unsubs.push(onSnapshot(msgsCol, snap => {
+    if (!alive()) return;
+    S.msgs = snap.docs.map(d => { const x = d.data({ serverTimestamps: "estimate" }); return { id: d.id, ...x, cms: x.created?.toMillis?.() ?? Date.now() }; }).sort((a, b) => a.cms - b.cms);
+    renderMsgs(); markRead();
+  }, e => { box.innerHTML = `<div class="dm-day">تعذر تحميل الرسائل: ${esc(e.code || e.message)}</div>`; }));
+  if (!admin) unsubs.push(onSnapshot(doc(db, "dmPresence", "admin"), s => { S.presence = s.data() || null; setStatus(); renderMsgs(); }, () => {}));
+  const tick = setInterval(() => { if (!alive()) { clearInterval(tick); return; } setStatus(); }, 3000);
+  document.addEventListener("visibilitychange", function vis() { if (!box.isConnected) { document.removeEventListener("visibilitychange", vis); return; } markRead(); });
+  updateBar();
+
+  const send = async () => {
+    const text = inp.value.trim(); if (!text) return;
+    if (!admin && S.th.blocked) return;
     const btn = $("#dmSend"); btn.disabled = true;
     try {
-      const body = th.locked ? await dmEncrypt(key, text) : { text };
-      const b = writeBatch(db);
-      b.set(doc(collection(db, "dmThreads", th.id, "messages")), { from: "admin", created: serverTimestamp(), ...body });
-      b.update(doc(db, "dmThreads", th.id), { lastAt: serverTimestamp(), lastText: th.locked ? "" : text.slice(0, 80) });
-      await b.commit(); inp.value = "";
+      if (S.edit) { await updateDoc(doc(msgsCol, S.edit), { text, edited: true }); S.edit = null; }
+      else {
+        const data = { from: role, text, created: serverTimestamp() };
+        if (S.reply) data.replyTo = { id: S.reply.id, text: S.reply.text, from: S.reply.from };
+        const b = writeBatch(db); b.set(doc(msgsCol), data);
+        b.update(thRef, admin ? { lastAt: serverTimestamp(), lastText: text.slice(0, 80) } : { lastUserAt: serverTimestamp(), lastUserText: text.slice(0, 80) });
+        await b.commit();
+      }
+      inp.value = ""; inp.style.height = "auto"; S.reply = null; updateCtx(); box.scrollTop = box.scrollHeight;
     } catch (e) { alert("تعذر الإرسال: " + (e.code || e.message)); }
-    btn.disabled = false;
+    btn.disabled = !admin && S.th.blocked === true; inp.focus();
   };
-  $("#dmPass").onclick = async () => {
-    let cur = ""; if (th.locked) { try { cur = (await getDoc(doc(db, "dmSecrets", th.id))).data()?.pass || ""; } catch {} }
-    const d = dmDialog(`<h3 class="fr">كلمة مرور المحادثة</h3>
-      <p class="mut">${th.locked ? `المحادثة محمية حاليًا. الباسورد الحالي: <b dir="ltr">${esc(cur)}</b>` : "المحادثة دلوقتي من غير باسورد."}</p>
-      <label>كلمة مرور ${th.locked ? "جديدة" : ""} (4 خانات على الأقل)<input id="dmNewPass" type="text" autocomplete="off"></label>
-      <div class="row"><button type="submit" id="dmPassSave">حفظ</button>${th.locked ? `<button type="button" class="sec" id="dmPassOff">إزالة الباسورد</button>` : ""}<button type="button" class="sec" id="dmPassX">إلغاء</button></div><p id="dmPassMsg" class="mut"></p>`);
+  $("#dmSend").onclick = send;
+  inp.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && matchMedia("(pointer:fine)").matches) { e.preventDefault(); send(); } };
+  inp.oninput = () => {
+    inp.style.height = "auto"; inp.style.height = Math.min(inp.scrollHeight, 120) + "px";
+    if (Date.now() - S.typedAt > 2500) { S.typedAt = Date.now(); updateDoc(thRef, { [admin ? "typingAdmin" : "typingUser"]: serverTimestamp() }).catch(() => {}); }
+  };
+  const emo = $("#dmEmo");
+  emo.innerHTML = DM_EMOJIS.map(e => `<button type="button" class="dm-ic" data-e="${e}">${e}</button>`).join("");
+  $("#dmEmoBtn").onclick = () => { emo.style.display = emo.style.display === "none" ? "" : "none"; };
+  emo.onclick = e => { const b = e.target.closest("[data-e]"); if (!b) return; const p = inp.selectionStart ?? inp.value.length; inp.value = inp.value.slice(0, p) + b.dataset.e + inp.value.slice(inp.selectionEnd ?? p); inp.focus(); inp.selectionStart = inp.selectionEnd = p + b.dataset.e.length; };
+  $("#dmSearchBtn").onclick = () => { const bar = $("#dmSearchBar"), on = bar.style.display === "none"; bar.style.display = on ? "" : "none"; if (on) $("#dmQ").focus(); else { S.q = ""; $("#dmQ").value = ""; renderMsgs(); } };
+  $("#dmQ").oninput = e => { S.q = e.target.value; renderMsgs(); };
+
+  const openMenu = id => {
+    const m = S.msgs.find(x => x.id === id); if (!m || m.deleted) return;
+    const mine = m.from === role, locked = !admin && S.th.blocked === true, myR = m.reactions?.[role];
+    const d = dmDialog(`${locked ? "" : `<div class="dm-rxrow">${DM_REACTS.map(e => `<button type="button" class="dm-ic ${myR === e ? "on" : ""}" data-r="${e}">${e}</button>`).join("")}</div>`}
+      <div class="dm-mlist">${locked ? "" : `<button type="button" class="sec" data-a="reply">↩️ رد</button>`}<button type="button" class="sec" data-a="copy">📋 نسخ</button>${mine && !locked ? `<button type="button" class="sec" data-a="edit">✏️ تعديل</button>` : ""}${(mine || admin) && !locked ? `<button type="button" class="sec" data-a="del">🗑️ حذف للجميع</button>` : ""}</div>
+      <div class="row"><button type="button" class="sec" data-a="x">إغلاق</button></div>`);
+    const ref = doc(msgsCol, id);
+    d.onclick = async e => {
+      const r = e.target.closest("[data-r]"), a = e.target.closest("[data-a]")?.dataset.a;
+      if (r) { d.close(); updateDoc(ref, { ["reactions." + role]: myR === r.dataset.r ? deleteField() : r.dataset.r }).catch(err => alert("تعذر التفاعل: " + (err.code || err.message))); return; }
+      if (!a) return;
+      if (a === "x") d.close();
+      else if (a === "reply") { S.reply = { id, text: String(m.text || "").slice(0, 80), from: m.from }; S.edit = null; d.close(); updateCtx(); inp.focus(); }
+      else if (a === "copy") { try { await navigator.clipboard.writeText(m.text || ""); } catch {} d.close(); }
+      else if (a === "edit") { S.edit = id; S.reply = null; inp.value = m.text || ""; d.close(); updateCtx(); inp.focus(); }
+      else if (a === "del") { if (!confirm("تحذف الرسالة دي للجميع؟")) return; d.close(); updateDoc(ref, { deleted: true, text: "" }).catch(err => alert("تعذر الحذف: " + (err.code || err.message))); }
+    };
+  };
+  box.onclick = e => {
+    const mb = e.target.closest("[data-menu]"); if (mb) return openMenu(mb.dataset.menu);
+    const g = e.target.closest("[data-goto]"); if (g) { const el = document.getElementById("dm-" + g.dataset.goto); if (el) { el.scrollIntoView({ block: "center", behavior: "smooth" }); el.classList.add("dm-flash"); setTimeout(() => el.classList.remove("dm-flash"), 1400); } }
+  };
+  if (!admin) return;
+  $("#dmBack").onclick = dmPage;
+  const openPass = () => {
+    const d = dmDialog(`<h3 class="fr">باسورد المحادثة</h3>
+      <p class="mut">الباسورد ده إنت بس اللي بتكتبه عشان تفتح المحادثة بعد ما تسجل خروج. الشخص بيشوف رسايله عادي من غير ما يكتب حاجة.<br>${S.th.locked ? "المحادثة محمية حاليًا." : "المحادثة دلوقتي من غير باسورد."}</p>
+      <label>باسورد ${S.th.locked ? "جديد" : ""} (4 خانات على الأقل)<input id="dmNewPass" type="text" autocomplete="off"></label>
+      <div class="row"><button type="submit" id="dmPassSave">حفظ</button>${S.th.locked ? `<button type="button" class="sec" id="dmPassOff">إزالة الباسورد</button>` : ""}<button type="button" class="sec" id="dmPassX">إلغاء</button></div><p id="dmPassMsg" class="mut"></p>`);
     const msg = d.querySelector("#dmPassMsg");
-    const run = async pass => { msg.textContent = "جاري الحفظ…"; try { await dmSetPassword(th, key, pass); d.close(); reopen(); } catch (e) { msg.textContent = "تعذر الحفظ: " + (e.code || e.message); } };
+    const done = async () => { d.close(); const s = await getDoc(thRef); s.exists() ? dmThreadView({ id: s.id, ...s.data() }) : dmPage(); };
     d.querySelector("#dmPassX").onclick = () => d.close();
-    d.querySelector("#dmPassSave").onclick = () => { const p = d.querySelector("#dmNewPass").value.trim(); if (p.length < 4) return msg.textContent = "كلمة المرور 4 خانات على الأقل"; run(p); };
-    const off = d.querySelector("#dmPassOff"); if (off) off.onclick = () => run("");
+    d.querySelector("#dmPassSave").onclick = async () => {
+      const p = d.querySelector("#dmNewPass").value.trim(); if (p.length < 4) return msg.textContent = "الباسورد 4 خانات على الأقل";
+      msg.textContent = "جاري الحفظ…";
+      try { const salt = dmNewSalt(), b = writeBatch(db); b.set(doc(db, "dmSecrets", th.id), { salt, hash: await dmHash(p, salt), updatedAt: serverTimestamp() }); b.update(thRef, { locked: true }); await b.commit(); dmUnlocked.add(th.id); done(); }
+      catch (e) { msg.textContent = "تعذر الحفظ: " + (e.code || e.message); }
+    };
+    const off = d.querySelector("#dmPassOff");
+    if (off) off.onclick = async () => { msg.textContent = "جاري الحفظ…"; try { const b = writeBatch(db); b.delete(doc(db, "dmSecrets", th.id)); b.update(thRef, { locked: false }); await b.commit(); dmUnlocked.delete(th.id); done(); } catch (e) { msg.textContent = "تعذر الحفظ: " + (e.code || e.message); } };
   };
-  $("#dmDel").onclick = async () => {
+  const delConv = async () => {
     if (!confirm("تحذف المحادثة دي بكل رسايلها؟")) return;
     try {
-      const ms = await getDocs(collection(db, "dmThreads", th.id, "messages"));
+      const ms = await getDocs(msgsCol);
       for (let i = 0; i < ms.docs.length; i += 400) { const b = writeBatch(db); ms.docs.slice(i, i + 400).forEach(x => b.delete(x.ref)); await b.commit(); }
-      const b = writeBatch(db); b.delete(doc(db, "dmThreads", th.id)); b.delete(doc(db, "dmSecrets", th.id)); await b.commit();
-      dmPage();
+      const b = writeBatch(db); b.delete(thRef); b.delete(doc(db, "dmSecrets", th.id)); await b.commit();
+      dmUnlocked.delete(th.id); dmPage();
     } catch (e) { alert("تعذر الحذف: " + (e.code || e.message)); }
+  };
+  $("#dmMenu").onclick = () => {
+    const d = dmDialog(`<h3 class="fr">${esc(th.name || "المحادثة")}</h3><div class="dm-mlist">
+      <button type="button" class="sec" data-a="block">${S.th.blocked ? "✅ السماح له بالرد" : "🚫 منعه من الرد"}</button>
+      <button type="button" class="sec" data-a="pass">🔑 الباسورد</button>
+      <button type="button" class="sec" data-a="del">🗑️ حذف المحادثة</button></div><div class="row"><button type="button" class="sec" data-a="x">إغلاق</button></div>`);
+    d.onclick = e => {
+      const a = e.target.closest("[data-a]")?.dataset.a; if (!a) return; d.close();
+      if (a === "block") updateDoc(thRef, { blocked: !S.th.blocked }).catch(err => alert("تعذر التنفيذ: " + (err.code || err.message)));
+      else if (a === "pass") openPass(); else if (a === "del") delConv();
+    };
   };
 }
 
