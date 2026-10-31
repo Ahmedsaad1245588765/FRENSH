@@ -536,7 +536,7 @@ body.night #app #gpPronunciationResult p,body.night #app #gpPronunciationResult 
 <body>
 <div class="top">Faculté · Département de français — قسم اللغة الفرنسية</div>
 <header><div class="brand" id="home"><svg viewBox="0 0 44 52"><path d="M22 2 L42 9 V26 C42 38 33 46 22 50 C11 46 2 38 2 26 V9Z" fill="#14264f" stroke="#c19a4b" stroke-width="2.5"/><text x="22" y="34" text-anchor="middle" font-family="Fraunces,serif" font-size="26" font-style="italic" fill="#c19a4b">F</text></svg><div><b>Département de français</b><small>قسم اللغة الفرنسية</small></div></div>
-<nav><button id="menuToggle" aria-label="فتح القائمة" aria-expanded="false">☰</button><a id="n1">المواد</a><a id="n10">قواعد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n11">مشروع التخرج</a><a id="n5" style="display:none">المستخدمين</a><a id="n6" style="display:none">الدرجات</a><a id="n7">لوحتي</a><span id="who"></span><button id="themeToggle" title="الوضع الليلي">☾</button><button id="auth" style="display:none">خروج</button></nav></header>
+<nav><button id="menuToggle" aria-label="فتح القائمة" aria-expanded="false">☰</button><a id="n1">المواد</a><a id="n10">قواعد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n11">مشروع التخرج</a><a id="n5" style="display:none">المستخدمين</a><a id="n6" style="display:none">الدرجات</a><a id="n7">لوحتي</a><a id="n12" style="display:none">الرسائل</a><span id="who"></span><button id="themeToggle" title="الوضع الليلي">☾</button><button id="auth" style="display:none">خروج</button></nav></header>
 <main id="app"></main>
 <footer>© قسم اللغة الفرنسية — Département de français</footer>
 <div id="sheet"><div class="f fr"></div><div class="a"></div><div class="b"></div>
@@ -739,6 +739,7 @@ $("#n11").onclick = () => graduationProjectsPage();
 $("#n5").onclick = () => usersPage();
 $("#n6").onclick = () => gradesPage();
 $("#n7").onclick = () => studentDashboard();
+$("#n12").onclick = () => dmPage();
 $("#themeToggle").onclick = () => { document.body.classList.toggle("night"); localStorage.setItem("fr-theme", document.body.classList.contains("night") ? "night" : "light"); $("#themeToggle").textContent = document.body.classList.contains("night") ? "☀" : "☾"; };
 if (localStorage.getItem("fr-theme") === "night") { document.body.classList.add("night"); $("#themeToggle").textContent="☀"; }
 const withTimeout = (promise, ms=4500) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error("FIRESTORE_TIMEOUT")), ms))]);
@@ -750,6 +751,7 @@ onAuthStateChanged(auth, async u => {
   $("#aiFab").style.display = u ? "grid" : "none"; $("#penFab").style.display = u ? "grid" : "none"; if (!u && penOn) $("#penFab").click(); if (!u) { $("#aiPanel").style.display = "none"; tutorChat = null; $("#aiMsgs").innerHTML = ""; }
   $("#auth").textContent = "خروج"; $("#auth").style.display = (u || pendingVerifyUser) ? "" : "none";
   editor = admin; $("#n5").style.display = admin ? "" : "none"; $("#n5").textContent="المستخدمين";
+  dmWatchUnsub?.(); dmWatchUnsub=null; dmKeys.clear(); $("#n12").style.display="none";
   if (!u) return needLogin();
   userRoleUnsub=onSnapshot(doc(db,"users",u.uid),snap=>{const profile=snap.data()||{};isAssistantUser=profile.role==="assistant";editor=admin||isAssistantUser;groupAdmin=admin||profile.groupsAdmin===true;$("#n5").style.display=admin||isAssistantUser?"":"none";$("#n5").textContent=admin?"المستخدمين":"إحصائيات المستخدمين";});
   startAppCheck();
@@ -769,7 +771,7 @@ onAuthStateChanged(auth, async u => {
     }
   } catch (e) { console.warn("default password check skipped", e.message); }
   // اعرض الصفحة فورًا، ولا تجعل مزامنة Firestore تمنع تسجيل الدخول
-  subjects();
+  subjects(); startDmWatch(u);
   (async()=>{ try {
     const existing=await withTimeout(getDoc(doc(db,"users",u.uid)));
     if(existing.data()?.disabled){ alert("هذا الحساب متوقف من الإدارة"); await signOut(auth); return; }
@@ -2620,6 +2622,200 @@ async function usersPage() {
   $("#clearUserSearch").onclick=()=>{searchText="";selectedFilter="total";$("#userSearch").value="";renderUsers();};
   renderUsers();
 }
+/* ---------- الرسائل الخاصة (الأدمن بس هو اللي يبعت) ---------- */
+let dmWatchUnsub = null;
+const dmKeys = new Map();
+const dmEnc = new TextEncoder(), dmDec = new TextDecoder();
+const dmB64 = u8 => { let s = ""; for (let i = 0; i < u8.length; i += 8192) s += String.fromCharCode(...u8.subarray(i, i + 8192)); return btoa(s); };
+const dmUnb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const dmNewSalt = () => dmB64(crypto.getRandomValues(new Uint8Array(16)));
+async function dmDerive(pass, saltB64) {
+  const base = await crypto.subtle.importKey("raw", dmEnc.encode(pass), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "PBKDF2", salt: dmUnb64(saltB64), iterations: 150000, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+async function dmEncrypt(key, text) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, dmEnc.encode(text)));
+  return { iv: dmB64(iv), ct: dmB64(ct) };
+}
+async function dmDecrypt(key, iv, ct) { return dmDec.decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: dmUnb64(iv) }, key, dmUnb64(ct))); }
+async function dmVerify(th, pass) {
+  try { const k = await dmDerive(pass, th.salt); return (await dmDecrypt(k, th.check.iv, th.check.ct)) === "ok" ? k : null; } catch { return null; }
+}
+async function dmAdminKey(th) {
+  if (!th.locked) return null;
+  const ck = th.id + ":" + th.salt; if (dmKeys.has(ck)) return dmKeys.get(ck);
+  const pass = (await getDoc(doc(db, "dmSecrets", th.id))).data()?.pass;
+  if (!pass) throw new Error("كلمة مرور المحادثة مش موجودة");
+  const k = await dmDerive(pass, th.salt); dmKeys.set(ck, k); return k;
+}
+function dmDialog(inner) {
+  const d = document.createElement("dialog");
+  d.innerHTML = `<form>${inner}</form>`;
+  d.querySelector("form").addEventListener("submit", e => e.preventDefault());
+  document.body.appendChild(d); d.showModal();
+  d.addEventListener("close", () => d.remove());
+  return d;
+}
+const dmFmt = ts => ts?.toDate?.().toLocaleString("ar-EG", { dateStyle: "short", timeStyle: "short" }) || "";
+function startDmWatch(u) {
+  dmWatchUnsub?.(); dmWatchUnsub = null;
+  const n = $("#n12"); if (!n) return;
+  if (admin) { n.style.display = ""; n.textContent = "الرسائل"; return; }
+  n.style.display = "none";
+  dmWatchUnsub = onSnapshot(doc(db, "dmThreads", u.uid), snap => {
+    if (!snap.exists()) { n.style.display = "none"; return; }
+    const d = snap.data(), unread = (d.lastAt?.toMillis?.() || 0) > (d.lastReadAt?.toMillis?.() || 0);
+    n.style.display = ""; n.textContent = unread ? "الرسائل 🔴" : "الرسائل";
+  }, () => { n.style.display = "none"; });
+}
+async function dmPage() {
+  if (!user) return needLogin();
+  document.body.classList.remove("login-screen");
+  if (!admin) {
+    try {
+      const s = await getDoc(doc(db, "dmThreads", user.uid));
+      if (!s.exists()) { app.innerHTML = `<div class="q" style="max-width:560px;margin:24px auto;text-align:center"><h2 class="sh">✉️ الرسائل</h2><p class="mut">مفيش رسائل لحد دلوقتي.</p></div>`; return; }
+      return dmThreadView({ id: s.id, ...s.data() });
+    } catch (e) { app.innerHTML = `<p class="danger" style="text-align:center">تعذر تحميل الرسائل: ${esc(e.code || e.message)}</p>`; return; }
+  }
+  let ths = [];
+  try { ths = (await getDocs(collection(db, "dmThreads"))).docs.map(d => ({ id: d.id, ...d.data() })); }
+  catch (e) { app.innerHTML = `<p class="danger" style="text-align:center">تعذر تحميل الرسائل: ${esc(e.code || e.message)}</p>`; return; }
+  ths.sort((a, b) => (b.lastAt?.seconds || 0) - (a.lastAt?.seconds || 0));
+  app.innerHTML = `<div class="wa-groups-head"><div><small>رسائل خاصة</small><h2 class="sh">الرسائل</h2><p class="mut">إنت بس اللي تقدر تبعت. الشخص بيشوف الرسائل في تبويب «الرسائل».</p></div><div class="row"><button id="dmNew">＋ رسالة جديدة</button></div></div>
+    ${ths.length ? ths.map(t => `<article class="q" style="cursor:pointer" data-dm-open="${esc(t.id)}"><b>${esc(t.name || "طالب")}</b> ${t.locked ? "🔒" : ""}<div class="mut" style="margin-top:4px">${t.locked ? "محادثة محمية بكلمة مرور" : esc(t.lastText || "")}</div><small class="mut">${dmFmt(t.lastAt)}</small></article>`).join("") : `<p class="mut">مفيش محادثات لسه. اضغط «رسالة جديدة».</p>`}`;
+  app.querySelectorAll("[data-dm-open]").forEach(el => el.onclick = () => dmThreadView(ths.find(t => t.id === el.dataset.dmOpen)));
+  $("#dmNew").onclick = async () => {
+    let studs = [];
+    try { studs = (await groupStudents()).filter(x => x.id !== user.uid).sort((a, b) => String(a.name).localeCompare(String(b.name), "ar")); } catch {}
+    const d = dmDialog(`<h3 class="fr">رسالة جديدة</h3>
+      <label>ابحث عن الشخص<input id="dmSearch" type="search" autocomplete="off"></label>
+      <select id="dmWho" size="6" style="width:100%"></select>
+      <label>كلمة مرور للمحادثة (سيبها فاضية لو من غير)<input id="dmPw" type="text" autocomplete="off"></label>
+      <label>الرسالة<textarea id="dmFirst" rows="3"></textarea></label>
+      <div class="row"><button type="submit" id="dmGo">إرسال</button><button type="button" class="sec" id="dmX">إلغاء</button></div><p id="dmErr" class="danger"></p>`);
+    const sel = d.querySelector("#dmWho"), err = d.querySelector("#dmErr");
+    const fill = q => { const n = normalizeSearchText(q); sel.innerHTML = studs.filter(x => normalizeSearchText(x.name).includes(n)).map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join(""); if (sel.options.length) sel.selectedIndex = 0; };
+    fill(""); d.querySelector("#dmSearch").oninput = e => fill(e.target.value);
+    d.querySelector("#dmX").onclick = () => d.close();
+    d.querySelector("#dmGo").onclick = async () => {
+      err.textContent = "";
+      const uid = sel.value, text = d.querySelector("#dmFirst").value.trim(), pw = d.querySelector("#dmPw").value.trim();
+      if (!uid) return err.textContent = "اختار الشخص الأول";
+      if (!text) return err.textContent = "اكتب الرسالة";
+      if (pw && pw.length < 4) return err.textContent = "كلمة المرور 4 خانات على الأقل";
+      const btn = d.querySelector("#dmGo"); btn.disabled = true; btn.textContent = "جاري الإرسال…";
+      try {
+        const ex = await getDoc(doc(db, "dmThreads", uid));
+        if (ex.exists()) { d.close(); alert("فيه محادثة مفتوحة مع الشخص ده بالفعل. هفتحها لك."); return dmThreadView({ id: uid, ...ex.data() }); }
+        const name = studs.find(x => x.id === uid)?.name || "طالب";
+        const base = { uid, name, locked: false, createdAt: serverTimestamp(), lastAt: serverTimestamp(), lastText: text.slice(0, 80) };
+        const b = writeBatch(db); let body = { text }, key = null;
+        if (pw) {
+          const salt = dmNewSalt(); key = await dmDerive(pw, salt);
+          base.locked = true; base.salt = salt; base.check = await dmEncrypt(key, "ok"); base.lastText = "";
+          body = await dmEncrypt(key, text);
+          b.set(doc(db, "dmSecrets", uid), { pass: pw, updatedAt: serverTimestamp() });
+          dmKeys.set(uid + ":" + salt, key);
+        }
+        b.set(doc(db, "dmThreads", uid), base);
+        b.set(doc(collection(db, "dmThreads", uid, "messages")), { from: "admin", created: serverTimestamp(), ...body });
+        await b.commit(); d.close();
+        dmThreadView({ id: uid, ...base, lastAt: null });
+      } catch (e) { err.textContent = "تعذر الإرسال: " + (e.code || e.message); btn.disabled = false; btn.textContent = "إرسال"; }
+    };
+  };
+}
+function dmUnlockScreen(th) {
+  app.innerHTML = `<div class="q" style="max-width:420px;margin:24px auto;text-align:center"><h2 class="sh">🔒 محادثة محمية</h2><p class="mut">اكتب كلمة المرور اللي الإدارة إدتهالك عشان تفتح الرسائل.</p><form id="dmUnlock"><label>كلمة المرور<input name="p" type="password" autocomplete="off" required></label><div class="row" style="justify-content:center"><button type="submit">فتح</button></div><p id="dmUErr" class="danger"></p></form></div>`;
+  addPasswordToggles(app);
+  $("#dmUnlock").onsubmit = async e => {
+    e.preventDefault();
+    const msg = $("#dmUErr"), btn = e.target.querySelector("button"); msg.textContent = ""; btn.disabled = true;
+    const k = await dmVerify(th, String(new FormData(e.target).get("p")).trim());
+    if (!k) { msg.textContent = "كلمة المرور غلط."; btn.disabled = false; return; }
+    dmKeys.set(th.id + ":" + th.salt, k); dmThreadView(th);
+  };
+}
+async function dmSetPassword(th, oldKey, pass) {
+  const ms = await getDocs(collection(db, "dmThreads", th.id, "messages"));
+  if (ms.size > 480) throw new Error("عدد الرسائل كبير (أكتر من 480)");
+  const docs = ms.docs.sort((a, b) => (a.data().created?.seconds ?? 1e12) - (b.data().created?.seconds ?? 1e12));
+  const plain = await Promise.all(docs.map(async d => { const m = d.data(); return m.ct ? await dmDecrypt(oldKey, m.iv, m.ct) : (m.text || ""); }));
+  const b = writeBatch(db), thRef = doc(db, "dmThreads", th.id);
+  if (pass) {
+    const salt = dmNewSalt(), key = await dmDerive(pass, salt), check = await dmEncrypt(key, "ok");
+    for (let i = 0; i < docs.length; i++) { const e = await dmEncrypt(key, plain[i]); b.update(docs[i].ref, { text: deleteField(), iv: e.iv, ct: e.ct }); }
+    b.update(thRef, { locked: true, salt, check, lastText: "" });
+    b.set(doc(db, "dmSecrets", th.id), { pass, updatedAt: serverTimestamp() });
+    await b.commit(); dmKeys.set(th.id + ":" + salt, key);
+  } else {
+    for (let i = 0; i < docs.length; i++) b.update(docs[i].ref, { text: plain[i], iv: deleteField(), ct: deleteField() });
+    b.update(thRef, { locked: false, salt: deleteField(), check: deleteField(), lastText: (plain[plain.length - 1] || "").slice(0, 80) });
+    b.delete(doc(db, "dmSecrets", th.id));
+    await b.commit();
+  }
+}
+async function dmThreadView(th) {
+  let key = null;
+  try {
+    if (admin) key = await dmAdminKey(th);
+    else if (th.locked) { key = dmKeys.get(th.id + ":" + th.salt) || null; if (!key) return dmUnlockScreen(th); }
+  } catch (e) { app.innerHTML = `<p class="danger" style="text-align:center">${esc(e.code || e.message)}</p>`; return; }
+  app.innerHTML = `<div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div>${admin ? `<button class="sec" id="dmBack">← كل الرسائل</button>` : ""}<h2 class="sh" style="display:inline-block;margin:0 8px">${admin ? esc(th.name || "طالب") : "✉️ رسائل من الإدارة"} ${th.locked ? "🔒" : ""}</h2></div>
+      ${admin ? `<div class="row"><button class="sec" id="dmPass">🔑 كلمة المرور</button><button class="sec" id="dmDel">🗑 حذف المحادثة</button></div>` : ""}</div>
+    <div id="dmMsgs" class="q" style="margin-top:12px;max-height:60vh;overflow:auto;display:flex;flex-direction:column;gap:8px"><p class="mut">جاري التحميل…</p></div>
+    ${admin ? `<div class="row" style="margin-top:10px;align-items:flex-end"><textarea id="dmIn" rows="2" style="flex:1" placeholder="اكتب رسالتك…"></textarea><button id="dmSend">إرسال</button></div>` : ""}`;
+  const box = $("#dmMsgs");
+  const unsub = onSnapshot(collection(db, "dmThreads", th.id, "messages"), async snap => {
+    if (!box.isConnected) { unsub(); return; }
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.created?.seconds ?? 1e12) - (b.created?.seconds ?? 1e12));
+    const items = await Promise.all(rows.map(async m => { let t; try { t = m.ct ? (key ? await dmDecrypt(key, m.iv, m.ct) : "🔒") : (m.text || ""); } catch { t = "⚠️ تعذر فك التشفير"; } return { m, t }; }));
+    if (!box.isConnected) return;
+    box.innerHTML = items.length ? items.map(({ m, t }) => `<div style="align-self:flex-start;max-width:85%;background:rgba(80,120,255,.12);padding:8px 12px;border-radius:12px"><div style="white-space:pre-wrap;word-break:break-word">${esc(t)}</div><small class="mut">${dmFmt(m.created)}</small></div>`).join("") : `<p class="mut">مفيش رسائل لسه.</p>`;
+    box.scrollTop = box.scrollHeight;
+    if (!admin) updateDoc(doc(db, "dmThreads", th.id), { lastReadAt: serverTimestamp() }).catch(() => {});
+  }, e => { box.innerHTML = `<p class="danger">تعذر تحميل الرسائل: ${esc(e.code || e.message)}</p>`; });
+  if (!admin) return;
+  const reopen = async () => { const s = await getDoc(doc(db, "dmThreads", th.id)); s.exists() ? dmThreadView({ id: s.id, ...s.data() }) : dmPage(); };
+  $("#dmBack").onclick = dmPage;
+  $("#dmSend").onclick = async () => {
+    const inp = $("#dmIn"), text = inp.value.trim(); if (!text) return;
+    const btn = $("#dmSend"); btn.disabled = true;
+    try {
+      const body = th.locked ? await dmEncrypt(key, text) : { text };
+      const b = writeBatch(db);
+      b.set(doc(collection(db, "dmThreads", th.id, "messages")), { from: "admin", created: serverTimestamp(), ...body });
+      b.update(doc(db, "dmThreads", th.id), { lastAt: serverTimestamp(), lastText: th.locked ? "" : text.slice(0, 80) });
+      await b.commit(); inp.value = "";
+    } catch (e) { alert("تعذر الإرسال: " + (e.code || e.message)); }
+    btn.disabled = false;
+  };
+  $("#dmPass").onclick = async () => {
+    let cur = ""; if (th.locked) { try { cur = (await getDoc(doc(db, "dmSecrets", th.id))).data()?.pass || ""; } catch {} }
+    const d = dmDialog(`<h3 class="fr">كلمة مرور المحادثة</h3>
+      <p class="mut">${th.locked ? `المحادثة محمية حاليًا. الباسورد الحالي: <b dir="ltr">${esc(cur)}</b>` : "المحادثة دلوقتي من غير باسورد."}</p>
+      <label>كلمة مرور ${th.locked ? "جديدة" : ""} (4 خانات على الأقل)<input id="dmNewPass" type="text" autocomplete="off"></label>
+      <div class="row"><button type="submit" id="dmPassSave">حفظ</button>${th.locked ? `<button type="button" class="sec" id="dmPassOff">إزالة الباسورد</button>` : ""}<button type="button" class="sec" id="dmPassX">إلغاء</button></div><p id="dmPassMsg" class="mut"></p>`);
+    const msg = d.querySelector("#dmPassMsg");
+    const run = async pass => { msg.textContent = "جاري الحفظ…"; try { await dmSetPassword(th, key, pass); d.close(); reopen(); } catch (e) { msg.textContent = "تعذر الحفظ: " + (e.code || e.message); } };
+    d.querySelector("#dmPassX").onclick = () => d.close();
+    d.querySelector("#dmPassSave").onclick = () => { const p = d.querySelector("#dmNewPass").value.trim(); if (p.length < 4) return msg.textContent = "كلمة المرور 4 خانات على الأقل"; run(p); };
+    const off = d.querySelector("#dmPassOff"); if (off) off.onclick = () => run("");
+  };
+  $("#dmDel").onclick = async () => {
+    if (!confirm("تحذف المحادثة دي بكل رسايلها؟")) return;
+    try {
+      const ms = await getDocs(collection(db, "dmThreads", th.id, "messages"));
+      for (let i = 0; i < ms.docs.length; i += 400) { const b = writeBatch(db); ms.docs.slice(i, i + 400).forEach(x => b.delete(x.ref)); await b.commit(); }
+      const b = writeBatch(db); b.delete(doc(db, "dmThreads", th.id)); b.delete(doc(db, "dmSecrets", th.id)); await b.commit();
+      dmPage();
+    } catch (e) { alert("تعذر الحذف: " + (e.code || e.message)); }
+  };
+}
+
 async function groupsPage() {
   if (!user) return needLogin();
   groupListUnsubs.forEach(fn => fn()); groupListUnsubs = [];
