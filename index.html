@@ -3346,12 +3346,550 @@ async function extractLocalGraduationFile(file){
 }
 const GP_MAX_CHARS=300000,GP_AI_CHARS=100000;   // حدود نص الملف: التخزين ~45 صفحة، والتنظيم بالـ AI ~40 صفحة
 const GP_FILE_ACCEPT=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+/* ================= مشروع التخرج (ملف واحد يذاكره كل أعضاء الجروب) ================= */
+const GPX_ACCEPT = ".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const GPX_CHUNK_BYTES = 560000, GPX_MAX_IMAGES = 80, GPX_MAX_TOTAL = 22 * 1024 * 1024;
+const gpxId = () => "i" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
+const gpxBytes = s => new TextEncoder().encode(s).length;
+function gpxShrink(src) {
+  return new Promise(res => {
+    const draw = el => {
+      try {
+        const w = el.naturalWidth || el.width, h = el.naturalHeight || el.height;
+        if (!w || !h || w < 30 || h < 30) return res(null);
+        let s = Math.min(1, 1000 / w), out = null;
+        for (let k = 0; k < 5; k++) {
+          const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w * s)); c.height = Math.max(1, Math.round(h * s));
+          const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); x.drawImage(el, 0, 0, c.width, c.height);
+          out = c.toDataURL("image/jpeg", k ? .6 : .78); if (out.length < 450000) break; s *= .75;
+        }
+        res(out && out.length < 800000 ? out : null);
+      } catch { res(null); }
+    };
+    if (typeof src !== "string") return draw(src);
+    const im = new Image(); im.onload = () => draw(im); im.onerror = () => res(null); im.src = src;
+  });
+}
+async function gpxFinishImages(blocks, jobs, progress) {
+  const imgs = {}; let done = 0;
+  for (const j of jobs) {
+    progress?.(`جاري تجهيز الصور ${++done} من ${jobs.length}…`);
+    const out = Object.keys(imgs).length >= GPX_MAX_IMAGES ? null : await gpxShrink(j.src);
+    if (out) imgs[j.b.v] = out; else j.b.drop = true;
+  }
+  return { blocks: blocks.filter(b => !b.drop), imgs };
+}
+/* ---------- Word ---------- */
+async function gpxFromDocx(file, progress) {
+  const m = await loadMammoth(); progress?.("جاري قراءة ملف Word…");
+  const r = await m.convertToHtml({ arrayBuffer: await file.arrayBuffer() }, {
+    styleMap: ["p[style-name='Title'] => h1:fresh", "p[style-name='Subtitle'] => h2:fresh"],
+    convertImage: m.images.imgElement(async im => ({ src: `data:${im.contentType};base64,${await im.read("base64")}` }))
+  });
+  const dom = new DOMParser().parseFromString(`<body>${r.value}</body>`, "text/html");
+  const blocks = [], jobs = [];
+  const pushText = (t, type = "p") => { t = String(t || "").replace(/\u00a0/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{2,}/g, "\n").trim(); if (t) blocks.push({ t: type, v: t }); };
+  const pushImg = src => { if (!src) return; const b = { t: "img", v: gpxId() }; blocks.push(b); jobs.push({ b, src }); };
+  const inline = (el, asType) => {
+    let buf = ""; const flush = () => { pushText(buf, asType); buf = ""; };
+    const walk = n => n.childNodes.forEach(c => { if (c.nodeType === 3) buf += c.nodeValue; else if (c.nodeName === "BR") buf += "\n"; else if (c.nodeName === "IMG") { flush(); pushImg(c.getAttribute("src")); } else walk(c); });
+    walk(el); flush();
+  };
+  [...dom.body.children].forEach(el => {
+    const tag = el.tagName;
+    if (/^H[1-6]$/.test(tag)) { inline(el, tag === "H1" ? "h1" : "h2"); return; }
+    if (tag === "UL" || tag === "OL") {
+      const lines = [...el.querySelectorAll("li")].map(li => {
+        const c = li.cloneNode(true); c.querySelectorAll("ul,ol,img").forEach(x => x.remove());
+        const t = c.textContent.replace(/\s+/g, " ").trim(); if (!t) return "";
+        return (li.parentElement?.tagName === "OL" ? ([...li.parentElement.children].indexOf(li) + 1) + ". " : "- ") + t;
+      }).filter(Boolean);
+      pushText(lines.join("\n")); el.querySelectorAll("img").forEach(i => pushImg(i.getAttribute("src"))); return;
+    }
+    if (tag === "TABLE") {
+      const rows = [...el.querySelectorAll("tr")].map(tr => [...tr.children].map(td => td.textContent.replace(/\s+/g, " ").trim())).filter(r => r.some(Boolean));
+      if (rows.length >= 2) blocks.push({ t: "tbl", rows }); else if (rows.length) pushText(rows.map(r => r.filter(Boolean).join(" ")).join("\n"));
+      el.querySelectorAll("img").forEach(i => pushImg(i.getAttribute("src"))); return;
+    }
+    const kids = [...el.childNodes].filter(n => n.nodeType === 1 || n.textContent.trim());
+    const text = el.textContent.replace(/\s+/g, " ").trim();
+    if (tag === "P" && kids.length === 1 && /^(STRONG|B)$/.test(kids[0].nodeName) && !el.querySelector("img") && text.length < 100 && !/[.!?:;,]$/.test(text)) { pushText(text, "h2"); return; }
+    inline(el);
+  });
+  return gpxFinishImages(blocks, jobs, progress);
+}
+/* ---------- PDF ---------- */
+const gpxMul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
+async function gpxCropPage(page, boxes) {
+  const S = 2, vp = page.getViewport({ scale: S }), cv = document.createElement("canvas");
+  cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
+  await page.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+  const out = [];
+  for (const b of boxes) {
+    const [x0, y0] = vp.convertToViewportPoint(b.minX, b.maxY), [x1, y1] = vp.convertToViewportPoint(b.maxX, b.minY);
+    const sx = Math.max(0, Math.floor(Math.min(x0, x1))), sy = Math.max(0, Math.floor(Math.min(y0, y1))), sw = Math.min(cv.width - sx, Math.ceil(Math.abs(x1 - x0))), sh = Math.min(cv.height - sy, Math.ceil(Math.abs(y1 - y0)));
+    if (sw < 20 || sh < 20) { out.push(null); continue; }
+    const cc = document.createElement("canvas"); cc.width = sw; cc.height = sh; cc.getContext("2d").drawImage(cv, sx, sy, sw, sh, 0, 0, sw, sh);
+    out.push(await gpxShrink(cc));
+  }
+  return out;
+}
+async function gpxFromPdf(file, progress) {
+  if (!pdfJsModulePromise) pdfJsModulePromise = import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs").then(lib => { lib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs"; return lib; });
+  return gpxPdfCore(await pdfJsModulePromise, new Uint8Array(await file.arrayBuffer()), progress, gpxCropPage);
+}
+const GPX_RTL = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
+const GPX_BULLET = /^\s*([\uF000-\uF0FF•▪◦·●■▸►–—]|-|\d{1,2}[.)])\s+/;
+function gpxLineCells(items, k = 2.2) {   // items مرتبة بصريًا (x تصاعدي) → خلايا حسب الفراغات الكبيرة
+  const cells = []; let cur = [];
+  items.forEach((it, i) => {
+    const prev = items[i - 1];
+    if (prev && it.x - (prev.x + prev.w) > Math.max(Math.max(it.sz, prev.sz) * k, k > 2 ? 14 : 8)) { cells.push(cur); cur = []; }
+    cur.push(it);
+  });
+  if (cur.length) cells.push(cur);
+  return cells;
+}
+function gpxCellText(items) {   // نص منطقي (مع عكس مقاطع العربي لأن الترتيب بصري)
+  const sep = items.map((it, i) => { const p = items[i - 1]; if (!p) return ""; const gap = it.x - (p.x + p.w); return gap > it.sz * .18 && !/\s$/.test(p.s) && !/^\s/.test(it.s) ? " " : ""; });
+  let out = "", i = 0;
+  while (i < items.length) {
+    if (items[i].rtl) {
+      let j = i; while (j + 1 < items.length && items[j + 1].rtl) j++;
+      let run = ""; for (let k = j; k >= i; k--) { run += items[k].s; if (k > i) run += sep[k]; }
+      out += sep[i] + run; i = j + 1;
+    } else { out += sep[i] + items[i].s; i++; }
+  }
+  return out.replace(/\s+/g, " ").trim();
+}
+async function gpxPdfCore(lib, data, progress, crop) {
+  const OPS = lib.OPS, pdf = await lib.getDocument({ data }).promise, N = Math.min(pdf.numPages, 400), pages = [];
+  let imgCount = 0;
+  for (let n = 1; n <= N; n++) {
+    progress?.(`جاري قراءة الصفحة ${n} من ${N}…`);
+    const page = await pdf.getPage(n), vp1 = page.getViewport({ scale: 1 }), W = vp1.width, H = vp1.height;
+    let ops = null; try { ops = await page.getOperatorList(); } catch (e) { console.warn("pdf ops", e); }
+    const tc = await page.getTextContent(), boldCache = {};
+    const isBold = f => { if (f in boldCache) return boldCache[f]; let b = false; try { b = /bold|black|heavy|semibold/i.test(page.commonObjs.get(f)?.name || ""); } catch {} return (boldCache[f] = b); };
+    const items = tc.items.filter(i => typeof i.str === "string" && i.str.trim() !== "").map(i => ({ s: i.str, x: i.transform[4], y: i.transform[5], sz: Math.hypot(i.transform[0], i.transform[1]) || i.height || 10, w: i.width || 0, bold: isBold(i.fontName), rtl: i.dir === "rtl" || GPX_RTL.test(i.str) })).sort((a, b) => b.y - a.y || a.x - b.x);
+    const groups = [];
+    items.forEach(it => { const g = groups[groups.length - 1]; if (g && Math.abs(g.y - it.y) <= Math.max(g.sz, it.sz) * .45) g.items.push(it); else groups.push({ y: it.y, sz: it.sz, items: [it] }); });
+    const lines = groups.map(g => {
+      g.items.sort((a, b) => a.x - b.x);
+      const cells = gpxLineCells(g.items).map(c => ({ x: c[0].x, x1: c[c.length - 1].x + c[c.length - 1].w, text: gpxCellText(c) })).filter(c => c.text);
+      const last = g.items[g.items.length - 1], sizes = g.items.map(i => i.sz).sort((a, b) => a - b);
+      return { items: g.items, soft: gpxLineCells(g.items, .8).length, y: g.y, x: g.items[0].x, x1: last.x + last.w, size: sizes[Math.floor(sizes.length / 2)], bold: g.items.every(i => i.bold), cells, text: cells.map(c => c.text).join(" ").trim() };
+    }).filter(l => l.text);
+    /* مواضع الصور */
+    const boxes = [];
+    if (ops) try {
+      let ctm = [1, 0, 0, 1, 0, 0]; const stack = [];
+      ops.fnArray.forEach((fn, k) => {
+        const a = ops.argsArray[k];
+        if (fn === OPS.save) stack.push(ctm.slice()); else if (fn === OPS.restore) ctm = stack.pop() || [1, 0, 0, 1, 0, 0];
+        else if (fn === OPS.transform) ctm = gpxMul(ctm, a);
+        else if (fn === OPS.paintFormXObjectBegin) { stack.push(ctm.slice()); if (a && a[0]) ctm = gpxMul(ctm, a[0]); }
+        else if (fn === OPS.paintFormXObjectEnd) ctm = stack.pop() || ctm;
+        else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject || fn === OPS.paintImageXObjectRepeat) {
+          const xs = [], ys = []; [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(([px, py]) => { xs.push(ctm[0] * px + ctm[2] * py + ctm[4]); ys.push(ctm[1] * px + ctm[3] * py + ctm[5]); });
+          const b = { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+          if (b.maxX - b.minX < 40 || b.maxY - b.minY < 40) return;
+          if (boxes.some(o => b.minX >= o.minX - 3 && b.maxX <= o.maxX + 3 && b.minY >= o.minY - 3 && b.maxY <= o.maxY + 3)) return;
+          boxes.push(b);
+        }
+      });
+    } catch (e) { console.warn("pdf image ops", e); }
+    const textInside = b => lines.filter(l => l.y >= b.minY - 2 && l.y <= b.maxY + 2 && l.x >= b.minX - 2 && l.x <= b.maxX).length;
+    for (let k = boxes.length - 1; k >= 0; k--) { const b = boxes[k], area = (b.maxX - b.minX) * (b.maxY - b.minY); if (textInside(b) && ((b.maxY - b.minY) < 110 || area < W * H * .12)) boxes.splice(k, 1); }
+    let crops = [];
+    if (boxes.length && imgCount < GPX_MAX_IMAGES) { try { crops = await crop(page, boxes.slice(0, GPX_MAX_IMAGES - imgCount)); } catch (e) { console.warn("pdf crop", e); } }
+    const imgsOnPage = []; boxes.forEach((b, i) => { if (crops[i]) { imgsOnPage.push({ ...b, data: crops[i] }); imgCount++; } });
+    pages.push({ n, W, H, lines, imgs: imgsOnPage }); try { page.cleanup(); } catch {}
+  }
+  /* حجم الخط الأساسي + استبعاد أرقام الصفحات والهيدر/الفوتر */
+  const freq = new Map(); pages.forEach(p => p.lines.forEach(l => { const k = Math.round(l.size * 2) / 2; freq.set(k, (freq.get(k) || 0) + l.text.length); }));
+  const body = [...freq.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 11;
+  const zk = l => l.text.replace(/\d+/g, "#").toLowerCase(), zc = new Map(), inZone = (l, p) => l.y > p.H * .92 || l.y < p.H * .07;
+  pages.forEach(p => p.lines.forEach(l => { if (inZone(l, p)) zc.set(zk(l), (zc.get(zk(l)) || 0) + 1); }));
+  const blocks = [], imgs = {}; let para = null, prevPageLast = null, table = null;
+  const flushTable = () => {
+    if (table) { const rows = table.rows.map(r => r.map(c => c.join(" ").replace(/\s+/g, " ").trim())).filter(r => r.some(Boolean)); if (rows.length >= 2) blocks.push({ t: "tbl", rows }); else if (rows.length) blocks.push({ t: "p", v: rows.map(r => r.filter(Boolean).join(" ")).join("\n") }); table = null; }
+  };
+  const flush = () => {
+    if (para) { const t = (para.list ? para.lines.join("\n") : para.text).replace(/[ \t]+/g, " ").trim(); if (t) blocks.push({ t: para.level || "p", v: t }); para = null; }
+    flushTable();
+  };
+  const lowerStart = s => /^[\p{Ll}]/u.test(s || "");
+  pages.forEach(p => {
+    const rights = p.lines.map(l => l.x1).sort((a, b) => a - b), pageRight = rights.length ? rights[Math.floor(rights.length * .9)] : p.W;
+    const lines = p.lines.filter(l => !(inZone(l, p) && (/^\W*\d+\W*$/.test(l.text) || (zc.get(zk(l)) >= 3 && l.text.length < 120))));
+    const entries = [...lines.map(l => ({ k: "l", y: l.y, l })), ...p.imgs.map(b => ({ k: "i", y: b.maxY + .5, b }))].sort((a, b) => b.y - a.y);
+    let prev = null, first = true;
+    entries.forEach((en, idx) => {
+      if (en.k === "i") { flush(); const id = gpxId(); blocks.push({ t: "img", v: id }); imgs[id] = en.b.data; prev = null; first = false; return; }
+      const l = en.l;
+      /* ---- جداول: الأعمدة من سطر العناوين، وتقسيم باقي السطور حسب مواضع الأعمدة ---- */
+      const ahead = entries.slice(idx + 1).filter(e => e.k === "l").slice(0, 2).map(e => e.l);
+      const multi = l.cells.length >= 2;
+      if (table) {
+        const cols = table.cols, colOf = x => { let k = -1; cols.forEach((cx, i) => { if (cx <= x + 6) k = i; }); return k; };
+        const inside = l.items[0].x >= cols[0] - 3 && !(prev && prev.y - l.y > Math.max(l.size, prev.size) * 2.1);
+        const cells = [];
+        if (inside) { let cur = null; l.items.forEach(it => { const k = Math.max(0, colOf(it.x)); if (cur && cur.col === k) cur.items.push(it); else { cur = { col: k, items: [it] }; cells.push(cur); } }); cells.forEach(c => { c.text = gpxCellText(c.items); c.x = c.items[0].x; }); }
+        if (inside && cells.length && (multi || cells.length > 1 || cells[0].col > 0 || lowerStart(cells[0].text))) {
+          const c0 = cells.find(c => c.col === 0);
+          if (c0 && !lowerStart(c0.text)) table.rows.push(cols.map(() => []));
+          const row = table.rows[table.rows.length - 1];
+          cells.forEach(c => row[c.col].push(c.text));
+          prev = l; first = false; prevPageLast = l; return;
+        }
+        flush();
+      }
+      if (multi && (l.cells.length >= 3 || ahead.some(a => a.soft >= 2 && Math.abs(a.y - l.y) < l.size * 4))) {
+        flush();
+        /* أعمدة الجدول: مواضع بداية الخلايا المتكررة في سطور الجدول */
+        const region = [l]; let pl = l;
+        for (const e of entries.slice(idx + 1)) { if (e.k !== "l") break; const l2 = e.l; if (pl.y - l2.y > Math.max(l2.size, pl.size) * 2.1 || l2.items[0].x < l.items[0].x - 3) break; region.push(l2); pl = l2; if (region.length >= 60) break; }
+        const xs = []; region.forEach(r => r.items.forEach((it, i) => { const pv = r.items[i - 1]; if (!pv || it.x - (pv.x + pv.w) > it.sz * .8) xs.push(it.x); }));
+        xs.sort((a, b) => a - b); const cl = [];
+        xs.forEach(x => { const c = cl[cl.length - 1]; if (c && x - c.max <= 4) { c.max = x; c.n++; c.sum += x; } else cl.push({ min: x, max: x, n: 1, sum: x }); });
+        let cols = cl.filter(c => c.n >= Math.max(2, Math.ceil(region.length * .35))).map(c => c.min);
+        if (cols.length < 2) cols = l.cells.map(c => c.x);
+        table = { cols, rows: [cols.map(() => [])] };
+        { const row = table.rows[0]; let cur = null; const groupsArr = [];
+          l.items.forEach(it => { let k = 0; cols.forEach((cx, i) => { if (cx <= it.x + 6) k = i; }); if (cur && cur.k === k) cur.items.push(it); else { cur = { k, items: [it] }; groupsArr.push(cur); } });
+          groupsArr.forEach(g => row[g.k].push(gpxCellText(g.items))); }
+        prev = l; first = false; prevPageLast = l; return;
+      }
+      /* ---- نص عادي ---- */
+      const ratio = l.size / body, shortLine = l.text.length < 150;
+      let level = null;
+      if (shortLine && ratio >= 1.45) level = "h1";
+      else if (shortLine && ratio >= 1.18) level = "h2";
+      else if (shortLine && l.bold && l.text.length < 130 && !/[.;,]$/.test(l.text)) level = "h2";
+      else if (l.text.length < 90 && /^\d{1,2}[.)]\s+\p{Lu}/u.test(l.text) && !/[.:;,?!]$/.test(l.text)) level = "h2";
+      const bullet = GPX_BULLET.test(l.text), text = l.text.replace(/^\s*[\uF000-\uF0FF•▪◦·●■▸►–—]\s*/, "- ");
+      if (level) {
+        if (para && para.level === level && prev && !first && Math.abs(para.size - l.size) < .6 && prev.y - l.y < l.size * 1.7 && !/^(\d{1,2}[.)]\s|(Section|SECTION|Chapitre|CHAPITRE)\b)/.test(l.text)) para.text += " " + l.text;
+        else { flush(); para = { level, text: l.text, size: l.size }; }
+      } else if (bullet) { flush(); para = { list: true, lines: [text] }; }
+      else {
+        let startNew = !para || para.level;
+        if (!startNew && !first) {
+          const gap = prev.y - l.y, lineH = Math.max(l.size, prev.size) * 1.25, ends = /[.!?:»"”)]$/.test(prev.text);
+          if (gap > lineH * 1.55) startNew = true;
+          else if (ends && l.x - prev.x > body * .9 && l.x > prev.x) startNew = true;
+          else if (ends && prev.x1 < pageRight - body * 4) startNew = true;
+        } else if (!startNew && first && prevPageLast) {
+          startNew = /[.!?:»"”)]$/.test(prevPageLast.text) || !/^\p{Ll}/u.test(l.text);
+        }
+        if (startNew) { flush(); para = { text: l.text }; }
+        else if (para.list) { para.lines[para.lines.length - 1] += " " + l.text; }
+        else para.text += (para.text.endsWith("-") ? "" : " ") + l.text;
+      }
+      prev = l; first = false; prevPageLast = l;
+    });
+    flushTable(); prev = null;
+  });
+  flush();
+  return { blocks, imgs };
+}
+
+async function gpxParseFile(f, progress) {
+  if (f.size > 40 * 1024 * 1024) throw new Error("الملف أكبر من 40 ميجابايت.");
+  let res;
+  if (/\.docx$/i.test(f.name)) res = await gpxFromDocx(f, progress);
+  else if (/\.pdf$/i.test(f.name) || f.type === "application/pdf") res = await gpxFromPdf(f, progress);
+  else if (/\.doc$/i.test(f.name)) throw new Error("ملفات .doc القديمة مش مدعومة. احفظه من Word كـ .docx أو PDF.");
+  else throw new Error("الملف لازم يكون Word (.docx) أو PDF.");
+  if (!res.blocks.some(b => b.t !== "img")) throw new Error("مفيش نص قابل للقراءة في الملف (ممكن يكون صور ممسوحة).");
+  return res;
+}
+/* ---------- التخزين ---------- */
+async function gpxLoad(g) {
+  const snap = await getDocs(collection(db, "graduationProjects", g.id, "chunks"));
+  const qa = {}, docs = [], blocks = [], imgs = {};
+  snap.docs.forEach(d => { if (d.id.startsWith("qa-")) { const x = d.data(); qa[x.i] = x; } else docs.push(d.data()); });
+  docs.sort((a, b) => a.n - b.n).forEach(d => { blocks.push(...(d.blocks || [])); Object.assign(imgs, d.imgs || {}); });
+  return { blocks, imgs, qa };
+}
+async function gpxSave(g, blocks, imgs, fileName, resetQA) {
+  let total = 0; const chunks = []; let cur = { blocks: [], imgs: {} }, size = 0;
+  for (const b of blocks) {
+    const sz = gpxBytes(JSON.stringify(b)) + (b.t === "img" ? (imgs[b.v] || "").length : 0) + 30; total += sz;
+    if (cur.blocks.length && size + sz > GPX_CHUNK_BYTES) { chunks.push(cur); cur = { blocks: [], imgs: {} }; size = 0; }
+    cur.blocks.push(b); if (b.t === "img") cur.imgs[b.v] = imgs[b.v]; size += sz;
+  }
+  if (cur.blocks.length) chunks.push(cur);
+  if (total > GPX_MAX_TOTAL) throw new Error("حجم المحتوى كبير جدًا (أكتر من 22 ميجا بعد الضغط).");
+  const col = collection(db, "graduationProjects", g.id, "chunks");
+  for (let i = 0; i < chunks.length; i++) await setDoc(doc(col, String(i).padStart(4, "0")), { n: i, blocks: chunks[i].blocks, imgs: chunks[i].imgs });
+  const old = await getDocs(col), keep = new Set(chunks.map((_, i) => String(i).padStart(4, "0")));
+  for (const d of old.docs) { if (d.id.startsWith("qa-")) { if (resetQA) await deleteDoc(d.ref); } else if (!keep.has(d.id)) await deleteDoc(d.ref); }
+  const meta = { fileName: fileName || "", blocks: blocks.length, images: Object.keys(imgs).length, chunks: chunks.length, translated: blocks.some(b => b.ar), at: Date.now() };
+  await updateDoc(doc(db, "graduationProjects", g.id), { contentMeta: meta, updatedAt: serverTimestamp() });
+  return meta;
+}
+async function gpxWipe(g, deleteProject) {
+  const col = collection(db, "graduationProjects", g.id, "chunks");
+  for (const d of (await getDocs(col)).docs) await deleteDoc(d.ref);
+  if (deleteProject) {
+    for (const d of (await getDocs(collection(db, "graduationProjects", g.id, "tasks")).catch(() => ({ docs: [] }))).docs) await deleteDoc(d.ref).catch(() => {});
+    await deleteDoc(doc(db, "graduationProjects", g.id));
+  } else await updateDoc(doc(db, "graduationProjects", g.id), { contentMeta: deleteField(), updatedAt: serverTimestamp() });
+}
+async function gpxTranslateSave(g, blocks, imgs, fileName, btn) {
+  const todo = blocks.filter(b => ["h1", "h2", "p"].includes(b.t) && !b.ar && /\p{L}/u.test(b.v || ""));
+  if (!todo.length) return alert("كل الفقرات متترجمة ومحفوظة بالفعل.");
+  if (!confirm(`هيتم ترجمة ${todo.length} بلوك بالذكاء الاصطناعي وحفظها لكل الأعضاء. ممكن ياخد وقت. تكمل؟`)) return false;
+  btn.disabled = true; let ok = 0, fail = 0;
+  for (let i = 0; i < todo.length; i++) {
+    btn.textContent = `⏳ ترجمة ${i + 1} من ${todo.length}`;
+    try { const r = await paragraphTranslation(todo[i].v); todo[i].ar = r.ar; todo[i].pairs = r.pairs; ok++; } catch (e) { fail++; console.warn("gpx translate", e); }
+  }
+  btn.textContent = "💾 جاري الحفظ…";
+  await gpxSave(g, blocks, imgs, fileName);
+  if (fail) alert(`تمت ترجمة ${ok} بلوك وتعذر ${fail}. اضغط الزر تاني لإكمال الباقي.`);
+  return true;
+}
+/* ---------- تنظيف (الغلاف/الأسماء/الفهرس/المراجع) ---------- */
+function gpxDetectParts(blocks) {
+  const head = b => (b.t === "h1" || b.t === "h2") && !/\.{4,}|\bp\.\s*\d+/.test(b.v || "");
+  let frontEnd = blocks.findIndex((b, i) => i > 0 && head(b) && /^(introduction|avant[\s-]?propos|préface|preface|résumé|abstract|remerciements|chapitre\s+(i|1|premier)\b|chapter\s+(i|1|one)\b|مقدمة)/i.test(b.v));
+  if (frontEnd < 0) frontEnd = 0;
+  let biblioStart = -1;
+  for (let i = frontEnd + 1; i < blocks.length; i++) if (head(blocks[i]) && /^(bibliographie|références|references|bibliography|المراجع|المصادر)/i.test(blocks[i].v)) { biblioStart = i; break; }
+  return { frontEnd, frontTitle: blocks[frontEnd]?.v || "", biblioStart, biblioCount: biblioStart >= 0 ? blocks.length - biblioStart : 0 };
+}
+function gpxApplyCleanup(blocks, imgs, parts, opt) {
+  const from = opt.front && parts.frontEnd > 0 ? parts.frontEnd : 0, to = opt.biblio && parts.biblioStart >= 0 ? parts.biblioStart : blocks.length;
+  const kept = blocks.slice(from, to), ni = {};
+  kept.forEach(b => { if (b.t === "img" && imgs[b.v]) ni[b.v] = imgs[b.v]; });
+  return { blocks: kept, imgs: ni };
+}
+function gpxAskCleanup(parts) {
+  return new Promise(resolve => {
+    let done = false;
+    const d = dmDialog(`<h3 class="fr">🧹 تنظيف الملف قبل الحفظ</h3><p class="mut">لقيت أجزاء مش محتاجها في المذاكرة. اختار اللي تحذفه (تقدر تسيبه لو عايزه):</p>
+      ${parts.frontEnd > 0 ? `<label style="display:flex;gap:8px;align-items:flex-start;margin:8px 0"><input type="checkbox" id="gcFront" checked style="width:auto;margin-top:4px"><span>حذف الغلاف والأسماء وفهرس المحتويات (${parts.frontEnd} بلوك قبل «${esc(String(parts.frontTitle).slice(0, 50))}»)</span></label>` : ""}
+      ${parts.biblioStart >= 0 ? `<label style="display:flex;gap:8px;align-items:flex-start;margin:8px 0"><input type="checkbox" id="gcBib" checked style="width:auto;margin-top:4px"><span>حذف المراجع (Bibliographie) — ${parts.biblioCount} بلوك في آخر الملف</span></label>` : ""}
+      <div class="row"><button type="button" id="gcGo">متابعة</button></div>`);
+    const finish = () => { if (done) return; done = true; resolve({ front: !!d.querySelector("#gcFront")?.checked, biblio: !!d.querySelector("#gcBib")?.checked }); };
+    d.querySelector("#gcGo").onclick = () => { finish(); d.close(); };
+    d.addEventListener("close", () => { if (!done) { done = true; resolve({ front: parts.frontEnd > 0, biblio: parts.biblioStart >= 0 }); } });
+  });
+}
+/* ---------- عرض المحتوى (فقرات + جداول حقيقية + صور) ---------- */
+function gpxEnsureStyle() {
+  if (document.getElementById("gpx-style")) return;
+  const st = document.createElement("style"); st.id = "gpx-style";
+  st.textContent = `.gpx-tblwrap{overflow-x:auto;margin:14px 0}.gpx-tbl{border-collapse:collapse;width:100%;direction:ltr;font-size:.95rem}
+.gpx-tbl th{background:#155a7d;color:#fff;text-align:left;padding:7px 10px;border:1px solid #0e4560;font-weight:700}
+.gpx-tbl td{padding:7px 10px;border:1px solid #7fb9d8;background:#d3ebf7;color:#14264f;text-align:left;vertical-align:top}
+.gpx-tbl tr:nth-child(odd) td{background:#9fd3ee}.gpx-tbl td:first-child{font-weight:700}
+.gpx-tbl .w:hover{background:rgba(255,255,255,.6);border-radius:3px}
+body.night .gpx-tbl td{background:#17283a;color:#e6eef7;border-color:#2e4a63}body.night .gpx-tbl tr:nth-child(odd) td{background:#1d3348}
+body.night .gpx-tbl th{background:#0f4259;border-color:#2e4a63}
+.gpx-chs{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;margin-bottom:4px}
+.gpx-chs .gpx-ch{flex:none;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis;font-size:.88rem;padding:7px 12px}
+.gpx-chs .gpx-ch.on{background:#00a884!important;color:#fff!important;border-color:#00a884!important}
+.gpx-qa{border:1px solid rgba(128,128,128,.35);border-radius:12px;margin:10px 0;padding:10px 14px;background:rgba(80,120,255,.06)}
+.gpx-qa summary{cursor:pointer;list-style:none}.gpx-qa summary::-webkit-details-marker{display:none}
+.gpx-qa summary b{color:#00a884;margin-left:6px}.gpx-qa[open] summary{margin-bottom:8px}
+.gpx-ans{border-top:1px dashed rgba(128,128,128,.4);padding-top:10px}.gpx-ans .ga{margin-bottom:6px}`;
+  document.head.appendChild(st);
+}
+function gpxRenderBody(root, blocks, imgs) {
+  gpxEnsureStyle(); root.textContent = ""; let seg = [];
+  const flushSeg = () => { if (!seg.length) return; const d = document.createElement("div"); root.appendChild(d); renderLessonBody(d, { blocks: seg }, imgs); seg = []; };
+  blocks.forEach(b => {
+    if (b.t !== "tbl") { seg.push(b); return; }
+    flushSeg();
+    const wrap = document.createElement("div"), t = document.createElement("table"); wrap.className = "gpx-tblwrap"; t.className = "gpx-tbl";
+    (b.rows || []).forEach((r, ri) => { const tr = document.createElement("tr"); r.forEach(c => { const td = document.createElement(ri === 0 ? "th" : "td"); clickable(td, String(c || ""), false); tr.appendChild(td); }); t.appendChild(tr); });
+    wrap.appendChild(t); root.appendChild(wrap);
+  });
+  flushSeg();
+}
+/* ---------- تقسيم الفصول + أسئلة المناقشة ---------- */
+function gpxChapters(blocks) {
+  const textOf = b => (b.t === "h1" || b.t === "h2" || b.t === "p") ? String(b.v || "") : "";
+  const topH2 = b => b.t === "h2" && /^(conclusion générale|conclusion|annexes?|bibliographie|références|résumé|abstract|الخاتمة|المراجع)\s*[:.]?\s*$/i.test(String(b.v || "").trim());
+  const isTop = b => b.t === "h1" || topH2(b);
+  let pick = isTop;
+  if (blocks.filter(isTop).length < 2 && blocks.filter(b => b.t === "h2").length >= 2) pick = b => b.t === "h1" || b.t === "h2";
+  let list = [];
+  blocks.forEach((b, i) => {
+    if (pick(b)) {
+      const last = list[list.length - 1];
+      if (last && !last.hasBody && last.lastHead === i - 1 && b.t === last.headType) { last.title += " " + String(b.v || "").trim(); last.lastHead = i; return; }
+      list.push({ title: String(b.v || "").trim(), from: i, headType: b.t, hasBody: false, lastHead: i });
+    } else if (list.length) list[list.length - 1].hasBody = true;
+  });
+  if (list.length) list[0].from = 0;
+  list.forEach((c, i) => { c.to = i + 1 < list.length ? list[i + 1].from : blocks.length; });
+  const stat = c => { let chars = 0, imgs = 0; const secs = []; for (let i = c.from; i < c.to; i++) { const b = blocks[i]; chars += textOf(b).length; if (b.t === "img") imgs++; if (b.t === "h2" && i > c.from) secs.push(b.v); } c.chars = chars; c.imgs = imgs; c.secs = secs; };
+  list.forEach(stat);
+  for (let i = list.length - 1; i > 0; i--) if (list[i].chars < 450 && list[i].imgs === 0) { list[i - 1].to = list[i].to; list.splice(i, 1); stat(list[i - 1]); }
+  if (list.length <= 1) {
+    const total = blocks.reduce((n, b) => n + textOf(b).length, 0);
+    if (total > 9000) {
+      list = []; let start = 0, chars = 0;
+      blocks.forEach((b, i) => { chars += textOf(b).length; const next = blocks[i + 1]; if (chars >= 6000 && next && (next.t === "h1" || next.t === "h2" || next.t === "p")) { list.push({ from: start, to: i + 1 }); start = i + 1; chars = 0; } });
+      if (start < blocks.length) list.push({ from: start, to: blocks.length });
+      list.forEach((c, i) => { const h = blocks.slice(c.from, c.to).find(b => b.t === "h1" || b.t === "h2"); c.title = `الجزء ${i + 1}${h ? " — " + h.v : ""}`; stat(c); });
+    } else { list = [{ title: (blocks.find(b => b.t === "h1" || b.t === "h2")?.v) || "المشروع", from: 0, to: blocks.length }]; stat(list[0]); }
+  }
+  list.forEach((c, i) => { c.idx = i; });
+  return list;
+}
+async function gpxGenQA(g, ch, text) {
+  const src = String(text).slice(0, 16000), n = src.length > 9000 ? 8 : src.length > 4000 ? 6 : 4;
+  const prompt = `أنت عضو لجنة مناقشة لمشروع تخرج جامعي في قسم اللغة الفرنسية. الفصل: "${ch.title}". اكتب ${n} أسئلة محتملة قد يسألها الدكتور في المناقشة على هذا الفصل، مع إجابة نموذجية لكل سؤال مبنية على نص الفصل فقط (لا تخترع معلومات غير موجودة). نوّع الأسئلة: تعريف، شرح، مقارنة، مثال أو تطبيق، رأي نقدي. اكتب السؤال والإجابة بالفرنسية بلغة سهلة تناسب طالبًا في مستوى A2-B1 (الإجابة من جملتين إلى 4 جمل قصيرة)، وأضف ترجمة عربية قصيرة لكل سؤال وكل إجابة. أعد JSON فقط بالشكل: {"items":[{"q":"السؤال بالفرنسية","a":"الإجابة بالفرنسية","qAr":"ترجمة السؤال","aAr":"ترجمة الإجابة"}]}\n\nنص الفصل:\n${src}`;
+  let items = null, lastErr;
+  for (let attempt = 0; attempt < 3 && !items; attempt++) {
+    try {
+      const j = await askJSON(prompt), arr = Array.isArray(j) ? j : j?.items;
+      items = (arr || []).map(x => ({ q: String(x.q || "").trim(), a: String(x.a || "").trim(), qAr: String(x.qAr || "").trim(), aAr: String(x.aAr || "").trim() })).filter(x => x.q && x.a);
+      if (!items.length) { items = null; throw new Error("لم يتم توليد أسئلة"); }
+    } catch (e) { lastErr = e; await sleep(/429|quota|exceeded|resource|503|overload|unavailable/i.test(String(e?.message || e)) ? 6000 * (attempt + 1) : 1500 * (attempt + 1)); }
+  }
+  if (!items) throw lastErr || new Error("فشل توليد الأسئلة");
+  const data = { i: ch.idx, title: ch.title, items, at: Date.now() };
+  await setDoc(doc(db, "graduationProjects", g.id, "chunks", "qa-" + String(ch.idx).padStart(3, "0")), data);
+  return data;
+}
+/* ---------- الصفحات ---------- */
+async function createGraduationProject(g) {
+  if (!groupManager(g)) return alert("إنشاء المشروع متاح لمدير الجروب فقط.");
+  const members = [...new Set(g.members || [])];
+  if (!members.length) return alert("الجروب مفيهوش أعضاء.");
+  form("إنشاء مشروع التخرج", [{ n: "title", l: "اسم المشروع", v: g.name || "" }], async v => {
+    const title = String(v.title || "").trim().slice(0, 200); if (!title) return alert("اكتب اسم المشروع.");
+    const project = { groupId: g.id, groupName: g.name || "", title, members, managerUid: user.uid, createdBy: user.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+    try { await setDoc(doc(db, "graduationProjects", g.id), project); graduationProjectRoom(g, { id: g.id, ...project }); }
+    catch (e) { alert("تعذر إنشاء المشروع: " + (e.code || e.message)); }
+  });
+}
+async function graduationProjectRoom(g, p, startCh = 0) {
+  if (!user || !groupMember(g)) return alert("هذه مساحة خاصة بأعضاء الفريق.");
+  groupListUnsubs.forEach(fn => fn()); groupListUnsubs = []; groupChatUnsubs.forEach(fn => fn()); groupChatUnsubs = [];
+  stopLessonSpeech();
+  const mgr = groupManager(g);
+  app.innerHTML = `<p class="mut" style="text-align:center;margin:40px">⏳ جاري تحميل المشروع…</p>`;
+  try { const s = await getDoc(doc(db, "graduationProjects", g.id)); if (s.exists()) p = { id: s.id, ...s.data() }; else return graduationProjectsPage(); } catch {}
+  let blocks = [], imgs = {}, qa = {}, loadErr = "";
+  try { ({ blocks, imgs, qa } = await gpxLoad(g)); } catch (e) { loadErr = e.code || e.message; }
+  const meta = p.contentMeta || {}, has = blocks.length > 0, members = [...new Set(g.members || [])], chapters = has ? gpxChapters(blocks) : [];
+  let cur = Math.max(-1, Math.min(startCh, chapters.length - 1));
+  gpxEnsureStyle();
+  app.innerHTML = `<div class="gp-head"><div><small>${esc(g.name || "جروب")}</small><h2 class="sh">${esc(p.title || "مشروع التخرج")}</h2><p class="mut">${members.length} أعضاء · ${has ? `الملف: ${esc(meta.fileName || "—")} · ${chapters.length} فصول${meta.images ? ` · ${meta.images} صورة` : ""}` : "لم يُرفع ملف المشروع بعد"}</p></div>
+      <div class="row" style="margin:0">${mgr ? `<button class="sec" id="gpxUpload">📎 ${has ? "تبديل الملف" : "رفع ملف المشروع"}</button><button class="sec" id="gpxRename">✏️ الاسم</button><button class="del" id="gpxDelete">🗑 حذف المشروع</button>` : ""}<button class="sec" id="backGraduation">← رجوع</button></div></div>
+    ${loadErr ? `<p class="danger">تعذر تحميل المحتوى: ${esc(loadErr)}</p>` : ""}
+    ${has ? `<div class="gpx-chs" id="gpxChs"></div>
+      <div class="row" id="gpxTools"><button class="sec" id="gpxSpeak">🔊 تشغيل</button><button class="sec important-print-hide" id="gpxPron">🎤 اختبر نطقك</button><button class="sec important-print-hide" id="gpxTr">🌐 ترجمة كل الفقرات</button>${mgr ? `<button class="sec important-print-hide" id="gpxSaveTr">💾 ترجمة وحفظ للجميع</button><button class="sec important-print-hide" id="gpxGenAll">🧠 توليد أسئلة كل الفصول</button><button class="del important-print-hide" id="gpxClear">🗑 حذف المحتوى</button>` : ""}<span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div>
+      <div id="ttsStatus" class="mut" style="margin:-4px 0 10px;font-size:.88rem"></div>
+      <div id="gpxChHead"></div><div class="text fr" id="txt"></div>
+      <div class="row" id="gpxNav" style="justify-content:space-between;margin-top:14px"></div>
+      <section class="gp-card gp-section" id="gpxQA" style="margin-top:18px"></section>`
+      : `<section class="gp-card gp-section" style="text-align:center"><h3>📄 مفيش محتوى لسه</h3><p class="mut">${mgr ? "ارفع ملف المشروع (Word أو PDF) وهيتقسم تلقائيًا لفصول، وتظهر لكل أعضاء الجروب بنفس النص والصور والجداول، مع الترجمة وتقييم النطق وأسئلة المناقشة." : "مدير الجروب لم يرفع ملف المشروع بعد."}</p>${mgr ? `<button id="gpxUpload2">📎 رفع ملف المشروع</button>` : ""}</section>`}`;
+  $("#backGraduation").onclick = () => { stopLessonSpeech(); graduationProjectsPage(); };
+  const upload = () => form("رفع ملف المشروع", [{ n: "file", l: "ملف المشروع (Word .docx أو PDF)", t: "file", accept: GPX_ACCEPT }], async v => {
+    const f = v.file; if (!f || !f.size) return;
+    if (has && !confirm("ده هيستبدل محتوى المشروع الحالي بالكامل (بما فيه الترجمات وأسئلة المناقشة المحفوظة). تكمل؟")) return;
+    const d = dmDialog(`<h3 class="fr">📎 ${esc(f.name)}</h3><p id="gpxProg" class="mut">جاري البدء…</p><p class="mut" style="font-size:.85rem">لا تقفل الصفحة لحد ما يخلص.</p>`);
+    try {
+      let out = await gpxParseFile(f, m => { const el = d.querySelector("#gpxProg"); if (el) el.textContent = m; });
+      const parts = gpxDetectParts(out.blocks);
+      if (parts.frontEnd > 0 || parts.biblioStart >= 0) { d.close(); const opt = await gpxAskCleanup(parts); out = gpxApplyCleanup(out.blocks, out.imgs, parts, opt); }
+      const d2 = d.isConnected ? d : dmDialog(`<h3 class="fr">📎 ${esc(f.name)}</h3><p id="gpxProg" class="mut">جاري الحفظ…</p>`);
+      const el = d2.querySelector("#gpxProg"); if (el) el.textContent = "جاري الحفظ…";
+      await gpxSave(g, out.blocks, out.imgs, f.name, true);
+      d2.close(); graduationProjectRoom(g, p);
+    } catch (e) { document.querySelectorAll("dialog").forEach(x => { if (x.querySelector("#gpxProg")) x.close(); }); alert("تعذر رفع الملف: " + (e.message || e.code || e)); }
+  });
+  ["#gpxUpload", "#gpxUpload2"].forEach(s => { const b = $(s); if (b) b.onclick = upload; });
+  if (mgr) {
+    $("#gpxRename").onclick = () => form("اسم المشروع", [{ n: "title", l: "اسم المشروع", v: p.title || "" }], async v => {
+      const title = String(v.title || "").trim().slice(0, 200); if (!title) return;
+      try { await updateDoc(doc(db, "graduationProjects", g.id), { title, updatedAt: serverTimestamp() }); graduationProjectRoom(g, { ...p, title }, cur); } catch (e) { alert("تعذر الحفظ: " + (e.code || e.message)); }
+    });
+    $("#gpxDelete").onclick = async () => { if (!confirm("تحذف المشروع بالكامل (الملف والترجمات والأسئلة)؟ مش هترجع تاني.")) return; try { await gpxWipe(g, true); graduationProjectsPage(); } catch (e) { alert("تعذر الحذف: " + (e.code || e.message)); } };
+  }
+  if (!has) return;
+  const root = $("#txt"), trBtn = $("#gpxTr"), chText = c => lessonFrenchText({ blocks: blocks.slice(c.from, c.to) });
+  let viewText = "", viewTitle = "";
+  const chipsEl = $("#gpxChs");
+  chipsEl.innerHTML = `<button class="sec gpx-ch" data-ch="-1">📚 المشروع كله</button>` + chapters.map(c => `<button class="sec gpx-ch" data-ch="${c.idx}" title="${esc(c.title)}">${c.idx + 1}. ${esc(c.title.length > 34 ? c.title.slice(0, 34) + "…" : c.title)}</button>`).join("");
+  chipsEl.onclick = e => { const b = e.target.closest("[data-ch]"); if (b) show(+b.dataset.ch); };
+  const allBi = () => { const bs = [...root.querySelectorAll(".paragraph-body")]; return bs.length && bs.every(x => x.classList.contains("bilingual-pair")); };
+  const renderQA = () => {
+    const box = $("#gpxQA");
+    if (cur < 0) { box.innerHTML = `<h3 style="margin:0 0 6px">❓ أسئلة المناقشة</h3><p class="mut">اختار فصل من الأعلى عشان تشوف الأسئلة المحتملة وإجاباتها.</p>`; return; }
+    const ch = chapters[cur], d = qa[ch.idx], items = d?.items || [];
+    box.innerHTML = `<div class="row" style="justify-content:space-between;align-items:center;margin:0 0 6px"><h3 style="margin:0">❓ أسئلة محتملة في المناقشة على هذا الفصل ${items.length ? `(${items.length})` : ""}</h3>${mgr ? `<button class="sec" id="gpxGenOne">${items.length ? "🔄 إعادة التوليد" : "🧠 توليد الأسئلة"}</button>` : ""}</div>
+      ${items.length ? `<p class="mut" style="margin:0 0 6px">اضغط على السؤال تشوف الإجابة النموذجية. جاوب في دماغك الأول 😉</p>` + items.map((x, k) => `<details class="gpx-qa"><summary><b>س${k + 1}</b><span class="gq" data-k="${k}"></span><div class="mut" dir="rtl" style="font-size:.88rem;margin-top:3px">${esc(x.qAr || "")}</div></summary><div class="gpx-ans"><div class="ga" data-k="${k}"></div><div class="mut" dir="rtl" style="margin-bottom:8px">${esc(x.aAr || "")}</div><div class="row"><button class="sec" data-say="${k}" style="font-size:.85rem">🔊 استمع</button><button class="sec" data-pr="${k}" style="font-size:.85rem">🎤 انطق الإجابة</button></div></div></details>`).join("")
+        : `<p class="mut">${mgr ? "لسه الأسئلة ما اتولدتش. اضغط «توليد الأسئلة»." : "مدير الجروب لسه ما ولّدش أسئلة لهذا الفصل."}</p>`}`;
+    box.querySelectorAll(".gq").forEach(el => { const x = items[+el.dataset.k]; clickable(el, x.q, false); el.addEventListener("click", e => e.preventDefault()); });
+    box.querySelectorAll(".ga").forEach(el => clickable(el, items[+el.dataset.k].a, false));
+    box.querySelectorAll("[data-say]").forEach(b => b.onclick = () => speakLesson(items[+b.dataset.say].a, b));
+    box.querySelectorAll("[data-pr]").forEach(b => b.onclick = () => { const x = items[+b.dataset.pr]; openPronunciationTest(x.q, x.a); });
+    const one = $("#gpxGenOne");
+    if (one) one.onclick = async () => {
+      one.disabled = true; one.textContent = "⏳ جاري التوليد…";
+      try { qa[ch.idx] = await gpxGenQA(g, ch, chText(ch)); renderQA(); } catch (e) { alert("تعذر التوليد: " + aiReason(e)); one.disabled = false; one.textContent = "🧠 توليد الأسئلة"; }
+    };
+  };
+  const show = i => {
+    stopLessonSpeech(); cur = i;
+    const ch = i >= 0 ? chapters[i] : null, sub = ch ? blocks.slice(ch.from, ch.to) : blocks;
+    chipsEl.querySelectorAll(".gpx-ch").forEach(b => b.classList.toggle("on", +b.dataset.ch === i));
+    chipsEl.querySelector(".on")?.scrollIntoView({ block: "nearest", inline: "center" });
+    $("#gpxChHead").innerHTML = ch ? `<h3 style="margin:6px 0 2px">${ch.idx + 1}. ${esc(ch.title)}</h3><p class="mut" style="margin:0 0 10px;font-size:.85rem">${ch.secs.length ? ch.secs.length + " أقسام · " : ""}${ch.imgs ? ch.imgs + " صور · " : ""}${Math.max(1, Math.round(ch.chars / 900))} دقايق قراءة تقريبًا</p>` : `<h3 style="margin:6px 0 10px">📚 المشروع كله</h3>`;
+    gpxRenderBody(root, sub, imgs);
+    root.querySelectorAll(".lsec").forEach(sec => {
+      const text = [...sec.querySelectorAll(".paragraph-body")].map(b => b.dataset.french || "").join("\n");
+      if (text.length < 40) return;
+      const title = sec.querySelector(".lh1,.lh2")?.dataset.french || "جزء من المشروع";
+      const b = document.createElement("button"); b.type = "button"; b.className = "sec important-print-hide"; b.textContent = "🎤 اختبر نطق هذا الجزء"; b.style.cssText = "font-size:.8rem;padding:4px 10px;margin:0 0 10px";
+      b.onclick = () => openPronunciationTest(title, text); sec.prepend(b);
+    });
+    viewText = lessonFrenchText({ blocks: sub }); viewTitle = ch ? ch.title : (p.title || "مشروع التخرج");
+    trBtn.textContent = allBi() ? "↩ إظهار الفرنسي فقط" : "🌐 ترجمة كل الفقرات";
+    $("#gpxNav").innerHTML = ch ? `<button class="sec" id="gpxPrev" ${i > 0 ? "" : "disabled"}>→ الفصل السابق</button><button class="sec" id="gpxNext" ${i < chapters.length - 1 ? "" : "disabled"}>الفصل التالي ←</button>` : "";
+    const pv = $("#gpxPrev"), nx = $("#gpxNext"); if (pv) pv.onclick = () => { show(i - 1); chipsEl.scrollIntoView({ behavior: "smooth", block: "start" }); }; if (nx) nx.onclick = () => { show(i + 1); chipsEl.scrollIntoView({ behavior: "smooth", block: "start" }); };
+    renderQA();
+  };
+  trBtn.onclick = () => translateAllParagraphs(root, trBtn);
+  $("#gpxSpeak").onclick = () => speakLesson(viewText, $("#gpxSpeak"));
+  $("#gpxPron").onclick = () => openPronunciationTest(viewTitle, viewText);
+  if (mgr) {
+    const sb = $("#gpxSaveTr");
+    sb.onclick = async () => { try { if (await gpxTranslateSave(g, blocks, imgs, meta.fileName, sb)) return graduationProjectRoom(g, p, cur); } catch (e) { alert("تعذر الحفظ: " + (e.code || e.message)); } sb.disabled = false; sb.textContent = "💾 ترجمة وحفظ للجميع"; };
+    const ga = $("#gpxGenAll");
+    ga.onclick = async () => {
+      const todo = chapters.filter(c => c.chars >= 300 && !qa[c.idx]?.items?.length);
+      if (!todo.length) return alert("كل الفصول عندها أسئلة بالفعل. تقدر تعيد توليد فصل معيّن من تحت.");
+      if (!confirm(`هيتم توليد أسئلة وإجابات لـ ${todo.length} فصل بالذكاء الاصطناعي وحفظها لكل الأعضاء. تكمل؟`)) return;
+      ga.disabled = true; let fail = 0;
+      for (let k = 0; k < todo.length; k++) {
+        ga.textContent = `⏳ فصل ${k + 1} من ${todo.length}`;
+        try { qa[todo[k].idx] = await gpxGenQA(g, todo[k], chText(todo[k])); } catch (e) { fail++; console.warn("gen qa", e); }
+      }
+      ga.disabled = false; ga.textContent = "🧠 توليد أسئلة كل الفصول"; renderQA();
+      if (fail) alert(`تم توليد أسئلة ${todo.length - fail} فصل وتعذر ${fail}. اضغط الزر تاني لإكمال الباقي.`);
+    };
+    $("#gpxClear").onclick = async () => { if (!confirm("تمسح محتوى المشروع (الملف والترجمات والأسئلة) وتبقى مساحة المشروع زي ما هي؟")) return; try { await gpxWipe(g, false); graduationProjectRoom(g, p); } catch (e) { alert("تعذر الحذف: " + (e.code || e.message)); } };
+  }
+  show(cur);
+}
+
 async function graduationProjectsPage(){
   if(!user)return needLogin();
   groupListUnsubs.forEach(fn=>fn());groupListUnsubs=[];groupChatUnsubs.forEach(fn=>fn());groupChatUnsubs=[];
   const groups=(await myGroups()).filter(g=>admin||groupMember(g));
   const items=await Promise.all(groups.map(async g=>{const snap=await getDoc(doc(db,"graduationProjects",g.id)).catch(e=>{console.warn("graduation project",e);return null;});if(!snap?.exists())return {g,p:null};let p={id:snap.id,...snap.data()};const currentMembers=[...(g.members||[])];if(JSON.stringify(currentMembers)!==JSON.stringify(p.members||[])){try{await updateDoc(doc(db,"graduationProjects",g.id),{members:currentMembers,updatedAt:serverTimestamp()});p={...p,members:currentMembers};}catch(e){console.warn("automatic graduation team sync",e);p={...p,members:currentMembers};}}return {g,p};}));
-  app.innerHTML=`<div class="gp-head"><div><small>مساحة خاصة بكل فريق</small><h2 class="sh">مشروع التخرج</h2><p class="mut">اربط مشروع الجروب، نظّم أدوار العرض، وتابع إنجاز كل طالب.</p></div><button class="sec" id="refreshGraduation">تحديث</button></div><div class="gp-note">أي مدير للجروب يستطيع إنشاء مساحة المشروع، وتُضاف إليها تلقائيًا أسماء أعضاء الجروب (من 2 إلى 10). بعد الإنشاء أضف ملف المشروع (PDF أو Word) أو الصق نصه، ثم يفتح لكل عضو جزء ثابت مطابق لعدد أعضاء الجروب. كل عضو يضيف ملف الجزء الخاص به، ثم ينظمه الذكاء الاصطناعي ويقترح له فقرة انتقالية وأسئلة اللجنة وإجاباتها، بدون كتابة مشروع جديد أو تغيير عدد الأجزاء.</div><div class="gp-grid gp-section">${items.map(({g,p})=>p?`<article class="gp-card"><small>${esc(g.name||"جروب")}</small><h3>${esc(p.title||"مشروع التخرج")}</h3><div class="gp-badges"><span>${(g.members||[]).length} أعضاء</span><span>${groupManager(g)?"مدير فريق":"عضو فريق"}</span></div><button data-open-graduation="${esc(g.id)}" style="margin-top:12px">فتح مساحة المشروع</button></article>`:groupManager(g)?`<article class="gp-card"><small>${esc(g.name||"جروب")}</small><h3>لم يتم إنشاء مساحة للمشروع</h3><div class="gp-badges"><span>${(g.members||[]).length} أعضاء في الجروب</span><span>أنت مدير الجروب</span></div><div class="row" style="margin-top:12px"><button data-create-graduation-manual="${esc(g.id)}">✍️ إنشاء مشروع</button></div></article>`:`<article class="gp-card"><small>${esc(g.name||"جروب")}</small><h3>لا توجد مساحة حتى الآن</h3><p class="mut">مدير الجروب لم ينشئ مساحة مشروع التخرج بعد.</p></article>` ).join("")||`<p class="mut">لا توجد جروبات متاحة لحسابك بعد. اطلب الانضمام إلى جروب مشروع التخرج أولًا.</p>`}</div>`;
+  app.innerHTML=`<div class="gp-head"><div><small>مساحة خاصة بكل فريق</small><h2 class="sh">مشروع التخرج</h2><p class="mut">مشروع واحد لكل الجروب: ملف المشروع بنصه وصوره وجداوله، مقسّم فصول، مع الترجمة وتقييم النطق وأسئلة المناقشة.</p></div><button class="sec" id="refreshGraduation">تحديث</button></div><div class="gp-note">مدير الجروب (أو الأدمن) يرفع ملف المشروع (Word أو PDF) فيتقسّم لفصول ويظهر لكل أعضاء الجروب بنفس النص والصور والجداول. تقدر تضغط على أي كلمة تشوف معناها وتسمع نطقها، وتترجم الفقرات، وتختبر نطقك بالذكاء الاصطناعي، وتذاكر أسئلة المناقشة المحتملة لكل فصل بإجاباتها.</div><div class="gp-grid gp-section">${items.map(({g,p})=>p?`<article class="gp-card"><small>${esc(g.name||"جروب")}</small><h3>${esc(p.title||"مشروع التخرج")}</h3><div class="gp-badges"><span>${(g.members||[]).length} أعضاء</span><span>${groupManager(g)?"مدير فريق":"عضو فريق"}</span></div><button data-open-graduation="${esc(g.id)}" style="margin-top:12px">فتح مساحة المشروع</button></article>`:groupManager(g)?`<article class="gp-card"><small>${esc(g.name||"جروب")}</small><h3>لم يتم إنشاء مساحة للمشروع</h3><div class="gp-badges"><span>${(g.members||[]).length} أعضاء في الجروب</span><span>أنت مدير الجروب</span></div><div class="row" style="margin-top:12px"><button data-create-graduation-manual="${esc(g.id)}">✍️ إنشاء مشروع</button></div></article>`:`<article class="gp-card"><small>${esc(g.name||"جروب")}</small><h3>لا توجد مساحة حتى الآن</h3><p class="mut">مدير الجروب لم ينشئ مساحة مشروع التخرج بعد.</p></article>` ).join("")||`<p class="mut">لا توجد جروبات متاحة لحسابك بعد. اطلب الانضمام إلى جروب مشروع التخرج أولًا.</p>`}</div>`;
   const byId=new Map(groups.map(g=>[g.id,g]));
   app.querySelectorAll("[data-open-graduation]").forEach(b=>b.onclick=()=>{const item=items.find(x=>x.g.id===b.dataset.openGraduation);if(item)graduationProjectRoom(item.g,item.p);});
   app.querySelectorAll("[data-create-graduation-manual]").forEach(b=>{const g=byId.get(b.dataset.createGraduationManual);if(g)b.onclick=()=>createGraduationProject(g);});
@@ -3364,7 +3902,7 @@ async function graduationBlueprintDashboard(g,title,members,directory){
   d.innerHTML=`<form><h2 class="sh">لوحة إعداد مشروع التخرج</h2><p class="mut">اسم المشروع: <b>${esc(title)}</b></p><div id="gpBlueprintStatus" class="gp-note">جارٍ إنشاء 20 عنوانًا ومقدمات وخواتيم مقترحة بالذكاء الاصطناعي…</div><div id="gpBlueprintBody"></div><div class="row"><button id="gpBlueprintCreate" disabled>🚀 إنشاء المشروع بهذه المقترحات</button><button type="button" class="sec" id="gpBlueprintCancel">إلغاء</button></div></form>`;document.body.appendChild(d);const body=d.querySelector("#gpBlueprintBody"),status=d.querySelector("#gpBlueprintStatus"),create=d.querySelector("#gpBlueprintCreate");
   try{const r=await askJSON(`أنت مستشار أكاديمي. لمشروع التخرج التالي اقترح 20 عنوانًا/موضوعًا مختلفًا يمكن تقسيمها إلى أجزاء للطلاب، ثم 3 مقدمات احترافية و3 خواتيم احترافية بالفرنسية. لا تخترع معلومات عن المشروع؛ اجعل العناوين قابلة للتخصيص. أعد JSON فقط بهذا الشكل: {"titles":["..."],"openings":["..."],"closings":["..."]}. اسم المشروع: ${title}`,2);const titles=(Array.isArray(r.titles)?r.titles:[]).map(x=>String(x||"").trim()).filter(Boolean).slice(0,20),openings=(Array.isArray(r.openings)?r.openings:[]).map(x=>String(x||"").trim()).filter(Boolean).slice(0,3),closings=(Array.isArray(r.closings)?r.closings:[]).map(x=>String(x||"").trim()).filter(Boolean).slice(0,3);if(!titles.length)throw new Error("لم يتم إنشاء عناوين مقترحة.");status.textContent="يمكن لأعضاء الفريق اختيار عنوان مقترح عند إضافة الجزء، أو رفع الملف مباشرة بدون اختيار عنوان.";body.innerHTML=`<section class="gp-card"><h3>20 عنوانًا مقترحًا للأجزاء</h3><ol class="gp-title-suggestions">${titles.map((x,i)=>`<li><b>${i+1}.</b> ${esc(x)}</li>`).join("")}</ol></section><section class="gp-card"><h3>مقدمات مقترحة</h3>${openings.map((x,i)=>`<p><b>${i+1}.</b> ${esc(x)}</p>`).join("")}</section><section class="gp-card"><h3>خواتيم مقترحة</h3>${closings.map((x,i)=>`<p><b>${i+1}.</b> ${esc(x)}</p>`).join("")}</section>`;create.disabled=false;create.onclick=async e=>{e.preventDefault();create.disabled=true;try{const minutesPerStudent=3,project={groupId:g.id,groupName:g.name||"",title,presentationMinutes:members.length*minutesPerStudent,minutesPerStudent,members,managerUid:user.uid,createdBy:user.uid,pdfUrl:"",summary:"",suggestedTitles:titles,openingOptions:openings,closingOptions:closings,selectedOpening:openings[0]||"",selectedClosing:closings[0]||"",createdAt:serverTimestamp(),updatedAt:serverTimestamp()};await setDoc(doc(db,"graduationProjects",g.id),project);for(let i=0;i<members.length;i++)await addDoc(collection(db,"graduationProjects",g.id,"tasks"),{title:`جزء ${i+1} — ${nameOf(members[i])}`,description:"اختر عنوانًا مقترحًا اختياريًا أو أضف ملف الجزء مباشرة.",content:"",script:"",transition:"",questions:[],fullText:"",suggestedMinutes:minutesPerStudent,memberUid:members[i],sectionIndex:i,status:"todo",createdBy:user.uid,createdAt:serverTimestamp()});d.close();d.remove();await graduationProjectRoom(g,{id:g.id,...project});}catch(err){alert("تعذر إنشاء المشروع: "+(err.code||err.message));create.disabled=false;}};}catch(e){status.textContent="تعذر إنشاء المقترحات تلقائيًا: "+(e.message||e.code||"");body.innerHTML=`<p class="mut">يمكنك إنشاء المشروع والاستمرار بدون مقترحات.</p>`;create.disabled=false;create.onclick=async e=>{e.preventDefault();d.close();d.remove();await createGraduationProject(g,true,title,members,directory);};}d.querySelector("#gpBlueprintCancel").onclick=()=>{d.close();d.remove();};d.showModal();
 }
-async function createGraduationProject(g,skipBlueprint=false,presetTitle="",presetMembers=null,presetDirectory=null){
+async function createGraduationProjectLegacy(g,skipBlueprint=false,presetTitle="",presetMembers=null,presetDirectory=null){
   if(!groupManager(g))return alert("إنشاء المساحة متاح لمدير الجروب فقط.");
   const members=presetMembers||[...new Set(g.members||[])];
   if(members.length<2||members.length>10)return alert("لازم يكون جروب المشروع من 2 إلى 10 أعضاء. عدّل أعضاء الجروب أولًا ثم حاول مرة أخرى.");
@@ -3616,7 +4154,7 @@ async function deleteGraduationProject(g,p){
   if(!confirm("تأكيد نهائي: اضغط موافق للحذف النهائي."))return;
   try{const snap=await getDocs(collection(db,"graduationProjects",g.id,"tasks")),batch=writeBatch(db);snap.docs.forEach(x=>batch.delete(x.ref));batch.delete(doc(db,"graduationProjects",g.id));await batch.commit();alert("تم حذف مشروع التخرج بالكامل.");graduationProjectsPage();}catch(e){alert("تعذر حذف المشروع بالكامل: "+(e.code||e.message));}
 }
-async function graduationProjectRoom(g,p){
+async function graduationProjectRoomLegacy(g,p){
   if(!user||!groupMember(g))return alert("هذه مساحة خاصة بأعضاء الفريق.");
   groupListUnsubs.forEach(fn=>fn());groupListUnsubs=[];groupChatUnsubs.forEach(fn=>fn());groupChatUnsubs=[];
   const currentMembers=[...(g.members||[])];
