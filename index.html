@@ -3611,10 +3611,10 @@ async function gpxParseFile(f, progress) {
 /* ---------- التخزين ---------- */
 async function gpxLoad(g) {
   const snap = await getDocs(collection(db, "graduationProjects", g.id, "chunks"));
-  const qa = {}, docs = [], blocks = [], imgs = {};
-  snap.docs.forEach(d => { if (d.id.startsWith("qa-")) { const x = d.data(); qa[x.i] = x; } else docs.push(d.data()); });
+  const qa = {}, imgx = {}, docs = [], blocks = [], imgs = {};
+  snap.docs.forEach(d => { if (d.id.startsWith("qa-")) { const x = d.data(); qa[x.i] = x; } else if (d.id.startsWith("img-")) imgx[d.id.slice(4)] = d.data(); else docs.push(d.data()); });
   docs.sort((a, b) => a.n - b.n).forEach(d => { blocks.push(...(d.blocks || []).map(gpxDecode)); Object.assign(imgs, d.imgs || {}); });
-  return { blocks, imgs, qa };
+  return { blocks, imgs, qa, imgx };
 }
 async function gpxSave(g, blocks, imgs, fileName, resetQA) {
   let total = 0; const chunks = []; let cur = { blocks: [], imgs: {} }, size = 0;
@@ -3629,7 +3629,7 @@ async function gpxSave(g, blocks, imgs, fileName, resetQA) {
   const col = collection(db, "graduationProjects", g.id, "chunks");
   for (let i = 0; i < chunks.length; i++) await setDoc(doc(col, String(i).padStart(4, "0")), { n: i, blocks: chunks[i].blocks, imgs: chunks[i].imgs });
   const old = await getDocs(col), keep = new Set(chunks.map((_, i) => String(i).padStart(4, "0")));
-  for (const d of old.docs) { if (d.id.startsWith("qa-")) { if (resetQA) await deleteDoc(d.ref); } else if (!keep.has(d.id)) await deleteDoc(d.ref); }
+  for (const d of old.docs) { if (d.id.startsWith("qa-") || d.id.startsWith("img-")) { if (resetQA) await deleteDoc(d.ref); } else if (!keep.has(d.id)) await deleteDoc(d.ref); }
   const meta = { fileName: fileName || "", blocks: blocks.length, images: Object.keys(imgs).length, chunks: chunks.length, translated: blocks.some(b => b.ar), at: Date.now() };
   await updateDoc(doc(db, "graduationProjects", g.id), { contentMeta: meta, updatedAt: serverTimestamp() });
   return meta;
@@ -3643,14 +3643,21 @@ async function gpxWipe(g, deleteProject) {
   } else await updateDoc(doc(db, "graduationProjects", g.id), { contentMeta: deleteField(), updatedAt: serverTimestamp() });
 }
 async function gpxTranslateSave(g, blocks, imgs, fileName, btn) {
-  const todo = blocks.filter(b => ["h1", "h2", "p"].includes(b.t) && !b.ar && /\p{L}/u.test(b.v || ""));
+  const todo = blocks.filter(b => ["h1", "h2", "p"].includes(b.t) && !b.ar && /\p{L}{2,}/u.test(b.v || ""));
   if (!todo.length) return alert("كل الفقرات متترجمة ومحفوظة بالفعل.");
-  if (!confirm(`هيتم ترجمة ${todo.length} بلوك بالذكاء الاصطناعي وحفظها لكل الأعضاء. ممكن ياخد وقت. تكمل؟`)) return false;
-  btn.disabled = true; let ok = 0, fail = 0;
-  for (let i = 0; i < todo.length; i++) {
-    btn.textContent = `⏳ ترجمة ${i + 1} من ${todo.length}`;
-    try { const r = await paragraphTranslation(todo[i].v); todo[i].ar = r.ar; todo[i].pairs = r.pairs; ok++; } catch (e) { fail++; console.warn("gpx translate", e); }
-  }
+  if (!confirm(`هيتم ترجمة ${todo.length} بلوك بالذكاء الاصطناعي وحفظها لكل الأعضاء. ممكن ياخد وقت (بيترجم 3 بلوكات مع بعض ويحفظ كل شوية). تكمل؟`)) return false;
+  btn.disabled = true; let done = 0, ok = 0, fail = 0, since = 0, saving = false;
+  const queue = [...todo];
+  const worker = async () => {
+    while (queue.length) {
+      const b = queue.shift();
+      try { const r = await paragraphTranslation(b.v); b.ar = r.ar; b.pairs = r.pairs; ok++; since++; } catch (e) { fail++; console.warn("gpx translate", e); }
+      done++; btn.textContent = `⏳ ترجمة ${done} من ${todo.length}`;
+      if (since >= 80 && !saving) { saving = true; since = 0; try { await gpxSave(g, blocks, imgs, fileName); } catch (e) { console.warn("checkpoint", e); } saving = false; }
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  while (saving) await sleep(300);
   btn.textContent = "💾 جاري الحفظ…";
   await gpxSave(g, blocks, imgs, fileName);
   if (fail) alert(`تمت ترجمة ${ok} بلوك وتعذر ${fail}. اضغط الزر تاني لإكمال الباقي.`);
@@ -3694,6 +3701,41 @@ function gpxEnsureStyle() {
 .gpx-tbl .w:hover{background:rgba(255,255,255,.6);border-radius:3px}
 body.night .gpx-tbl td{background:#17283a;color:#e6eef7;border-color:#2e4a63}body.night .gpx-tbl tr:nth-child(odd) td{background:#1d3348}
 body.night .gpx-tbl th{background:#0f4259;border-color:#2e4a63}
+.gpx-wrap{max-width:1040px;margin:0 auto}
+.gpx-hero{display:flex;gap:16px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;padding:22px 26px;border-radius:22px;background:linear-gradient(135deg,#0f2b5b 0%,#1b4a9e 55%,#2a7bd1 100%);color:#fff;box-shadow:0 12px 32px rgba(15,43,91,.28);margin-bottom:16px}
+.gpx-hero small{opacity:.8;font-size:.85rem}.gpx-hero h2{margin:4px 0 12px;color:#fff;font-size:1.75rem;line-height:1.3}
+.gpx-meta{display:flex;flex-wrap:wrap;gap:8px}.gpx-meta span{background:rgba(255,255,255,.16);padding:4px 12px;border-radius:999px;font-size:.82rem}
+.gpx-hero-actions{display:flex;gap:8px;flex-wrap:wrap}.gpx-hero-actions button{margin:0}
+.gpx-prog{display:flex;align-items:center;gap:10px;margin:0 2px 8px;font-size:.82rem;opacity:.9}
+.gpx-prog .bar{flex:1;height:7px;border-radius:99px;background:rgba(128,128,128,.25);overflow:hidden}
+.gpx-prog .bar i{display:block;height:100%;background:linear-gradient(90deg,#00a884,#2fd3a5);border-radius:99px;transition:width .4s}
+.gpx-ch .n{display:inline-grid;place-items:center;min-width:22px;height:22px;border-radius:50%;background:rgba(128,128,128,.25);margin-left:7px;font-size:.75rem;font-weight:700}
+.gpx-ch.on .n{background:rgba(255,255,255,.32)}.gpx-ch.done:not(.on) .n{background:#00a884;color:#fff}
+.gpx-tb{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}.gpx-tb button{margin:0}
+.gpx-hint{font-size:.82rem;opacity:.7;margin:2px 2px 10px}
+.gpx-admin{margin:6px 0 12px;border:1px dashed rgba(128,128,128,.45);border-radius:14px;padding:8px 14px}
+.gpx-admin summary{cursor:pointer;font-weight:700;font-size:.9rem}
+.gpx-chead{display:flex;gap:14px;align-items:center;margin:14px 2px 10px}
+.gpx-chead .no{flex:none;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:1.3rem;font-weight:800;color:#fff;background:linear-gradient(135deg,#1b4a9e,#2a7bd1)}
+.gpx-chead h3{margin:0;font-size:1.25rem;line-height:1.35}.gpx-chead p{margin:2px 0 0;font-size:.84rem;opacity:.7}
+.gpx-paper{padding:24px 30px!important;line-height:1.95;font-size:1.03rem;border-radius:20px}
+.gpx-paper figure.limg{display:table;margin:20px auto;position:relative;max-width:100%}
+.gpx-paper figure.limg img{display:block;max-width:100%;height:auto;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.14);border:1px solid rgba(128,128,128,.22)}
+.gpx-explain{position:absolute;top:8px;left:8px;z-index:2;margin:0!important;width:auto!important;min-width:0!important;padding:3px 10px!important;font-size:.7rem!important;line-height:1.5;border-radius:999px!important;background:rgba(15,23,42,.8)!important;color:#fff!important;border:0!important;box-shadow:none!important;opacity:.92;cursor:pointer}
+.gpx-explain:hover{opacity:1;background:#6d4aff!important}
+.gpx-expl{margin:-8px auto 20px;max-width:900px;border-radius:16px;padding:14px 18px;background:linear-gradient(180deg,rgba(124,92,255,.12),rgba(124,92,255,.04));border:1px solid rgba(124,92,255,.38);line-height:1.8;font-size:.97rem}
+.gpx-expl h4{margin:0 0 6px;font-size:.98rem}.gpx-expl ul{margin:6px 0 10px;padding-inline-start:22px}
+.gpx-expl .frs{border-top:1px dashed rgba(128,128,128,.45);padding-top:8px;margin-top:8px;direction:ltr;text-align:left}
+.gpx-expl .note{font-size:.76rem;opacity:.65;margin-top:8px}
+.ge-list{max-height:58vh;overflow:auto;border:1px solid rgba(128,128,128,.3);border-radius:12px;margin-top:10px}
+.ge-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid rgba(128,128,128,.18);cursor:pointer;margin:0}
+.ge-row:hover{background:rgba(128,128,128,.08)}.ge-row.sel{background:rgba(229,57,53,.13)}
+.ge-row input{width:auto!important;flex:none;margin:0}.ge-ic{flex:none;width:26px;text-align:center}
+.ge-tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:ltr;text-align:left}
+.ge-row.hd .ge-tx{font-weight:700}.ge-row.l2{padding-left:28px}.ge-row.l3{padding-left:48px}
+.ge-row img{height:38px;border-radius:6px;flex:none}
+.ge-row .ge-sec{flex:none;font-size:.74rem;padding:2px 9px;margin:0}
+.gpx-qa summary b{display:inline-grid;place-items:center;min-width:30px;height:24px;border-radius:8px;background:#00a884;color:#fff;font-size:.78rem;margin-left:8px;padding:0 6px}
 .gpx-chs{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;margin-bottom:4px}
 .gpx-chs .gpx-ch{flex:none;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis;font-size:.88rem;padding:7px 12px}
 .gpx-chs .gpx-ch.on{background:#00a884!important;color:#fff!important;border-color:#00a884!important}
@@ -3705,7 +3747,11 @@ body.night .gpx-tbl th{background:#0f4259;border-color:#2e4a63}
 }
 function gpxRenderBody(root, blocks, imgs) {
   gpxEnsureStyle(); root.textContent = ""; let seg = [];
-  const flushSeg = () => { if (!seg.length) return; const d = document.createElement("div"); root.appendChild(d); renderLessonBody(d, { blocks: seg }, imgs); seg = []; };
+  const flushSeg = () => {
+    if (!seg.length) return; const d = document.createElement("div"); root.appendChild(d); renderLessonBody(d, { blocks: seg }, imgs);
+    const ids = seg.filter(b => b.t === "img").map(b => b.v); d.querySelectorAll("figure.limg").forEach((f, k) => { if (ids[k] && imgs[ids[k]]) f.dataset.imgId = ids[k]; });
+    seg = [];
+  };
   blocks.forEach(b => {
     if (b.t !== "tbl") { seg.push(b); return; }
     flushSeg();
@@ -3714,6 +3760,28 @@ function gpxRenderBody(root, blocks, imgs) {
     wrap.appendChild(t); root.appendChild(wrap);
   });
   flushSeg();
+}
+/* ---------- تحرير المحتوى (حذف أجزاء) ---------- */
+async function gpxRemapQA(g, oldQa, chapters) {
+  const col = collection(db, "graduationProjects", g.id, "chunks"), olds = Object.values(oldQa || {});
+  if (!olds.length) return;
+  const byTitle = new Map(olds.map(x => [x.title, x])), want = {};
+  chapters.forEach(c => { const x = byTitle.get(c.title); if (x) want[c.idx] = x; });
+  const same = olds.length === Object.keys(want).length && olds.every(x => want[x.i] === x);
+  if (same) return;
+  for (const x of olds) await deleteDoc(doc(col, "qa-" + String(x.i).padStart(3, "0"))).catch(() => {});
+  for (const [i, x] of Object.entries(want)) await setDoc(doc(col, "qa-" + String(i).padStart(3, "0")), { ...x, i: +i });
+}
+const gpxHeadLevel = b => b.t === "h1" ? 1 : b.t === "h2" ? (/^\d{1,2}(\.\d+)*[.)]?\s/.test(String(b.v || "")) ? 3 : 2) : 0;
+/* ---------- شرح الصورة بالذكاء الاصطناعي ---------- */
+async function gpxExplainImage(g, id, dataUrl, ctx) {
+  const data = String(dataUrl || "").split(",")[1]; if (!data) throw new Error("الصورة غير متاحة");
+  const prompt = `أنت مدرّس لغة فرنسية يشرح صورة من مشروع تخرج جامعي لطالب مستواه A2-B1. ${ctx.chapter ? `الفصل: "${ctx.chapter}". ` : ""}${ctx.text ? `النص القريب من الصورة في المشروع:\n"""${ctx.text}"""\n` : ""}اشرح الصورة المرفقة: ما نوعها (رسم بياني، جدول، شعار، مخطط، صورة…)، وماذا تعرض بالتحديد، وأهم الأرقام أو العناصر التي تظهر فيها بدقة (اقرأ النصوص والأرقام الظاهرة داخل الصورة كما هي)، والفكرة التي تدعمها في المشروع. لا تخترع شيئًا غير ظاهر. أعد JSON فقط بالشكل: {"ar":"شرح بالعربية من 3 إلى 5 جمل واضحة","points":["أهم النقاط بالعربية (من 3 إلى 5 نقاط قصيرة)"],"fr":"ملخص بالفرنسية من جملتين إلى 3 جمل سهلة"}`;
+  const j = await askJSON(prompt, 2, [{ inlineData: { mimeType: "image/jpeg", data } }]);
+  const out = { ar: String(j.ar || "").trim(), fr: String(j.fr || "").trim(), points: (Array.isArray(j.points) ? j.points : []).map(x => String(x).trim()).filter(Boolean).slice(0, 6), at: Date.now() };
+  if (!out.ar && !out.fr) throw new Error("لم يتم شرح الصورة");
+  try { await setDoc(doc(db, "graduationProjects", g.id, "chunks", "img-" + id), out); } catch {}   // بيتحفظ لو المستخدم مدير
+  return out;
 }
 /* ---------- تقسيم الفصول + أسئلة المناقشة ---------- */
 function gpxChapters(blocks) {
@@ -3782,25 +3850,32 @@ async function graduationProjectRoom(g, p, startCh = 0) {
   const mgr = groupManager(g);
   app.innerHTML = `<p class="mut" style="text-align:center;margin:40px">⏳ جاري تحميل المشروع…</p>`;
   try { const s = await getDoc(doc(db, "graduationProjects", g.id)); if (s.exists()) p = { id: s.id, ...s.data() }; else return graduationProjectsPage(); } catch {}
-  let blocks = [], imgs = {}, qa = {}, loadErr = "";
-  try { ({ blocks, imgs, qa } = await gpxLoad(g)); } catch (e) { loadErr = e.code || e.message; }
+  let blocks = [], imgs = {}, qa = {}, imgx = {}, loadErr = "";
+  try { ({ blocks, imgs, qa, imgx } = await gpxLoad(g)); } catch (e) { loadErr = e.code || e.message; }
   const meta = p.contentMeta || {}, has = blocks.length > 0, members = [...new Set(g.members || [])], chapters = has ? gpxChapters(blocks) : [];
+  const nTables = blocks.filter(b => b.t === "tbl").length, nImgs = blocks.filter(b => b.t === "img").length;
   let cur = Math.max(-1, Math.min(startCh, chapters.length - 1));
+  const visKey = "gpxVisited:" + g.id; let visited = new Set(); try { visited = new Set(JSON.parse(localStorage.getItem(visKey) || "[]")); } catch {}
   gpxEnsureStyle();
-  app.innerHTML = `<div class="gp-head"><div><small>${esc(g.name || "جروب")}</small><h2 class="sh">${esc(p.title || "مشروع التخرج")}</h2><p class="mut">${members.length} أعضاء · ${has ? `الملف: ${esc(meta.fileName || "—")} · ${chapters.length} فصول${meta.images ? ` · ${meta.images} صورة` : ""}` : "لم يُرفع ملف المشروع بعد"}</p></div>
-      <div class="row" style="margin:0">${mgr ? `<button class="sec" id="gpxUpload">📎 ${has ? "تبديل الملف" : "رفع ملف المشروع"}</button><button class="sec" id="gpxRename">✏️ الاسم</button><button class="del" id="gpxDelete">🗑 حذف المشروع</button>` : ""}<button class="sec" id="backGraduation">← رجوع</button></div></div>
+  app.innerHTML = `<div class="gpx-wrap">
+    <div class="gpx-hero"><div style="min-width:0;flex:1"><small>${esc(g.name || "جروب")} · مشروع التخرج</small><h2>${esc(p.title || "مشروع التخرج")}</h2>
+        <div class="gpx-meta"><span>👥 ${members.length} أعضاء</span>${has ? `<span>📚 ${chapters.length} فصول</span>${nImgs ? `<span>🖼 ${nImgs} صور</span>` : ""}${nTables ? `<span>📊 ${nTables} جداول</span>` : ""}<span>📎 ${esc(meta.fileName || "ملف المشروع")}</span>` : `<span>لم يُرفع ملف بعد</span>`}</div></div>
+      <div class="gpx-hero-actions">${mgr ? `<button class="sec" id="gpxUpload">📎 ${has ? "تبديل الملف" : "رفع ملف المشروع"}</button><button class="sec" id="gpxRename">✏️ الاسم</button><button class="del" id="gpxDelete">🗑 حذف</button>` : ""}<button class="sec" id="backGraduation">← رجوع</button></div></div>
     ${loadErr ? `<p class="danger">تعذر تحميل المحتوى: ${esc(loadErr)}</p>` : ""}
-    ${has ? `<div class="gpx-chs" id="gpxChs"></div>
-      <div class="row" id="gpxTools"><button class="sec" id="gpxSpeak">🔊 تشغيل</button><button class="sec important-print-hide" id="gpxPron">🎤 اختبر نطقك</button><button class="sec important-print-hide" id="gpxTr">🌐 ترجمة كل الفقرات</button>${mgr ? `<button class="sec important-print-hide" id="gpxSaveTr">💾 ترجمة وحفظ للجميع</button><button class="sec important-print-hide" id="gpxGenAll">🧠 توليد أسئلة كل الفصول</button><button class="del important-print-hide" id="gpxClear">🗑 حذف المحتوى</button>` : ""}<span class="mut" style="flex:1">اضغط على أي كلمة تشوف معناها وتسمع نطقها.</span></div>
-      <div id="ttsStatus" class="mut" style="margin:-4px 0 10px;font-size:.88rem"></div>
-      <div id="gpxChHead"></div><div class="text fr" id="txt"></div>
-      <div class="row" id="gpxNav" style="justify-content:space-between;margin-top:14px"></div>
+    ${has ? `<div class="gpx-prog"><span id="gpxProgTxt"></span><div class="bar"><i id="gpxProgBar" style="width:0"></i></div></div>
+      <div class="gpx-chs" id="gpxChs"></div>
+      <div class="gpx-tb" id="gpxTools"><button id="gpxPron">🎤 اختبر نطقك</button><button class="sec" id="gpxSpeak">🔊 تشغيل</button><button class="sec" id="gpxTr">🌐 ترجمة كل الفقرات</button>${mgr ? `<button class="sec" id="gpxEdit">✂️ حذف أجزاء</button>` : ""}</div>
+      ${mgr ? `<details class="gpx-admin" id="gpxAdmin"><summary>⚙️ أدوات المدير (ترجمة وحفظ · أسئلة المناقشة · حذف)</summary><div class="gpx-tb" style="margin-top:10px"><button class="sec" id="gpxSaveTr">💾 ترجمة وحفظ للجميع</button><button class="sec" id="gpxGenAll">🧠 توليد أسئلة كل الفصول</button><button class="del" id="gpxClear">🗑 حذف المحتوى</button></div></details>` : ""}
+      <div class="gpx-hint">اضغط على أي كلمة تشوف معناها وتسمع نطقها · زرار «✨ شرح الصورة» جنب كل صورة · وفي آخر كل فصل أسئلة المناقشة المحتملة.</div>
+      <div id="ttsStatus" class="mut" style="font-size:.88rem"></div>
+      <div id="gpxChHead"></div><div class="text fr gpx-paper" id="txt"></div>
+      <div class="gpx-tb" id="gpxNav" style="justify-content:space-between;margin-top:14px"></div>
       <section class="gp-card gp-section" id="gpxQA" style="margin-top:18px"></section>`
-      : `<section class="gp-card gp-section" style="text-align:center"><h3>📄 مفيش محتوى لسه</h3><p class="mut">${mgr ? "ارفع ملف المشروع (Word أو PDF) وهيتقسم تلقائيًا لفصول، وتظهر لكل أعضاء الجروب بنفس النص والصور والجداول، مع الترجمة وتقييم النطق وأسئلة المناقشة." : "مدير الجروب لم يرفع ملف المشروع بعد."}</p>${mgr ? `<button id="gpxUpload2">📎 رفع ملف المشروع</button>` : ""}</section>`}`;
+      : `<section class="gp-card gp-section" style="text-align:center"><h3>📄 مفيش محتوى لسه</h3><p class="mut">${mgr ? "ارفع ملف المشروع (Word أو PDF) وهيتقسم تلقائيًا لفصول، وتظهر لكل أعضاء الجروب بنفس النص والصور والجداول، مع الترجمة وتقييم النطق وشرح الصور وأسئلة المناقشة." : "مدير الجروب لم يرفع ملف المشروع بعد."}</p>${mgr ? `<button id="gpxUpload2">📎 رفع ملف المشروع</button>` : ""}</section>`}</div>`;
   $("#backGraduation").onclick = () => { stopLessonSpeech(); graduationProjectsPage(); };
   const upload = () => form("رفع ملف المشروع", [{ n: "file", l: "ملف المشروع (Word .docx أو PDF)", t: "file", accept: GPX_ACCEPT }], async v => {
     const f = v.file; if (!f || !f.size) return;
-    if (has && !confirm("ده هيستبدل محتوى المشروع الحالي بالكامل (بما فيه الترجمات وأسئلة المناقشة المحفوظة). تكمل؟")) return;
+    if (has && !confirm("ده هيستبدل محتوى المشروع الحالي بالكامل (بما فيه الترجمات وأسئلة المناقشة وشروحات الصور المحفوظة). تكمل؟")) return;
     const d = dmDialog(`<h3 class="fr">📎 ${esc(f.name)}</h3><p id="gpxProg" class="mut">جاري البدء…</p><p class="mut" style="font-size:.85rem">لا تقفل الصفحة لحد ما يخلص.</p>`);
     try {
       let out = await gpxParseFile(f, m => { const el = d.querySelector("#gpxProg"); if (el) el.textContent = m; });
@@ -3809,8 +3884,8 @@ async function graduationProjectRoom(g, p, startCh = 0) {
       const d2 = d.isConnected ? d : dmDialog(`<h3 class="fr">📎 ${esc(f.name)}</h3><p id="gpxProg" class="mut">جاري الحفظ…</p>`);
       const el = d2.querySelector("#gpxProg"); if (el) el.textContent = "جاري الحفظ…";
       await gpxSave(g, out.blocks, out.imgs, f.name, true);
-      d2.close(); graduationProjectRoom(g, p);
-    } catch (e) { document.querySelectorAll("dialog").forEach(x => { if (x.querySelector("#gpxProg")) x.close(); }); console.error("gpx upload", e); alert("تعذر رفع الملف: " + (e.message || e.code || e)); }
+      d2.close(); try { localStorage.removeItem(visKey); } catch {} graduationProjectRoom(g, p);
+    } catch (e) { console.error("gpx upload", e); document.querySelectorAll("dialog").forEach(x => { if (x.querySelector("#gpxProg")) x.close(); }); alert("تعذر رفع الملف: " + (e.message || e.code || e)); }
   });
   ["#gpxUpload", "#gpxUpload2"].forEach(s => { const b = $(s); if (b) b.onclick = upload; });
   if (mgr) {
@@ -3824,9 +3899,36 @@ async function graduationProjectRoom(g, p, startCh = 0) {
   const root = $("#txt"), trBtn = $("#gpxTr"), chText = c => lessonFrenchText({ blocks: blocks.slice(c.from, c.to) });
   let viewText = "", viewTitle = "";
   const chipsEl = $("#gpxChs");
-  chipsEl.innerHTML = `<button class="sec gpx-ch" data-ch="-1">📚 المشروع كله</button>` + chapters.map(c => `<button class="sec gpx-ch" data-ch="${c.idx}" title="${esc(c.title)}">${c.idx + 1}. ${esc(c.title.length > 34 ? c.title.slice(0, 34) + "…" : c.title)}</button>`).join("");
+  chipsEl.innerHTML = `<button class="sec gpx-ch" data-ch="-1">📚 المشروع كله</button>` + chapters.map(c => `<button class="sec gpx-ch" data-ch="${c.idx}" title="${esc(c.title)}"><span class="n">${c.idx + 1}</span>${esc(c.title.length > 32 ? c.title.slice(0, 32) + "…" : c.title)}</button>`).join("");
   chipsEl.onclick = e => { const b = e.target.closest("[data-ch]"); if (b) show(+b.dataset.ch); };
   const allBi = () => { const bs = [...root.querySelectorAll(".paragraph-body")]; return bs.length && bs.every(x => x.classList.contains("bilingual-pair")); };
+  const updateProgress = () => {
+    chipsEl.querySelectorAll(".gpx-ch").forEach(b => { const k = +b.dataset.ch; b.classList.toggle("done", k >= 0 && visited.has(k)); });
+    const n = [...visited].filter(k => k >= 0 && k < chapters.length).length;
+    $("#gpxProgTxt").textContent = `تقدّمك: ${n} من ${chapters.length} فصول`; $("#gpxProgBar").style.width = Math.round(n / chapters.length * 100) + "%";
+  };
+  /* ----- شرح الصور ----- */
+  const ctxFor = id => {
+    const bi = blocks.findIndex(b => b.t === "img" && b.v === id), ch = chapters.find(c => bi >= c.from && bi < c.to);
+    const near = blocks.slice(Math.max(0, bi - 3), bi + 3).filter(b => ["h1", "h2", "p"].includes(b.t)).map(b => String(b.v || "")).join("\n").slice(0, 1500);
+    return { chapter: ch?.title || "", text: near };
+  };
+  const renderExplain = (panel, d, id) => {
+    panel.innerHTML = `<h4>✨ شرح الصورة</h4><div dir="rtl">${esc(d.ar || "")}</div>${d.points?.length ? `<ul dir="rtl">${d.points.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+      ${d.fr ? `<div class="frs"><div class="ex-fr"></div><div class="row" style="margin-top:6px"><button class="sec" data-sp style="font-size:.8rem">🔊 استمع</button><button class="sec" data-pr style="font-size:.8rem">🎤 انطق</button>${mgr ? `<button class="sec" data-re style="font-size:.8rem">🔄 إعادة الشرح</button>` : ""}</div></div>` : (mgr ? `<div class="row"><button class="sec" data-re style="font-size:.8rem">🔄 إعادة الشرح</button></div>` : "")}
+      <div class="note">شرح مولَّد بالذكاء الاصطناعي — راجعه مع النص.</div>`;
+    const fr = panel.querySelector(".ex-fr"); if (fr) clickable(fr, d.fr, false);
+    const sp = panel.querySelector("[data-sp]"); if (sp) sp.onclick = () => speakLesson(d.fr, sp);
+    const pr = panel.querySelector("[data-pr]"); if (pr) pr.onclick = () => openPronunciationTest("شرح الصورة", d.fr);
+    const re = panel.querySelector("[data-re]"); if (re) re.onclick = () => { delete imgx[id]; panel.remove(); const fig = root.querySelector(`figure[data-img-id="${id}"]`); if (fig) explain(fig, id); };
+  };
+  const explain = async (fig, id) => {
+    let panel = fig.nextElementSibling?.classList.contains("gpx-expl") ? fig.nextElementSibling : null;
+    if (panel) { panel.hidden = !panel.hidden; return; }
+    panel = document.createElement("div"); panel.className = "gpx-expl"; panel.innerHTML = `<div class="mut">⏳ الذكاء الاصطناعي بيحلل الصورة…</div>`; fig.after(panel);
+    try { let d = imgx[id]; if (!d) { d = await gpxExplainImage(g, id, imgs[id], ctxFor(id)); imgx[id] = d; } renderExplain(panel, d, id); }
+    catch (e) { console.warn("explain", e); panel.innerHTML = `<p class="danger" style="margin:0 0 6px">تعذر شرح الصورة: ${esc(aiReason(e))}</p><button class="sec" style="font-size:.8rem">إعادة المحاولة</button>`; panel.querySelector("button").onclick = () => { panel.remove(); explain(fig, id); }; }
+  };
   const renderQA = () => {
     const box = $("#gpxQA");
     if (cur < 0) { box.innerHTML = `<h3 style="margin:0 0 6px">❓ أسئلة المناقشة</h3><p class="mut">اختار فصل من الأعلى عشان تشوف الأسئلة المحتملة وإجاباتها.</p>`; return; }
@@ -3847,9 +3949,10 @@ async function graduationProjectRoom(g, p, startCh = 0) {
   const show = i => {
     stopLessonSpeech(); cur = i;
     const ch = i >= 0 ? chapters[i] : null, sub = ch ? blocks.slice(ch.from, ch.to) : blocks;
+    if (ch) { visited.add(i); try { localStorage.setItem(visKey, JSON.stringify([...visited])); } catch {} }
     chipsEl.querySelectorAll(".gpx-ch").forEach(b => b.classList.toggle("on", +b.dataset.ch === i));
     chipsEl.querySelector(".on")?.scrollIntoView({ block: "nearest", inline: "center" });
-    $("#gpxChHead").innerHTML = ch ? `<h3 style="margin:6px 0 2px">${ch.idx + 1}. ${esc(ch.title)}</h3><p class="mut" style="margin:0 0 10px;font-size:.85rem">${ch.secs.length ? ch.secs.length + " أقسام · " : ""}${ch.imgs ? ch.imgs + " صور · " : ""}${Math.max(1, Math.round(ch.chars / 900))} دقايق قراءة تقريبًا</p>` : `<h3 style="margin:6px 0 10px">📚 المشروع كله</h3>`;
+    $("#gpxChHead").innerHTML = ch ? `<div class="gpx-chead"><div class="no">${ch.idx + 1}</div><div><h3>${esc(ch.title)}</h3><p>${ch.secs.length ? ch.secs.length + " أقسام · " : ""}${ch.imgs ? ch.imgs + " صور · " : ""}${Math.max(1, Math.round(ch.chars / 900))} دقايق قراءة تقريبًا</p></div></div>` : `<div class="gpx-chead"><div class="no">📚</div><div><h3>المشروع كله</h3><p>${chapters.length} فصول</p></div></div>`;
     gpxRenderBody(root, sub, imgs);
     root.querySelectorAll(".lsec").forEach(sec => {
       const text = [...sec.querySelectorAll(".paragraph-body")].map(b => b.dataset.french || "").join("\n");
@@ -3858,24 +3961,72 @@ async function graduationProjectRoom(g, p, startCh = 0) {
       const b = document.createElement("button"); b.type = "button"; b.className = "sec important-print-hide"; b.textContent = "🎤 اختبر نطق هذا الجزء"; b.style.cssText = "font-size:.8rem;padding:4px 10px;margin:0 0 10px";
       b.onclick = () => openPronunciationTest(title, text); sec.prepend(b);
     });
+    root.querySelectorAll("figure.limg[data-img-id]").forEach(fig => {
+      const id = fig.dataset.imgId, b = document.createElement("button"); b.type = "button"; b.className = "gpx-explain important-print-hide"; b.textContent = "✨ شرح الصورة"; b.title = "الذكاء الاصطناعي يشرح الصورة";
+      b.onclick = () => explain(fig, id); fig.appendChild(b);
+    });
     viewText = lessonFrenchText({ blocks: sub }); viewTitle = ch ? ch.title : (p.title || "مشروع التخرج");
     trBtn.textContent = allBi() ? "↩ إظهار الفرنسي فقط" : "🌐 ترجمة كل الفقرات";
-    $("#gpxNav").innerHTML = ch ? `<button class="sec" id="gpxPrev" ${i > 0 ? "" : "disabled"}>→ الفصل السابق</button><button class="sec" id="gpxNext" ${i < chapters.length - 1 ? "" : "disabled"}>الفصل التالي ←</button>` : "";
+    $("#gpxNav").innerHTML = ch ? `<button class="sec" id="gpxPrev" ${i > 0 ? "" : "disabled"}>→ الفصل السابق</button><button id="gpxNext" ${i < chapters.length - 1 ? "" : "disabled"}>الفصل التالي ←</button>` : "";
     const pv = $("#gpxPrev"), nx = $("#gpxNext"); if (pv) pv.onclick = () => { show(i - 1); chipsEl.scrollIntoView({ behavior: "smooth", block: "start" }); }; if (nx) nx.onclick = () => { show(i + 1); chipsEl.scrollIntoView({ behavior: "smooth", block: "start" }); };
-    renderQA();
+    updateProgress(); renderQA();
   };
   trBtn.onclick = () => translateAllParagraphs(root, trBtn);
   $("#gpxSpeak").onclick = () => speakLesson(viewText, $("#gpxSpeak"));
   $("#gpxPron").onclick = () => openPronunciationTest(viewTitle, viewText);
+  const openEditor = () => {
+    const from = cur >= 0 ? chapters[cur].from : 0, to = cur >= 0 ? chapters[cur].to : blocks.length;
+    const icon = b => ({ h1: "📘", h2: "🔹", p: "¶", tbl: "📊", img: "🖼" }[b.t] || "•");
+    const prev = b => b.t === "img" ? "صورة" : b.t === "tbl" ? `جدول (${(b.rows || []).length} صفوف) — ${(b.rows?.[0] || []).filter(Boolean).join(" | ").slice(0, 70)}` : String(b.v || "").replace(/\s+/g, " ").slice(0, 120);
+    let rows = "";
+    for (let i = from; i < to; i++) {
+      const b = blocks[i], hl = gpxHeadLevel(b);
+      rows += `<label class="ge-row ${hl ? "hd" : ""} ${hl === 2 ? "l2" : hl === 3 ? "l3" : ""}" data-i="${i}"><input type="checkbox" data-i="${i}"><span class="ge-ic">${icon(b)}</span>${b.t === "img" && imgs[b.v] ? `<img src="${imgs[b.v]}" alt="">` : ""}<span class="ge-tx">${esc(prev(b))}</span>${hl ? `<button type="button" class="sec ge-sec" data-sec="${i}">حذف القسم كامل</button>` : ""}</label>`;
+    }
+    const d = dmDialog(`<h3 class="fr">✂️ حذف أجزاء من ${cur >= 0 ? "الفصل: " + esc(chapters[cur].title.slice(0, 60)) : "المشروع"}</h3>
+      <p class="mut" style="margin:4px 0">علّم الأجزاء اللي عايز تحذفها (فقرات، عناوين، جداول، صور)، أو اضغط «حذف القسم كامل» جنب أي عنوان لتحديد القسم بكل محتواه. بعدين اضغط «حذف المحدد».</p>
+      <div class="row" style="margin:6px 0"><button type="button" class="del" id="geDel" disabled>🗑 حذف المحدد (0)</button><button type="button" class="sec" id="geNone">إلغاء التحديد</button>${cur >= 0 ? `<button type="button" class="sec" id="geAll">تحديد الفصل كله</button>` : ""}<button type="button" class="sec" id="geClose">إغلاق</button></div>
+      <div class="ge-list" id="geList">${rows || `<p class="mut" style="padding:12px">مفيش محتوى.</p>`}</div>`);
+    d.style.width = "min(96vw,860px)";
+    const list = d.querySelector("#geList"), delBtn = d.querySelector("#geDel");
+    const boxes = () => [...list.querySelectorAll("input[type=checkbox]")];
+    const refresh = () => { let n = 0; boxes().forEach(c => { c.closest(".ge-row").classList.toggle("sel", c.checked); if (c.checked) n++; }); delBtn.disabled = !n; delBtn.textContent = `🗑 حذف المحدد (${n})`; };
+    list.onchange = refresh;
+    list.onclick = e => {
+      const s = e.target.closest("[data-sec]"); if (!s) return;
+      e.preventDefault(); const i = +s.dataset.sec, lv = gpxHeadLevel(blocks[i]); let end = to;
+      for (let j = i + 1; j < to; j++) { const l = gpxHeadLevel(blocks[j]); if (l && l <= lv) { end = j; break; } }
+      boxes().forEach(c => { const k = +c.dataset.i; if (k >= i && k < end) c.checked = true; }); refresh();
+    };
+    d.querySelector("#geNone").onclick = () => { boxes().forEach(c => c.checked = false); refresh(); };
+    const all = d.querySelector("#geAll"); if (all) all.onclick = () => { boxes().forEach(c => c.checked = true); refresh(); };
+    d.querySelector("#geClose").onclick = () => d.close();
+    delBtn.onclick = async () => {
+      const sel = new Set(boxes().filter(c => c.checked).map(c => +c.dataset.i)); if (!sel.size) return;
+      const wholeChapter = cur >= 0 && sel.size === to - from;
+      if (!confirm(wholeChapter ? "هتحذف الفصل كله. متأكد؟ مش هيرجع." : `هتحذف ${sel.size} جزء من المشروع. متأكد؟ مش هيرجعوا.`)) return;
+      delBtn.disabled = true; delBtn.textContent = "⏳ جاري الحذف…";
+      try {
+        const kept = blocks.filter((_, i) => !sel.has(i)), removedImgs = [...sel].map(i => blocks[i]).filter(b => b.t === "img").map(b => b.v);
+        if (!kept.some(b => b.t !== "img")) throw new Error("مينفعش تحذف كل النص. استخدم «حذف المحتوى» بدل كده.");
+        const newCh = gpxChapters(kept);
+        await gpxSave(g, kept, imgs, meta.fileName, false);
+        await gpxRemapQA(g, qa, newCh);
+        for (const id of removedImgs) await deleteDoc(doc(db, "graduationProjects", g.id, "chunks", "img-" + id)).catch(() => {});
+        d.close(); graduationProjectRoom(g, p, Math.max(0, Math.min(cur, newCh.length - 1)));
+      } catch (e) { console.error("gpx delete", e); alert("تعذر الحذف: " + (e.message || e.code || e)); delBtn.disabled = false; refresh(); }
+    };
+  };
   if (mgr) {
-    const sb = $("#gpxSaveTr");
-    sb.onclick = async () => { try { if (await gpxTranslateSave(g, blocks, imgs, meta.fileName, sb)) return graduationProjectRoom(g, p, cur); } catch (e) { alert("تعذر الحفظ: " + (e.code || e.message)); } sb.disabled = false; sb.textContent = "💾 ترجمة وحفظ للجميع"; };
+    $("#gpxEdit").onclick = openEditor;
+    const adm = $("#gpxAdmin"), sb = $("#gpxSaveTr");
+    sb.onclick = async () => { adm.open = true; try { if (await gpxTranslateSave(g, blocks, imgs, meta.fileName, sb)) return graduationProjectRoom(g, p, cur); } catch (e) { alert("تعذر الحفظ: " + (e.code || e.message)); } sb.disabled = false; sb.textContent = "💾 ترجمة وحفظ للجميع"; };
     const ga = $("#gpxGenAll");
     ga.onclick = async () => {
       const todo = chapters.filter(c => c.chars >= 300 && !qa[c.idx]?.items?.length);
       if (!todo.length) return alert("كل الفصول عندها أسئلة بالفعل. تقدر تعيد توليد فصل معيّن من تحت.");
       if (!confirm(`هيتم توليد أسئلة وإجابات لـ ${todo.length} فصل بالذكاء الاصطناعي وحفظها لكل الأعضاء. تكمل؟`)) return;
-      ga.disabled = true; let fail = 0;
+      adm.open = true; ga.disabled = true; let fail = 0;
       for (let k = 0; k < todo.length; k++) {
         ga.textContent = `⏳ فصل ${k + 1} من ${todo.length}`;
         try { qa[todo[k].idx] = await gpxGenQA(g, todo[k], chText(todo[k])); } catch (e) { fail++; console.warn("gen qa", e); }
@@ -3893,7 +4044,7 @@ async function graduationProjectsPage(){
   groupListUnsubs.forEach(fn=>fn());groupListUnsubs=[];groupChatUnsubs.forEach(fn=>fn());groupChatUnsubs=[];
   const groups=(await myGroups()).filter(g=>admin||groupMember(g));
   const items=await Promise.all(groups.map(async g=>{const snap=await getDoc(doc(db,"graduationProjects",g.id)).catch(e=>{console.warn("graduation project",e);return null;});if(!snap?.exists())return {g,p:null};let p={id:snap.id,...snap.data()};const currentMembers=[...(g.members||[])];if(JSON.stringify(currentMembers)!==JSON.stringify(p.members||[])){try{await updateDoc(doc(db,"graduationProjects",g.id),{members:currentMembers,updatedAt:serverTimestamp()});p={...p,members:currentMembers};}catch(e){console.warn("automatic graduation team sync",e);p={...p,members:currentMembers};}}return {g,p};}));
-  app.innerHTML=`<div class="gp-head"><div><small>مساحة خاصة بكل فريق</small><h2 class="sh">مشروع التخرج</h2><p class="mut">مشروع واحد لكل الجروب: ملف المشروع بنصه وصوره وجداوله، مقسّم فصول، مع الترجمة وتقييم النطق وأسئلة المناقشة.</p></div><button class="sec" id="refreshGraduation">تحديث</button></div><div class="gp-note">مدير الجروب (أو الأدمن) يرفع ملف المشروع (Word أو PDF) فيتقسّم لفصول ويظهر لكل أعضاء الجروب بنفس النص والصور والجداول. تقدر تضغط على أي كلمة تشوف معناها وتسمع نطقها، وتترجم الفقرات، وتختبر نطقك بالذكاء الاصطناعي، وتذاكر أسئلة المناقشة المحتملة لكل فصل بإجاباتها.</div><div class="gp-grid gp-section">${items.map(({g,p})=>p?`<article class="gp-card"><small>${esc(g.name||"جروب")}</small><h3>${esc(p.title||"مشروع التخرج")}</h3><div class="gp-badges"><span>${(g.members||[]).length} أعضاء</span><span>${groupManager(g)?"مدير فريق":"عضو فريق"}</span></div><button data-open-graduation="${esc(g.id)}" style="margin-top:12px">فتح مساحة المشروع</button></article>`:groupManager(g)?`<article class="gp-card"><small>${esc(g.name||"جروب")}</small><h3>لم يتم إنشاء مساحة للمشروع</h3><div class="gp-badges"><span>${(g.members||[]).length} أعضاء في الجروب</span><span>أنت مدير الجروب</span></div><div class="row" style="margin-top:12px"><button data-create-graduation-manual="${esc(g.id)}">✍️ إنشاء مشروع</button></div></article>`:`<article class="gp-card"><small>${esc(g.name||"جروب")}</small><h3>لا توجد مساحة حتى الآن</h3><p class="mut">مدير الجروب لم ينشئ مساحة مشروع التخرج بعد.</p></article>` ).join("")||`<p class="mut">لا توجد جروبات متاحة لحسابك بعد. اطلب الانضمام إلى جروب مشروع التخرج أولًا.</p>`}</div>`;
+  app.innerHTML=`<div class="gp-head"><div><small>مساحة خاصة بكل فريق</small><h2 class="sh">مشروع التخرج</h2><p class="mut">مشروع واحد لكل الجروب: ملف المشروع بنصه وصوره وجداوله، مقسّم فصول، مع الترجمة وتقييم النطق وشرح الصور وأسئلة المناقشة.</p></div><button class="sec" id="refreshGraduation">تحديث</button></div><div class="gp-note">مدير الجروب (أو الأدمن) يرفع ملف المشروع (Word أو PDF) فيتقسّم لفصول ويظهر لكل أعضاء الجروب بنفس النص والصور والجداول. تقدر تضغط على أي كلمة تشوف معناها وتسمع نطقها، وتترجم الفقرات، وتختبر نطقك بالذكاء الاصطناعي، وتشرح أي صورة بزرار «شرح الصورة»، وتذاكر أسئلة المناقشة المحتملة لكل فصل.</div><div class="gp-grid gp-section">${items.map(({g,p})=>p?`<article class="gp-card"><small>${esc(g.name||"جروب")}</small><h3>${esc(p.title||"مشروع التخرج")}</h3><div class="gp-badges"><span>${(g.members||[]).length} أعضاء</span><span>${groupManager(g)?"مدير فريق":"عضو فريق"}</span></div><button data-open-graduation="${esc(g.id)}" style="margin-top:12px">فتح مساحة المشروع</button></article>`:groupManager(g)?`<article class="gp-card"><small>${esc(g.name||"جروب")}</small><h3>لم يتم إنشاء مساحة للمشروع</h3><div class="gp-badges"><span>${(g.members||[]).length} أعضاء في الجروب</span><span>أنت مدير الجروب</span></div><div class="row" style="margin-top:12px"><button data-create-graduation-manual="${esc(g.id)}">✍️ إنشاء مشروع</button></div></article>`:`<article class="gp-card"><small>${esc(g.name||"جروب")}</small><h3>لا توجد مساحة حتى الآن</h3><p class="mut">مدير الجروب لم ينشئ مساحة مشروع التخرج بعد.</p></article>` ).join("")||`<p class="mut">لا توجد جروبات متاحة لحسابك بعد. اطلب الانضمام إلى جروب مشروع التخرج أولًا.</p>`}</div>`;
   const byId=new Map(groups.map(g=>[g.id,g]));
   app.querySelectorAll("[data-open-graduation]").forEach(b=>b.onclick=()=>{const item=items.find(x=>x.g.id===b.dataset.openGraduation);if(item)graduationProjectRoom(item.g,item.p);});
   app.querySelectorAll("[data-create-graduation-manual]").forEach(b=>{const g=byId.get(b.dataset.createGraduationManual);if(g)b.onclick=()=>createGraduationProject(g);});
