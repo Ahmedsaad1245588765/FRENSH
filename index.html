@@ -3351,6 +3351,9 @@ const GPX_ACCEPT = ".pdf,.docx,application/pdf,application/vnd.openxmlformats-of
 const GPX_CHUNK_BYTES = 560000, GPX_MAX_IMAGES = 80, GPX_MAX_TOTAL = 22 * 1024 * 1024;
 const gpxId = () => "i" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
 const gpxBytes = s => new TextEncoder().encode(s).length;
+/* Firestore لا يقبل مصفوفة داخل مصفوفة: صفوف الجداول تتخزن ككائنات {c:[...]} */
+const gpxEncode = b => b && b.t === "tbl" ? { ...b, rows: (b.rows || []).map(r => ({ c: Array.isArray(r) ? r.map(x => String(x ?? "")) : [] })) } : b;
+const gpxDecode = b => b && b.t === "tbl" ? { ...b, rows: (b.rows || []).map(r => Array.isArray(r) ? r : (r.c || [])) } : b;
 function gpxShrink(src) {
   return new Promise(res => {
     const draw = el => {
@@ -3610,12 +3613,13 @@ async function gpxLoad(g) {
   const snap = await getDocs(collection(db, "graduationProjects", g.id, "chunks"));
   const qa = {}, docs = [], blocks = [], imgs = {};
   snap.docs.forEach(d => { if (d.id.startsWith("qa-")) { const x = d.data(); qa[x.i] = x; } else docs.push(d.data()); });
-  docs.sort((a, b) => a.n - b.n).forEach(d => { blocks.push(...(d.blocks || [])); Object.assign(imgs, d.imgs || {}); });
+  docs.sort((a, b) => a.n - b.n).forEach(d => { blocks.push(...(d.blocks || []).map(gpxDecode)); Object.assign(imgs, d.imgs || {}); });
   return { blocks, imgs, qa };
 }
 async function gpxSave(g, blocks, imgs, fileName, resetQA) {
   let total = 0; const chunks = []; let cur = { blocks: [], imgs: {} }, size = 0;
-  for (const b of blocks) {
+  for (const b0 of blocks) {
+    const b = gpxEncode(b0);
     const sz = gpxBytes(JSON.stringify(b)) + (b.t === "img" ? (imgs[b.v] || "").length : 0) + 30; total += sz;
     if (cur.blocks.length && size + sz > GPX_CHUNK_BYTES) { chunks.push(cur); cur = { blocks: [], imgs: {} }; size = 0; }
     cur.blocks.push(b); if (b.t === "img") cur.imgs[b.v] = imgs[b.v]; size += sz;
@@ -3806,7 +3810,7 @@ async function graduationProjectRoom(g, p, startCh = 0) {
       const el = d2.querySelector("#gpxProg"); if (el) el.textContent = "جاري الحفظ…";
       await gpxSave(g, out.blocks, out.imgs, f.name, true);
       d2.close(); graduationProjectRoom(g, p);
-    } catch (e) { document.querySelectorAll("dialog").forEach(x => { if (x.querySelector("#gpxProg")) x.close(); }); alert("تعذر رفع الملف: " + (e.message || e.code || e)); }
+    } catch (e) { document.querySelectorAll("dialog").forEach(x => { if (x.querySelector("#gpxProg")) x.close(); }); console.error("gpx upload", e); alert("تعذر رفع الملف: " + (e.message || e.code || e)); }
   });
   ["#gpxUpload", "#gpxUpload2"].forEach(s => { const b = $(s); if (b) b.onclick = upload; });
   if (mgr) {
