@@ -867,10 +867,18 @@ async function lessons(sub) {
   const starsFor = pct => pct >= 90 ? 3 : pct >= 75 ? 2 : pct >= 50 ? 1 : 0;
   const bestStars = {}; atts.forEach(a => { const s = Number.isFinite(Number(a.stars)) ? Number(a.stars) : starsFor(Number(a.percent) || 0); bestStars[a.lessonId] = Math.max(bestStars[a.lessonId] ?? 0, s); });
   const starsHtml = n => n ? `<span class="lesson-stars" title="${n} من 3 نجوم">${"★".repeat(n)}${`<span class="empty">${"★".repeat(3 - n)}</span>`}</span>` : "";
-  const need = x => x.examPass ?? 50, passed = x => passedIds.has(x.id), locked = ls.map(l => !editor && !!l.prevId && !passedIds.has(l.prevId));
-  app.innerHTML = `<div class="row"><button class="sec" id="back">← المواد</button><h2 style="flex:1;margin:0">${esc(sub.name)}</h2>${editor ? `<button id="add">+ درس</button>` : ""}</div><input id="lessonSearch" placeholder="ابحث داخل دروس ${esc(sub.name)}..." style="margin:10px 0 18px">
+  const need = x => x.examPass ?? 50, passed = x => passedIds.has(x.id), gateOpen = !!sub.gateOpen, locked = ls.map(l => !editor && !gateOpen && !!l.prevId && !passedIds.has(l.prevId));
+  app.innerHTML = `<div class="row"><button class="sec" id="back">← المواد</button><h2 style="flex:1;margin:0">${esc(sub.name)}</h2>${admin ? `<button class="${gateOpen ? "" : "sec"}" id="gateToggle" title="تبديل القفل التسلسلي للدروس">${gateOpen ? "🔓 الدروس مفتوحة للجميع — اقفلها" : "🔒 القفل التسلسلي شغال — افتحها"}</button>` : ""}${editor ? `<button id="add">+ درس</button>` : ""}</div>${admin && gateOpen ? `<p class="mut" style="margin:8px 0 0;font-size:.88rem">🔓 كل دروس المادة مفتوحة دلوقتي بدون قفل، وتقدّم الطلاب (النجاح في الاختبارات) بيتحفظ عادي. لو قفلتها تاني هيرجع الشرط: لازم ينجح في الدرس اللي قبله.</p>` : ""}<input id="lessonSearch" placeholder="ابحث داخل دروس ${esc(sub.name)}..." style="margin:10px 0 18px">
     <div id="lessonList">${ls.map((l, i) => `<div class="item fr${locked[i] ? " locked" : ""}" data-id="${l.id}"><b class="n">${locked[i] ? "🔒" : i + 1}</b><span>${esc(l.title)}</span>${bestStars[l.id] ? starsHtml(bestStars[l.id]) : ""}${(l.examCount || 0) ? (passed(l) ? `<small class="badge">✓ نجحت${best[l.id] !== undefined ? " — " + best[l.id] + "%" : ""}</small>` : best[l.id] !== undefined ? `<small class="badge">آخر نتيجة ${best[l.id]}% — المطلوب ${need(l)}%</small>` : `<small class="badge">اختبار — المطلوب ${need(l)}%</small>`) : ""}${editor ? `<button class="sec" data-edit-lesson="${l.id}">تعديل</button>${admin ? `<button class="del" data-del="${l.id}">حذف</button>` : ""}` : ""}</div>`).join("") || `<p class="mut">مفيش دروس لسه.</p>`}</div>`;
   $("#back").onclick = subjects;
+  const gateBtn = $("#gateToggle");
+  if (gateBtn) gateBtn.onclick = async () => {
+    const next = !gateOpen;
+    if (!confirm(next ? `تفتح كل دروس «${sub.name}» لكل الطلاب من غير قفل؟ تقدّمهم هيفضل محفوظ، وتقدر تقفلها تاني في أي وقت.` : `ترجّع القفل التسلسلي في «${sub.name}»؟ الطالب مش هيدخل درس إلا بعد ما ينجح في اللي قبله (والتقدم المحفوظ هيتحسب).`)) return;
+    gateBtn.disabled = true;
+    try { await updateDoc(doc(db, "subjects", sub.id), { gateOpen: next }); sub.gateOpen = next; lessons(sub); }
+    catch (e) { alert("تعذر التبديل: " + (e.code || e.message)); gateBtn.disabled = false; }
+  };
   $("#lessonSearch").oninput = e => app.querySelectorAll("#lessonList .item").forEach(x => x.style.display = x.innerText.toLowerCase().includes(e.target.value.toLowerCase()) ? "" : "none");
   if (editor) $("#add").onclick = () => lessonEditor(null, sub, () => lessons(sub));
   app.querySelectorAll(".item").forEach(el => el.onclick = async e => {
@@ -2312,7 +2320,7 @@ async function lesson(l, sub, startKey) {
     const passed = percent >= passPct;
     if (user && passed) { try { await setDoc(doc(db, "passes", `${user.uid}_${l.id}`), { uid: user.uid, lessonId: l.id, percent, stars, created: serverTimestamp() }); } catch (e) { console.error("pass write", e); } }
     $("#quizStatus").textContent = "تم إنهاء الاختبار وحفظ الإجابات.";
-    $("#quizResult").innerHTML = `<div class="q"><b>نتيجة الاختبار:</b> <span class="score">${score}/${max}</span> — ${percent}%<div style="font-size:2rem;line-height:1.35;margin:8px 0" title="${stars} من 3 نجوم"><span class="lesson-stars">${stars ? "★".repeat(stars) : ""}<span class="empty">${"★".repeat(3 - stars)}</span></span></div>${passed ? `<b style="color:var(--ok)">🎉 نجحت! الدرس التالي اتفتح.</b>` : `<b class="danger">محتاج ${passPct}% على الأقل عشان تفتح الدرس التالي.</b>`}<div class="row">${passed ? `<button id="toNext">← للدروس</button>` : `<button id="retake">🔁 إعادة الاختبار</button>`}</div></div>`;
+    $("#quizResult").innerHTML = `<div class="q"><b>نتيجة الاختبار:</b> <span class="score">${score}/${max}</span> — ${percent}%<div style="font-size:2rem;line-height:1.35;margin:8px 0" title="${stars} من 3 نجوم"><span class="lesson-stars">${stars ? "★".repeat(stars) : ""}<span class="empty">${"★".repeat(3 - stars)}</span></span></div>${passed ? `<b style="color:var(--ok)">🎉 نجحت! ${sub.gateOpen ? "تقدّمك اتحفظ ✅" : "الدرس التالي اتفتح."}</b>` : `<b class="danger">محتاج ${passPct}% على الأقل عشان ${sub.gateOpen ? "تُحسب ناجح" : "تفتح الدرس التالي"}.</b>`}<div class="row">${passed ? `<button id="toNext">← للدروس</button>` : `<button id="retake">🔁 إعادة الاختبار</button>`}</div></div>`;
     const tn = $("#toNext"); if (tn) tn.onclick = () => { window.lessonCtx = null; lessons(sub); };
     const rt = $("#retake"); if (rt) rt.onclick = () => lesson(l, sub, "exam");
   };
@@ -2429,7 +2437,7 @@ async function studentDashboard(targetUid) {
   const avg = attempts.length ? Math.round(attempts.reduce((a, x) => a + Number(x.percent || 0), 0) / attempts.length) : 0;
   const levelAvg = scored.length ? Math.round(scored.reduce((a, c) => a + c.best, 0) / scored.length) : null, [lv, lvCol] = gradeLevel(levelAvg);
   const bestEver = attempts.length ? Math.max(...attempts.map(a => Number(a.percent) || 0)) : 0, stars = cellsAll.reduce((a, c) => a + c.stars, 0);
-  const locked = l => !!l.prevId && !per.get(l.prevId)?.passed;
+  const subGate = new Map(subs.map(s => [s.id, !!s.gateOpen])), locked = l => !subGate.get(l.subjectId) && !!l.prevId && !per.get(l.prevId)?.passed;
   const date = sec => sec ? new Date(sec * 1000).toLocaleDateString("ar-EG") : "";
   const chip = (txt, col) => `<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:.82rem;border:1px solid ${col};color:${col};background:${col}1a">${esc(txt)}</span>`;
   const status = l => { const c = per.get(l.id); if (c.passed) return chip(`ناجح ✓ ${c.best}%`, "#16a34a"); if (c.tries) return chip(`لم ينجح بعد · أعلى درجة ${c.best}%`, "#d97706"); if (c.completed) return chip("أنهيت الدرس · بدون اختبار", "#2563eb"); if (locked(l)) return chip("🔒 مغلق", "#8a96ad"); return chip("لم يبدأ", "#8a96ad"); };
@@ -3630,10 +3638,8 @@ async function gpxSave(g, blocks, imgs, fileName, resetQA) {
   for (let i = 0; i < chunks.length; i++) await setDoc(doc(col, String(i).padStart(4, "0")), { n: i, blocks: chunks[i].blocks, imgs: chunks[i].imgs });
   const old = await getDocs(col), keep = new Set(chunks.map((_, i) => String(i).padStart(4, "0")));
   for (const d of old.docs) { if (d.id.startsWith("qa-") || d.id.startsWith("img-")) { if (resetQA) await deleteDoc(d.ref); } else if (!keep.has(d.id)) await deleteDoc(d.ref); }
-  const projRef = doc(db, "graduationProjects", g.id); let prevMeta = {};
-  try { prevMeta = (await getDoc(projRef)).data()?.contentMeta || {}; } catch {}
-  const meta = { fileName: fileName || "", blocks: blocks.length, images: Object.keys(imgs).length, chunks: chunks.length, translated: blocks.some(b => b.ar), at: Date.now(), locked: !!prevMeta.locked, chapters: gpxChapterSummary(blocks) };
-  await updateDoc(projRef, { contentMeta: meta, updatedAt: serverTimestamp() });
+  const meta = { fileName: fileName || "", blocks: blocks.length, images: Object.keys(imgs).length, chunks: chunks.length, translated: blocks.some(b => b.ar), at: Date.now() };
+  await updateDoc(doc(db, "graduationProjects", g.id), { contentMeta: meta, updatedAt: serverTimestamp() });
   return meta;
 }
 async function gpxWipe(g, deleteProject) {
@@ -3667,7 +3673,27 @@ async function gpxTranslateSave(g, blocks, imgs, fileName, btn) {
 }
 /* ---------- محاذاة الترجمة (نفس منطق «تنظيم ومحاذاة الدرس») ---------- */
 const gpxIsText = b => ["h1", "h2", "p"].includes(b.t);
-const gpxMisaligned = list => list.filter(b => gpxIsText(b) && b.ar && !blAlign(b.v, b.ar).ok);
+const gpxDigits = s => String(s || "").replace(/٫/g, ".").replace(/٬/g, "").replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 1632)).replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 1776));
+const gpxNums = s => (gpxDigits(s).match(/\d+(?:[.,]\d+)?/g) || []).map(x => x.replace(",", "."));
+/* يرجع سبب عدم المحاذاة: missing = غير مترجمة · count = عدد الوحدات مختلف · length = طول الترجمة غير منطقي · latin = ترجمة ناقصة/غير عربية · numbers = أرقام ناقصة */
+function gpxAlignIssue(b) {
+  if (!gpxIsText(b)) return null;
+  const fr = String(b.v || ""); if (!/\p{L}{2,}/u.test(fr)) return null;
+  if (!b.ar || !String(b.ar).trim()) return "missing";
+  const al = blAlign(fr, b.ar);
+  if (!al.ok) return "count";
+  for (let i = 0; i < al.fr.length; i++) {
+    const f = al.fr[i], a = al.ar[i] || "";
+    const arN = (a.match(/[\u0600-\u06FF]/g) || []).length, laN = (a.match(/[A-Za-zÀ-ÿ]/g) || []).length;
+    if (!arN && /\p{L}{3,}/u.test(f)) return "latin";
+    if (arN && laN > arN * 1.2 && f.length > 30) return "latin";
+    if (f.length >= 40) { const r = a.length / f.length; if (r < .33 || r > 2.3) return "length"; }
+    const nf = gpxNums(f); if (nf.length >= 2) { const na = gpxDigits(a); if (nf.filter(n => !na.includes(n)).length > nf.length / 2) return "numbers"; }
+  }
+  return null;
+}
+const gpxScan = list => { const out = { missing: [], count: [], length: [], latin: [], numbers: [] }; list.forEach(b => { const r = gpxAlignIssue(b); if (r) out[r].push(b); }); return out; };
+const gpxMisaligned = list => { const s = gpxScan(list); return [...s.count, ...s.length, ...s.latin, ...s.numbers]; };
 async function gpxFixAlign(b) {
   const frUnits = blUnits(b.v); let ar = null;
   try { ar = await paragraphTranslations(frUnits); }
@@ -3681,21 +3707,39 @@ async function gpxFixAlign(b) {
   }).join("\n\n");
   b.pairs = [];
 }
+const GPX_ALIGN_LABELS = { missing: "فقرات غير مترجمة", count: "عدد الوحدات (الفقرات/النقط) مش متساوي بين الفرنسي والعربي", length: "طول الترجمة غير منطقي (ممكن اتدمجت أو اتقطعت)", latin: "ترجمة ناقصة أو فيها نص غير عربي", numbers: "أرقام ناقصة في الترجمة" };
+function gpxAskAlign(scan, anyTranslated, totalTranslated) {
+  return new Promise(resolve => {
+    let done = false;
+    const cats = Object.keys(scan).filter(k => scan[k].length);
+    const sample = k => scan[k].slice(0, 4).map(b => `<li style="direction:ltr;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(String(b.v).replace(/\s+/g, " ").slice(0, 80))}</li>`).join("");
+    const d = dmDialog(`<h3 class="fr">🧩 فحص المحاذاة</h3><p class="mut">فحصت الترجمات المحفوظة بأربع طرق (عدد الوحدات، الطول، النص العربي، الأرقام). دي المشاكل اللي لقيتها، علّم اللي عايز تصلحه:</p>
+      ${cats.map(k => `<label style="display:block;margin:8px 0"><input type="checkbox" class="gaCat" data-k="${k}" ${k === "missing" && !anyTranslated ? "" : "checked"} style="width:auto;margin-left:8px"><b>${GPX_ALIGN_LABELS[k]} (${scan[k].length})</b><ul class="mut" style="margin:4px 26px;font-size:.8rem;padding:0;list-style:none">${sample(k)}</ul></label>`).join("")}
+      ${totalTranslated ? `<label style="display:block;margin:12px 0;border-top:1px dashed rgba(128,128,128,.4);padding-top:10px"><input type="checkbox" id="gaForce" style="width:auto;margin-left:8px">إعادة ترجمة ومحاذاة كل الفقرات المترجمة (${totalTranslated}) من الأول (أبطأ، استخدمه لو لسه في فقرات شكلها مش متحاذي)</label>` : ""}
+      <div class="row"><button type="button" id="gaGo">ابدأ التصحيح</button><button type="button" class="sec" id="gaX">إلغاء</button></div>`);
+    const finish = v => { if (done) return; done = true; resolve(v); };
+    d.querySelector("#gaGo").onclick = () => { finish({ cats: [...d.querySelectorAll(".gaCat")].filter(c => c.checked).map(c => c.dataset.k), force: !!d.querySelector("#gaForce")?.checked }); d.close(); };
+    d.querySelector("#gaX").onclick = () => d.close();
+    d.addEventListener("close", () => finish(null));
+  });
+}
 async function gpxAlignBlocks(g, all, subset, imgs, fileName, btn) {
-  const todo = gpxMisaligned(subset);
-  if (!todo.length) { alert("كل الفقرات متحاذية بالفعل ✅"); return false; }
-  if (!confirm(`في ${todo.length} فقرة ترجمتها مش متحاذية مع النص الفرنسي. هيتم فحصها وإعادة ترجمتها بالذكاء الاصطناعي وحفظها. تكمل؟`)) return false;
+  const scan = gpxScan(subset), translated = subset.filter(b => gpxIsText(b) && b.ar && /\p{L}{2,}/u.test(b.v || ""));
+  const total = Object.values(scan).reduce((n, a) => n + a.length, 0);
+  if (!total && !translated.length) { alert("مفيش ترجمات محفوظة تتفحص. اضغط «💾 ترجمة وحفظ للجميع» الأول."); return false; }
+  if (!total) {
+    if (!confirm(`فحصت ${translated.length} فقرة مترجمة (عدد الوحدات، الطول، النص العربي، الأرقام) ومفيش مشاكل ظاهرة ✅\nلو لسه شايف فقرات مش متحاذية، تحب أعيد ترجمة ومحاذاة كل الفقرات المترجمة من الأول؟`)) return false;
+    var opt = { cats: [], force: true };
+  } else var opt = await gpxAskAlign(scan, translated.length > 0, translated.length);
+  if (!opt) return false;
+  const set = new Set(); opt.cats.forEach(k => scan[k].forEach(b => set.add(b))); if (opt.force) translated.forEach(b => set.add(b));
+  const todo = [...set]; if (!todo.length) return false;
   btn.disabled = true; let done = 0, fixed = 0, failed = 0; const queue = [...todo];
-  const worker = async () => {
-    while (queue.length) {
-      const b = queue.shift();
-      try { await gpxFixAlign(b); fixed++; } catch (e) { failed++; }
-      done++; btn.textContent = `⏳ ${done} / ${todo.length}`;
-    }
-  };
+  const worker = async () => { while (queue.length) { const b = queue.shift(); try { await gpxFixAlign(b); fixed++; } catch (e) { failed++; } done++; btn.textContent = `⏳ ${done} / ${todo.length}`; } };
   await Promise.all([worker(), worker(), worker()]);
   if (fixed) { btn.textContent = "💾 جاري الحفظ…"; await gpxSave(g, all, imgs, fileName); }
-  alert(`تم تنظيم ${fixed} فقرة${failed ? ` وتعذر ${failed} (اضغط تاني لإعادة المحاولة)` : ""}.`);
+  const left = gpxMisaligned(subset).length;
+  alert(`تم تصحيح ${fixed} فقرة${failed ? ` وتعذر ${failed} (اضغط تاني لإعادة المحاولة)` : ""}.${left ? `\nلسه ${left} فقرة مشكوك فيها (ممكن تكون سليمة فعلًا).` : "\nكل الفقرات متحاذية دلوقتي ✅"}`);
   return fixed > 0;
 }
 /* ---------- تنظيف (الغلاف/الأسماء/الفهرس/المراجع) ---------- */
@@ -3805,8 +3849,6 @@ function gpxRenderBody(root, blocks, imgs) {
   });
   flushSeg();
 }
-/* ---------- ملخص الدروس (يتخزن في بيانات المشروع عشان يظهر حتى لو الدروس مقفولة) ---------- */
-function gpxChapterSummary(blocks) { return gpxChapters(blocks).map(c => ({ t: String(c.title).slice(0, 140), m: Math.max(1, Math.round(c.chars / 900)), i: c.imgs, s: c.secs.length })); }
 /* ---------- تحرير المحتوى (حذف أجزاء) ---------- */
 async function gpxRemapQA(g, oldQa, chapters) {
   const col = collection(db, "graduationProjects", g.id, "chunks"), olds = Object.values(oldQa || {});
@@ -3896,7 +3938,7 @@ async function graduationProjectRoom(g, p, startCh = -2) {
   const mgr = groupManager(g);
   app.innerHTML = `<p class="mut" style="text-align:center;margin:40px">⏳ جاري تحميل المشروع…</p>`;
   try { const s = await getDoc(doc(db, "graduationProjects", g.id)); if (s.exists()) p = { id: s.id, ...s.data() }; else return graduationProjectsPage(); } catch {}
-  const meta = p.contentMeta || {}, locked = !!meta.locked, lockedForMe = locked && !mgr;
+  const meta = p.contentMeta || {}, locked = false, lockedForMe = false;
   let blocks = [], imgs = {}, qa = {}, imgx = {}, loadErr = "";
   if (!lockedForMe) { try { ({ blocks, imgs, qa, imgx } = await gpxLoad(g)); } catch (e) { loadErr = e.code || e.message; } }
   const members = [...new Set(g.members || [])];
@@ -3905,19 +3947,15 @@ async function graduationProjectRoom(g, p, startCh = -2) {
   else if (blocks.length) { chapters = gpxChapters(blocks); chapters.forEach(c => { c.mins = Math.max(1, Math.round(c.chars / 900)); }); }
   const has = lockedForMe ? (meta.blocks > 0 || chapters.length > 0) : blocks.length > 0;
   const nTables = blocks.filter(b => b.t === "tbl").length, nImgs = blocks.filter(b => b.t === "img").length;
-  if (mgr && blocks.length) { /* مزامنة ملخص الدروس في بيانات المشروع (للأعضاء لما الدروس تتقفل) */
-    const sum = gpxChapterSummary(blocks); if (JSON.stringify(sum) !== JSON.stringify(meta.chapters || [])) updateDoc(doc(db, "graduationProjects", g.id), { "contentMeta.chapters": sum }).catch(() => {});
-  }
   let cur = startCh;   // -2 قائمة الدروس · -1 المشروع كله · 0.. درس
   const visKey = "gpxVisited:" + g.id; let visited = new Set(); try { visited = new Set(JSON.parse(localStorage.getItem(visKey) || "[]")); } catch {}
   gpxEnsureStyle();
   app.innerHTML = `<div class="gpx-wrap">
     <div class="gpx-hero"><div style="min-width:0;flex:1"><small>${esc(g.name || "جروب")} · مشروع التخرج</small><h2>${esc(p.title || "مشروع التخرج")}</h2>
-        <div class="gpx-meta"><span>👥 ${members.length} أعضاء</span>${has ? `<span>📚 ${chapters.length} دروس</span>${nImgs ? `<span>🖼 ${nImgs} صور</span>` : ""}${nTables ? `<span>📊 ${nTables} جداول</span>` : ""}${meta.fileName ? `<span>📎 ${esc(meta.fileName)}</span>` : ""}<span>${locked ? "🔒 الدروس مقفولة" : "🔓 الدروس مفتوحة"}</span>` : `<span>لم يُرفع ملف بعد</span>`}</div></div>
-      <div class="gpx-hero-actions">${mgr ? `${has ? `<button class="${locked ? "del" : "sec"}" id="gpxLock" title="اضغط للتبديل بين قفل الدروس وفتحها للجميع">${locked ? "🔒 الدروس مقفولة — افتحها" : "🔓 الدروس مفتوحة — اقفلها"}</button>` : ""}<button class="sec" id="gpxUpload">📎 ${has ? "تبديل الملف" : "رفع ملف المشروع"}</button><button class="sec" id="gpxRename">✏️ الاسم</button><button class="del" id="gpxDelete">🗑 حذف</button>` : ""}<button class="sec" id="backGraduation">← رجوع</button></div></div>
+        <div class="gpx-meta"><span>👥 ${members.length} أعضاء</span>${has ? `<span>📚 ${chapters.length} دروس</span>${nImgs ? `<span>🖼 ${nImgs} صور</span>` : ""}${nTables ? `<span>📊 ${nTables} جداول</span>` : ""}${meta.fileName ? `<span>📎 ${esc(meta.fileName)}</span>` : ""}` : `<span>لم يُرفع ملف بعد</span>`}</div></div>
+      <div class="gpx-hero-actions">${mgr ? `<button class="sec" id="gpxUpload">📎 ${has ? "تبديل الملف" : "رفع ملف المشروع"}</button><button class="sec" id="gpxRename">✏️ الاسم</button><button class="del" id="gpxDelete">🗑 حذف</button>` : ""}<button class="sec" id="backGraduation">← رجوع</button></div></div>
     ${loadErr ? `<p class="danger">تعذر تحميل المحتوى: ${esc(loadErr)}</p>` : ""}
     ${has ? `<div id="gpxListView">
-        ${locked ? `<div class="gpx-banner">${mgr ? "🔒 الدروس مقفولة على الأعضاء دلوقتي (إنت شايفها لأنك مدير). اضغط الزر فوق لو عايز تفتحها للجميع." : "🔒 مدير الجروب قافل الدروس حاليًا. هتظهر لك أول ما يفتحها."}</div>` : ""}
         <div class="gpx-prog"><span id="gpxProgTxt"></span><div class="bar"><i id="gpxProgBar" style="width:0"></i></div></div>
         <div class="gpx-lessons" id="gpxLessons"></div>
         ${mgr ? `<details class="gpx-admin" id="gpxAdmin"><summary>⚙️ أدوات المدير (ترجمة وحفظ · أسئلة المناقشة · حذف المحتوى)</summary><div class="gpx-tb" style="margin-top:10px"><button class="sec" id="gpxSaveTr">💾 ترجمة وحفظ للجميع</button><button class="sec" id="gpxAlign" title="يفحص الترجمات المحفوظة ويعيد ترجمة الفقرات غير المتحاذية مع الفرنسي">🧩 تنظيم ومحاذاة</button><button class="sec" id="gpxGenAll">🧠 توليد أسئلة كل الدروس</button><button class="del" id="gpxClear">🗑 حذف المحتوى</button></div></details>` : ""}
@@ -3953,13 +3991,6 @@ async function graduationProjectRoom(g, p, startCh = -2) {
       try { await updateDoc(doc(db, "graduationProjects", g.id), { title, updatedAt: serverTimestamp() }); graduationProjectRoom(g, { ...p, title }, cur); } catch (e) { alert("تعذر الحفظ: " + (e.code || e.message)); }
     });
     $("#gpxDelete").onclick = async () => { if (!confirm("تحذف المشروع بالكامل (الملف والترجمات والأسئلة)؟ مش هترجع تاني.")) return; try { await gpxWipe(g, true); graduationProjectsPage(); } catch (e) { alert("تعذر الحذف: " + (e.code || e.message)); } };
-    const lk = $("#gpxLock");
-    if (lk) lk.onclick = async () => {
-      if (!locked && !confirm("تقفل الدروس على كل الأعضاء؟ مش هيقدروا يفتحوها لحد ما تفتحها.")) return;
-      lk.disabled = true;
-      try { await updateDoc(doc(db, "graduationProjects", g.id), { "contentMeta.locked": !locked, updatedAt: serverTimestamp() }); graduationProjectRoom(g, p, cur); }
-      catch (e) { alert("تعذر التبديل: " + (e.code || e.message)); lk.disabled = false; }
-    };
   }
   if (!has) return;
   const listView = $("#gpxListView"), lessonView = $("#gpxLessonView"), listEl = $("#gpxLessons");
