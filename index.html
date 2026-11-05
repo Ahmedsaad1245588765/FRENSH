@@ -536,7 +536,7 @@ body.night #app #gpPronunciationResult p,body.night #app #gpPronunciationResult 
 <body>
 <div class="top">Faculté · Département de français — قسم اللغة الفرنسية</div>
 <header><div class="brand" id="home"><svg viewBox="0 0 44 52"><path d="M22 2 L42 9 V26 C42 38 33 46 22 50 C11 46 2 38 2 26 V9Z" fill="#14264f" stroke="#c19a4b" stroke-width="2.5"/><text x="22" y="34" text-anchor="middle" font-family="Fraunces,serif" font-size="26" font-style="italic" fill="#c19a4b">F</text></svg><div><b>Département de français</b><small>قسم اللغة الفرنسية</small></div></div>
-<nav><button id="menuToggle" aria-label="فتح القائمة" aria-expanded="false">☰</button><a id="n1">المواد</a><a id="n10">قواعد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n11">مشروع التخرج</a><a id="n5" style="display:none">المستخدمين</a><a id="n6" style="display:none">الدرجات</a><a id="n7">لوحتي</a><a id="n12" style="display:none">الرسائل</a><span id="who"></span><button id="themeToggle" title="الوضع الليلي">☾</button><button id="auth" style="display:none">خروج</button></nav></header>
+<nav><button id="menuToggle" aria-label="فتح القائمة" aria-expanded="false">☰</button><a id="n1">المواد</a><a id="n13">الميد ترم</a><a id="n10">قواعد</a><a id="n2">كاردز الكلمات</a><a id="n3">الجروبات</a><a id="n11">مشروع التخرج</a><a id="n5" style="display:none">المستخدمين</a><a id="n6" style="display:none">الدرجات</a><a id="n7">لوحتي</a><a id="n12" style="display:none">الرسائل</a><span id="who"></span><button id="themeToggle" title="الوضع الليلي">☾</button><button id="auth" style="display:none">خروج</button></nav></header>
 <main id="app"></main>
 <footer>© قسم اللغة الفرنسية — Département de français</footer>
 <div id="sheet"><div class="f fr"></div><div class="a"></div><div class="b"></div>
@@ -733,6 +733,7 @@ $("#auth").onclick = () => signOut(auth);
 $("#menuToggle").onclick = () => { const n=$("#menuToggle").parentElement; n.classList.toggle("open"); const open=n.classList.contains("open"); $("#menuToggle").textContent=open?"✕":"☰"; $("#menuToggle").setAttribute("aria-expanded",String(open)); };
 document.querySelectorAll("nav a").forEach(a=>a.addEventListener("click",()=>{if(activeGraduationRecognition){activeGraduationRecognition.stop();activeGraduationRecognition=null;}const n=a.parentElement;n.classList.remove("open");if($("#menuToggle")){ $("#menuToggle").textContent="☰"; $("#menuToggle").setAttribute("aria-expanded","false"); }}));
 $("#home").onclick = $("#n1").onclick = () => {if(activeGraduationRecognition){activeGraduationRecognition.stop();activeGraduationRecognition=null;}subjects();};
+$("#n13").onclick = () => user ? midtermPage() : needLogin();
 $("#n2").onclick = () => user ? review() : needLogin();
 $("#n3").onclick = () => groupsPage();
 $("#n11").onclick = () => graduationProjectsPage();
@@ -3868,7 +3869,7 @@ async function gpxExplainImage(g, id, dataUrl, ctx) {
   const j = await askJSON(prompt, 2, [{ inlineData: { mimeType: "image/jpeg", data } }]);
   const out = { ar: String(j.ar || "").trim(), fr: String(j.fr || "").trim(), points: (Array.isArray(j.points) ? j.points : []).map(x => String(x).trim()).filter(Boolean).slice(0, 6), at: Date.now() };
   if (!out.ar && !out.fr) throw new Error("لم يتم شرح الصورة");
-  try { await setDoc(doc(db, "graduationProjects", g.id, "chunks", "img-" + id), out); } catch {}   // بيتحفظ لو المستخدم مدير
+  if (g) try { await setDoc(doc(db, "graduationProjects", g.id, "chunks", "img-" + id), out); } catch {}   // بيتحفظ لو المستخدم مدير
   return out;
 }
 /* ---------- تقسيم الفصول + أسئلة المناقشة ---------- */
@@ -4008,7 +4009,6 @@ async function graduationProjectRoom(g, p, startCh = -2) {
   listEl.onclick = e => { const b = e.target.closest("[data-ch]"); if (!b) return; if (lockedForMe) return alert("🔒 الدروس مقفولة حاليًا من مدير الجروب."); show(+b.dataset.ch); };
   const root = $("#txt"), trBtn = $("#gpxTr"), chText = c => lessonFrenchText({ blocks: blocks.slice(c.from, c.to) });
   let viewText = "", viewTitle = "";
-  const allBi = () => { const bs = [...root.querySelectorAll(".paragraph-body")]; return bs.length && bs.every(x => x.classList.contains("bilingual-pair")); };
   /* ----- شرح الصور ----- */
   const ctxFor = id => {
     const bi = blocks.findIndex(b => b.t === "img" && b.v === id), ch = chapters.find(c => bi >= c.from && bi < c.to);
@@ -4048,14 +4048,26 @@ async function graduationProjectRoom(g, p, startCh = -2) {
       try { qa[ch.idx] = await gpxGenQA(g, ch, chText(ch)); renderQA(); } catch (e) { alert("تعذر التوليد: " + aiReason(e)); one.disabled = false; one.textContent = "🧠 توليد الأسئلة"; }
     };
   };
-  const showList = () => { stopLessonSpeech(); cur = -2; lessonView.style.display = "none"; listView.style.display = ""; renderList(); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const show = i => {
-    if (lockedForMe) return;
-    stopLessonSpeech(); cur = i; listView.style.display = "none"; lessonView.style.display = "";
-    const ch = i >= 0 ? chapters[i] : null, sub = ch ? blocks.slice(ch.from, ch.to) : blocks;
-    if (ch) { visited.add(i); try { localStorage.setItem(visKey, JSON.stringify([...visited])); } catch {} }
-    $("#gpxChHead").innerHTML = ch ? `<div class="gpx-chead"><div class="no">${ch.idx + 1}</div><div><h3>${esc(ch.title)}</h3><p>${ch.secs.length ? ch.secs.length + " أقسام · " : ""}${ch.imgs ? ch.imgs + " صور · " : ""}${ch.mins} دقايق قراءة تقريبًا</p></div></div>` : `<div class="gpx-chead"><div class="no">📚</div><div><h3>المشروع كله</h3><p>${chapters.length} دروس</p></div></div>`;
-    gpxRenderBody(root, sub, imgs);
+  /* ----- عرض الترجمة: تبديل فرنسي فقط / مع الترجمة من غير ما يتمسح أي حاجة ----- */
+  let mode = "bi";
+  const currentSub = () => cur >= 0 ? blocks.slice(chapters[cur].from, chapters[cur].to) : blocks;
+  const hasAr = list => list.some(b => gpxIsText(b) && b.ar);
+  const missingAr = list => list.filter(b => gpxIsText(b) && !b.ar && /\p{L}{2,}/u.test(b.v || ""));
+  const updateTr = () => {
+    const sub = currentSub(), miss = missingAr(sub).length; trBtn.disabled = false;
+    trBtn.textContent = hasAr(sub) ? (mode === "bi" ? "↩ عرض الفرنسي فقط" : "🌐 عرض الترجمة") : "🌐 ترجمة كل الفقرات";
+    let more = $("#gpxTrMore");
+    if (hasAr(sub) && miss) { if (!more) { more = document.createElement("button"); more.id = "gpxTrMore"; more.className = "sec"; trBtn.after(more); more.onclick = () => translateMissing(more); } more.disabled = false; more.textContent = `🌐 ترجمة الباقي (${miss})`; }
+    else if (more) more.remove();
+  };
+  const translateMissing = async btn => {
+    const todo = missingAr(currentSub()); if (!todo.length) return;
+    btn.disabled = true; let done = 0; const q = [...todo];
+    const worker = async () => { while (q.length) { const b = q.shift(); try { await gpxFixAlign(b); } catch (e) { console.warn("translate", e); } done++; btn.textContent = `⏳ ${done} / ${todo.length}`; } };
+    await Promise.all([worker(), worker(), worker()]);
+    mode = "bi"; renderView();
+  };
+  const decorate = () => {
     root.querySelectorAll(".lsec").forEach(sec => {
       const text = [...sec.querySelectorAll(".paragraph-body")].map(b => b.dataset.french || "").join("\n");
       if (text.length < 40) return;
@@ -4067,14 +4079,31 @@ async function graduationProjectRoom(g, p, startCh = -2) {
       const id = fig.dataset.imgId, b = document.createElement("button"); b.type = "button"; b.className = "gpx-explain important-print-hide"; b.textContent = "✨ شرح الصورة"; b.title = "الذكاء الاصطناعي يشرح الصورة";
       b.onclick = () => explain(fig, id); fig.appendChild(b);
     });
+  };
+  const renderView = () => {
+    stopLessonSpeech(); const sub = currentSub();
+    const useB = mode === "bi" ? sub : sub.map(b => gpxIsText(b) && b.ar ? { ...b, ar: undefined, pairs: undefined } : b);
+    gpxRenderBody(root, useB, imgs); decorate(); updateTr();
+  };
+  const showList = () => { stopLessonSpeech(); cur = -2; lessonView.style.display = "none"; listView.style.display = ""; renderList(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const show = i => {
+    if (lockedForMe) return;
+    stopLessonSpeech(); cur = i; listView.style.display = "none"; lessonView.style.display = "";
+    const ch = i >= 0 ? chapters[i] : null, sub = ch ? blocks.slice(ch.from, ch.to) : blocks;
+    if (ch) { visited.add(i); try { localStorage.setItem(visKey, JSON.stringify([...visited])); } catch {} }
+    $("#gpxChHead").innerHTML = ch ? `<div class="gpx-chead"><div class="no">${ch.idx + 1}</div><div><h3>${esc(ch.title)}</h3><p>${ch.secs.length ? ch.secs.length + " أقسام · " : ""}${ch.imgs ? ch.imgs + " صور · " : ""}${ch.mins} دقايق قراءة تقريبًا</p></div></div>` : `<div class="gpx-chead"><div class="no">📚</div><div><h3>المشروع كله</h3><p>${chapters.length} دروس</p></div></div>`;
+    mode = "bi"; renderView();
     viewText = lessonFrenchText({ blocks: sub }); viewTitle = ch ? ch.title : (p.title || "مشروع التخرج");
-    trBtn.textContent = allBi() ? "↩ إظهار الفرنسي فقط" : "🌐 ترجمة كل الفقرات";
     $("#gpxNav").innerHTML = ch ? `<button class="sec" id="gpxPrev" ${i > 0 ? "" : "disabled"}>→ الدرس السابق</button><button id="gpxNext" ${i < chapters.length - 1 ? "" : "disabled"}>الدرس التالي ←</button>` : "";
     const pv = $("#gpxPrev"), nx = $("#gpxNext"); if (pv) pv.onclick = () => { show(i - 1); window.scrollTo({ top: 0, behavior: "smooth" }); }; if (nx) nx.onclick = () => { show(i + 1); window.scrollTo({ top: 0, behavior: "smooth" }); };
     renderQA(); window.scrollTo({ top: 0, behavior: "smooth" });
   };
   $("#gpxToList").onclick = showList;
-  trBtn.onclick = () => translateAllParagraphs(root, trBtn);
+  trBtn.onclick = async () => {
+    const sub = currentSub();
+    if (hasAr(sub)) { mode = mode === "bi" ? "fr" : "bi"; renderView(); return; }
+    await translateMissing(trBtn);
+  };
   $("#gpxSpeak").onclick = () => speakLesson(viewText, $("#gpxSpeak"));
   $("#gpxPron").onclick = () => openPronunciationTest(viewTitle, viewText);
   const openEditor = () => {
@@ -4145,6 +4174,456 @@ async function graduationProjectRoom(g, p, startCh = -2) {
     $("#gpxClear").onclick = async () => { if (!confirm("تمسح محتوى المشروع (الملف والترجمات والأسئلة) وتبقى مساحة المشروع زي ما هي؟")) return; try { await gpxWipe(g, false); graduationProjectRoom(g, p); } catch (e) { alert("تعذر الحذف: " + (e.code || e.message)); } };
   }
   if (cur >= -1 && !lockedForMe) show(Math.min(cur, chapters.length - 1)); else showList();
+}
+
+/* ================= الميد ترم ================= */
+const midId = () => "l" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const midRefDoc = sid => doc(db, "midterms", sid);
+const midShuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const midName = () => currentStudentName || user?.displayName || "طالب";
+function midEnsureStyle() {
+  gpxEnsureStyle();
+  if (document.getElementById("mid-style")) return;
+  const st = document.createElement("style"); st.id = "mid-style";
+  st.textContent = `.mid-desc{white-space:pre-wrap;line-height:1.9;border-radius:18px;padding:16px 20px;border:1px solid rgba(124,92,255,.35);background:linear-gradient(180deg,rgba(124,92,255,.10),rgba(124,92,255,.03));margin:0 0 6px}
+.mid-sec{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:20px 2px 8px}.mid-sec h3{margin:0}
+.gpx-lesson .tx small{display:block;margin-top:2px}
+.mid-exam{display:flex;gap:14px;align-items:center;padding:16px 18px;border-radius:18px;border:1px solid rgba(128,128,128,.3);margin:0 0 10px;background:rgba(255,255,255,.7);cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.05)}
+body.night .mid-exam{background:rgba(255,255,255,.06)}.mid-exam:hover{box-shadow:0 8px 22px rgba(0,0,0,.12)}
+.mid-exam .no{flex:none;width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-size:1.3rem;color:#fff;background:linear-gradient(135deg,#6d4aff,#9b7bff)}
+.mid-exam .tx{flex:1;min-width:0}.mid-exam .tx b{display:block}.mid-exam .tx small{opacity:.72;font-size:.8rem}
+.mid-q{border:1px solid rgba(128,128,128,.3);border-radius:16px;padding:14px 18px;margin:12px 0;background:rgba(255,255,255,.6)}
+body.night .mid-q{background:rgba(255,255,255,.05)}.mid-q .qh{display:flex;gap:8px;align-items:center;margin-bottom:8px;font-size:.78rem;opacity:.8}
+.mid-q .qt{font-weight:600;line-height:1.7;margin-bottom:6px}
+.mid-opt{display:flex;gap:10px;align-items:flex-start;padding:8px 12px;border-radius:12px;border:1px solid rgba(128,128,128,.3);margin:6px 0;cursor:pointer}
+.mid-opt:hover{background:rgba(128,128,128,.1)}.mid-opt input{width:auto!important;margin:5px 0 0!important;flex:none}
+.mid-opt.ok{background:rgba(0,168,132,.18);border-color:#00a884}.mid-opt.bad{background:rgba(229,57,53,.15);border-color:#e53935}
+.mid-q textarea{width:100%;min-height:90px}
+.mid-timer{position:sticky;top:8px;z-index:5;background:#0f2b5b;color:#fff;border-radius:999px;padding:6px 18px;font-weight:700;width:max-content;margin-inline-start:auto}
+.mid-score{display:grid;place-items:center;width:130px;height:130px;border-radius:50%;margin:10px auto;font-size:2rem;font-weight:800;color:#fff}
+.mid-score.pass{background:linear-gradient(135deg,#00a884,#2fd3a5)}.mid-score.fail{background:linear-gradient(135deg,#c62828,#ef5350)}
+.mid-tbl{width:100%;border-collapse:collapse}.mid-tbl th,.mid-tbl td{padding:8px 10px;border-bottom:1px solid rgba(128,128,128,.25);text-align:right}
+.mid-tag{display:inline-block;padding:1px 9px;border-radius:999px;font-size:.72rem;background:rgba(128,128,128,.2)}
+.mid-fb{margin-top:8px;padding:8px 12px;border-radius:12px;background:rgba(124,92,255,.1);font-size:.9rem;line-height:1.7}`;
+  document.head.appendChild(st);
+}
+/* ---------- تخزين محتوى الدروس ---------- */
+function midChunk(blocks, imgs) {
+  const chunks = []; let cur = { blocks: [], imgs: {} }, size = 0, total = 0;
+  for (const b0 of blocks) {
+    const b = gpxEncode(b0), sz = gpxBytes(JSON.stringify(b)) + (b.t === "img" ? (imgs[b.v] || "").length : 0) + 30; total += sz;
+    if (cur.blocks.length && size + sz > GPX_CHUNK_BYTES) { chunks.push(cur); cur = { blocks: [], imgs: {} }; size = 0; }
+    cur.blocks.push(b); if (b.t === "img" && imgs[b.v]) cur.imgs[b.v] = imgs[b.v]; size += sz;
+  }
+  if (cur.blocks.length) chunks.push(cur);
+  return { chunks, total };
+}
+async function midSaveContent(sid, lid, blocks, imgs) {
+  const { chunks, total } = midChunk(blocks, imgs);
+  if (total > GPX_MAX_TOTAL) throw new Error("حجم الدرس كبير جدًا بعد الضغط");
+  const col = collection(db, "midterms", sid, "content");
+  for (let k = 0; k < chunks.length; k++) await setDoc(doc(col, `${lid}_${String(k).padStart(3, "0")}`), { lid, k, blocks: chunks[k].blocks, imgs: chunks[k].imgs });
+  const old = await getDocs(query(col, where("lid", "==", lid)));
+  for (const d of old.docs) if (d.data().k >= chunks.length) await deleteDoc(d.ref);
+  return chunks.length;
+}
+async function midLoadLesson(sid, lid) {
+  const s = await getDocs(query(collection(db, "midterms", sid, "content"), where("lid", "==", lid)));
+  const blocks = [], imgs = {};
+  s.docs.map(d => d.data()).sort((a, b) => a.k - b.k).forEach(d => { blocks.push(...(d.blocks || []).map(gpxDecode)); Object.assign(imgs, d.imgs || {}); });
+  return { blocks, imgs };
+}
+async function midLessons(sid) {
+  const s = await getDocs(collection(db, "midterms", sid, "lessons"));
+  return s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order || 0) - (b.order || 0));
+}
+async function midSyncCounts(sid) {
+  const l = await getDocs(collection(db, "midterms", sid, "lessons")), e = await getDocs(collection(db, "midterms", sid, "exams"));
+  await setDoc(midRefDoc(sid), { lessonCount: l.size, examCount: e.docs.filter(d => d.data().published).length, updatedAt: serverTimestamp() }, { merge: true });
+}
+/* ---------- صفحة الميد ترم (كل المواد) ---------- */
+async function midtermPage() {
+  if (!user) return needLogin();
+  document.body.classList.remove("login-screen"); midEnsureStyle(); stopLessonSpeech();
+  app.innerHTML = `<p class="mut" style="text-align:center;margin:40px">⏳ جاري التحميل…</p>`;
+  let subs = [], metas = {};
+  try { subs = await list("subjects"); (await getDocs(collection(db, "midterms"))).docs.forEach(d => { metas[d.id] = d.data(); }); }
+  catch (e) { app.innerHTML = `<p class="danger" style="text-align:center">تعذر التحميل: ${esc(e.code || e.message)}</p>`; return; }
+  const shown = editor ? subs : subs.filter(s => { const m = metas[s.id]; return m && (m.desc || m.lessonCount || m.examCount); });
+  app.innerHTML = `<div class="gpx-wrap"><div class="gpx-hero"><div style="flex:1"><small>امتحانات منتصف الفصل</small><h2>الميد ترم</h2><div class="gpx-meta"><span>📘 ${shown.length} مواد</span></div></div></div>
+    <div class="gpx-lessons">${shown.map(s => { const m = metas[s.id] || {}; return `<button class="gpx-lesson" data-id="${esc(s.id)}"><span class="no">📘</span><div class="tx"><b>${esc(s.name)}</b><small>${m.desc ? esc(String(m.desc).replace(/\s+/g, " ").slice(0, 110)) : "لسه مفيش وصف للميد ترم"}</small><small>📚 ${m.lessonCount || 0} دروس · 📝 ${m.examCount || 0} اختبارات</small></div><span class="st">▶</span></button>`; }).join("") || `<p class="mut">${editor ? "مفيش مواد لسه." : "الميد ترم لسه ما اتحددش. هيظهر هنا أول ما المدرس يضيف المواد."}</p>`}</div></div>`;
+  app.querySelectorAll("[data-id]").forEach(b => b.onclick = () => midtermSubject(subs.find(s => s.id === b.dataset.id)));
+}
+/* ---------- ميد ترم مادة واحدة ---------- */
+async function midtermSubject(sub) {
+  midEnsureStyle(); stopLessonSpeech();
+  app.innerHTML = `<p class="mut" style="text-align:center;margin:40px">⏳ جاري التحميل…</p>`;
+  let meta = {}, lessons = [], exams = [], myAtt = {};
+  try {
+    const ms = await getDoc(midRefDoc(sub.id)); meta = ms.exists() ? ms.data() : {};
+    lessons = await midLessons(sub.id);
+    const col = collection(db, "midterms", sub.id, "exams");
+    exams = (await getDocs(editor ? col : query(col, where("published", "==", true)))).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0));
+    if (exams.length) (await getDocs(query(collection(db, "midtermAttempts"), where("uid", "==", user.uid), where("subjectId", "==", sub.id)))).docs.forEach(d => { const a = d.data(); (myAtt[a.examId] = myAtt[a.examId] || []).push(a); });
+  } catch (e) { console.warn(e); app.innerHTML = `<p class="danger" style="text-align:center">تعذر التحميل: ${esc(e.code || e.message)}</p>`; return; }
+  const examCard = (x, i) => {
+    const atts = myAtt[x.id] || [], used = atts.length, limit = x.attempts || 0, best = used ? Math.max(...atts.map(a => a.percent || 0)) : null;
+    return `<div class="mid-exam" data-e="${esc(x.id)}"><span class="no">${i + 1}</span><div class="tx"><b>${esc(x.title || "اختبار")}</b><small>${x.count || (x.questions || []).length} سؤال · نجاح ${x.passPct ?? 50}%${x.minutes ? ` · ${x.minutes} دقيقة` : ""} · المحاولات: ${used}/${limit ? limit : "∞"}${best != null ? ` · أعلى نتيجة ${best}%` : ""}</small></div>${editor ? `<span class="mid-tag">${x.published ? "🟢 منشور" : "⚪ مسودة"}</span>` : `<span class="st">▶</span>`}</div>`;
+  };
+  app.innerHTML = `<div class="gpx-wrap">
+    <div class="gpx-hero"><div style="flex:1;min-width:0"><small>الميد ترم</small><h2>${esc(sub.name)}</h2><div class="gpx-meta"><span>📚 ${lessons.length} دروس</span><span>📝 ${exams.filter(x => editor || x.published).length} اختبارات</span></div></div>
+      <div class="gpx-hero-actions">${editor ? `<button class="sec" id="midDescBtn">✏️ وصف الميد ترم</button>` : ""}<button class="sec" id="midBack">← كل المواد</button></div></div>
+    <div class="mid-desc">${meta.desc ? esc(meta.desc) : `<span class="mut">${editor ? "لسه ما كتبتش وصف. اضغط «✏️ وصف الميد ترم» واكتب اللي الطلاب هيمتحنوا فيه." : "المدرس لسه ما كتبش وصف الميد ترم لهذه المادة."}</span>`}</div>
+    <div class="mid-sec"><h3>📚 دروس الميد ترم (${lessons.length})</h3>${editor ? `<button class="sec" id="midImport">📥 استيراد كتاب أو ملف</button>` : ""}</div>
+    <div class="gpx-lessons">${lessons.map((l, i) => `<button class="gpx-lesson" data-l="${i}"><span class="no">${i + 1}</span><div class="tx"><b>${esc(l.title)}</b><small>${l.mins || 1} د قراءة${l.imgs ? " · 🖼 " + l.imgs + " صور" : ""}</small></div><span class="st">▶</span></button>`).join("") || `<p class="mut">${editor ? "مفيش دروس لسه. اضغط «📥 استيراد كتاب أو ملف» وارفع الكتاب كامل وهيتقسّم دروس." : "الدروس لسه ما اتضافتش."}</p>`}</div>
+    <div class="mid-sec"><h3>📝 الاختبارات (${exams.filter(x => editor || x.published).length})</h3>${editor && lessons.length ? `<button class="sec" id="midNewExam">➕ اختبار جديد</button>` : ""}</div>
+    <div id="midExams">${exams.map(examCard).join("") || `<p class="mut">${editor ? (lessons.length ? "مفيش اختبارات لسه. اضغط «➕ اختبار جديد»." : "ضيف دروس الأول وبعدين اعمل اختبارات.") : "مفيش اختبارات منشورة دلوقتي."}</p>`}</div></div>`;
+  $("#midBack").onclick = midtermPage;
+  app.querySelectorAll("[data-l]").forEach(b => b.onclick = () => midLessonView(sub, lessons, +b.dataset.l));
+  app.querySelectorAll("[data-e]").forEach(b => b.onclick = () => { const x = exams.find(e => e.id === b.dataset.e); editor ? midExamAdmin(sub, x, lessons) : midExamIntro(sub, x); });
+  if (!editor) return;
+  $("#midDescBtn").onclick = () => {
+    const d = dmDialog(`<h3 class="fr">✏️ وصف الميد ترم — ${esc(sub.name)}</h3><p class="mut">اكتب اللي الطلاب هيمتحنوا فيه في الميد ترم لهذه المادة (الدروس، الأبواب، نوع الأسئلة، ملاحظات…).</p><textarea id="mdTxt" rows="9" style="width:100%">${esc(meta.desc || "")}</textarea><div class="row"><button type="button" id="mdSave">💾 حفظ</button><button type="button" class="sec" id="mdX">إلغاء</button></div>`);
+    d.querySelector("#mdX").onclick = () => d.close();
+    d.querySelector("#mdSave").onclick = async () => { try { await setDoc(midRefDoc(sub.id), { desc: d.querySelector("#mdTxt").value.trim(), updatedAt: serverTimestamp() }, { merge: true }); d.close(); midtermSubject(sub); } catch (e) { alert("تعذر الحفظ: " + (e.code || e.message)); } };
+  };
+  $("#midImport").onclick = () => midImportBook(sub, lessons);
+  const ne = $("#midNewExam"); if (ne) ne.onclick = () => midExamCreate(sub, lessons);
+}
+/* ---------- استيراد كتاب وتقسيمه دروس ---------- */
+function midAskPick(chapters) {
+  return new Promise(resolve => {
+    let done = false;
+    const rows = chapters.map(c => `<label class="ge-row" style="cursor:default"><input type="checkbox" class="mpk" data-i="${c.idx}" checked><input class="mpt" data-i="${c.idx}" value="${esc(String(c.title).slice(0, 140))}" style="flex:1;min-width:0;margin:0"><small class="mut" style="flex:none">${Math.max(1, Math.round(c.chars / 900))} د${c.imgs ? " · 🖼" + c.imgs : ""}</small></label>`).join("");
+    const d = dmDialog(`<h3 class="fr">📚 الدروس اللي لقيتها في الملف (${chapters.length})</h3><p class="mut">علّم الدروس اللي عايز تضيفها للميد ترم، وتقدر تعدّل اسم أي درس.</p>
+      <div class="row"><button type="button" class="sec" id="mpAll">تحديد الكل</button><button type="button" class="sec" id="mpNone">إلغاء الكل</button><button type="button" id="mpGo">➕ إضافة المحدد</button></div><div class="ge-list" style="max-height:52vh">${rows}</div>`);
+    d.style.width = "min(96vw,820px)";
+    const boxes = () => [...d.querySelectorAll(".mpk")];
+    d.querySelector("#mpAll").onclick = () => boxes().forEach(b => b.checked = true);
+    d.querySelector("#mpNone").onclick = () => boxes().forEach(b => b.checked = false);
+    d.querySelector("#mpGo").onclick = () => {
+      const picked = boxes().filter(b => b.checked).map(b => ({ c: chapters[+b.dataset.i], title: (d.querySelector(`.mpt[data-i="${b.dataset.i}"]`).value || "").trim() || chapters[+b.dataset.i].title }));
+      done = true; resolve(picked); d.close();
+    };
+    d.addEventListener("close", () => { if (!done) { done = true; resolve([]); } });
+  });
+}
+function midImportBook(sub, lessons) {
+  form("استيراد كتاب أو ملف", [{ n: "file", l: "الكتاب (PDF أو Word .docx) — لو كتاب كامل هيتقسّم دروس تلقائيًا", t: "file", accept: GPX_ACCEPT }], async v => {
+    const f = v.file; if (!f || !f.size) return;
+    const dlg = dmDialog(`<h3 class="fr">📘 ${esc(f.name)}</h3><p id="mdProg" class="mut">جاري البدء…</p><p class="mut" style="font-size:.85rem">الكتب الكبيرة بتاخد وقت. لا تقفل الصفحة.</p>`);
+    const say = m => { const el = document.getElementById("mdProg"); if (el) el.textContent = m; };
+    try {
+      let out = await gpxParseFile(f, say);
+      const parts = gpxDetectParts(out.blocks);
+      if (parts.frontEnd > 0 || parts.biblioStart >= 0) { dlg.close(); const opt = await gpxAskCleanup(parts); out = gpxApplyCleanup(out.blocks, out.imgs, parts, opt); }
+      const chapters = gpxChapters(out.blocks);
+      dlg.close();
+      const picked = await midAskPick(chapters);
+      if (!picked.length) return;
+      const d2 = dmDialog(`<h3 class="fr">💾 جاري حفظ ${picked.length} درس</h3><p id="mdProg" class="mut">…</p>`);
+      const say2 = m => { const el = d2.querySelector("#mdProg"); if (el) el.textContent = m; };
+      try {
+        let order = lessons.reduce((m, l) => Math.max(m, l.order || 0), 0);
+        for (let k = 0; k < picked.length; k++) {
+          const { c, title } = picked[k]; say2(`الدرس ${k + 1} من ${picked.length}: ${title.slice(0, 40)}`);
+          const blocks = out.blocks.slice(c.from, c.to), imgs = {}; blocks.forEach(b => { if (b.t === "img" && out.imgs[b.v]) imgs[b.v] = out.imgs[b.v]; });
+          const lid = midId(); order++;
+          const nch = await midSaveContent(sub.id, lid, blocks, imgs);
+          await setDoc(doc(db, "midterms", sub.id, "lessons", lid), { title, order, chars: c.chars, mins: Math.max(1, Math.round(c.chars / 900)), imgs: c.imgs, chunks: nch, file: f.name, txt: lessonFrenchText({ blocks }).slice(0, 30000), createdAt: serverTimestamp() });
+        }
+        await midSyncCounts(sub.id);
+      } finally { d2.close(); }
+      midtermSubject(sub);
+    } catch (e) { console.error("mid import", e); document.querySelectorAll("dialog").forEach(x => { if (x.querySelector("#mdProg")) x.close(); }); alert("تعذر استيراد الملف: " + (e.message || e.code || e)); }
+  });
+}
+/* ---------- عرض الدرس ---------- */
+async function midLessonView(sub, lessons, idx) {
+  midEnsureStyle(); stopLessonSpeech();
+  const lesson = lessons[idx];
+  app.innerHTML = `<p class="mut" style="text-align:center;margin:40px">⏳ جاري تحميل الدرس…</p>`;
+  let blocks = [], imgs = {};
+  try { ({ blocks, imgs } = await midLoadLesson(sub.id, lesson.id)); } catch (e) { app.innerHTML = `<p class="danger" style="text-align:center">تعذر تحميل الدرس: ${esc(e.code || e.message)}</p>`; return; }
+  app.innerHTML = `<div class="gpx-wrap">
+    <div class="gpx-tb"><button class="sec" id="mlBack">← دروس الميد ترم</button><button id="mlPron">🎤 اختبر نطقك</button><button class="sec" id="mlSpeak">🔊 تشغيل</button><button class="sec" id="mlTr">🌐 ترجمة كل الفقرات</button>
+      ${editor ? `<button class="sec" id="mlSaveTr">💾 ترجمة وحفظ للجميع</button><button class="sec" id="mlRen">✏️ الاسم</button><button class="sec" id="mlUp" ${idx > 0 ? "" : "disabled"}>⬆</button><button class="sec" id="mlDown" ${idx < lessons.length - 1 ? "" : "disabled"}>⬇</button><button class="del" id="mlDel">🗑 حذف الدرس</button>` : ""}</div>
+    <div class="gpx-hint">اضغط على أي كلمة تشوف معناها وتسمع نطقها · «✨ شرح الصورة» جنب كل صورة.</div><div id="ttsStatus" class="mut" style="font-size:.88rem"></div>
+    <div class="gpx-chead"><div class="no">${idx + 1}</div><div><h3>${esc(lesson.title)}</h3><p>${sub.name ? esc(sub.name) + " · " : ""}${lesson.mins || 1} دقايق قراءة تقريبًا</p></div></div>
+    <div class="text fr gpx-paper" id="txt"></div>
+    <div class="gpx-tb" style="justify-content:space-between;margin-top:14px"><button class="sec" id="mlPrev" ${idx > 0 ? "" : "disabled"}>→ الدرس السابق</button><button id="mlNext" ${idx < lessons.length - 1 ? "" : "disabled"}>الدرس التالي ←</button></div></div>`;
+  const root = $("#txt"), trBtn = $("#mlTr"); let mode = "bi";
+  const fullText = lessonFrenchText({ blocks });
+  $("#mlBack").onclick = () => { stopLessonSpeech(); midtermSubject(sub); };
+  $("#mlPrev").onclick = () => midLessonView(sub, lessons, idx - 1); $("#mlNext").onclick = () => midLessonView(sub, lessons, idx + 1);
+  $("#mlSpeak").onclick = () => speakLesson(fullText, $("#mlSpeak"));
+  $("#mlPron").onclick = () => openPronunciationTest(lesson.title, fullText);
+  const hasAr = () => blocks.some(b => gpxIsText(b) && b.ar), missing = () => blocks.filter(b => gpxIsText(b) && !b.ar && /\p{L}{2,}/u.test(b.v || ""));
+  const explain = async (fig, id) => {
+    let panel = fig.nextElementSibling?.classList.contains("gpx-expl") ? fig.nextElementSibling : null;
+    if (panel) { panel.hidden = !panel.hidden; return; }
+    panel = document.createElement("div"); panel.className = "gpx-expl"; panel.innerHTML = `<div class="mut">⏳ الذكاء الاصطناعي بيحلل الصورة…</div>`; fig.after(panel);
+    try {
+      const bi = blocks.findIndex(b => b.t === "img" && b.v === id), near = blocks.slice(Math.max(0, bi - 3), bi + 3).filter(gpxIsText).map(b => String(b.v || "")).join("\n").slice(0, 1500);
+      const d = await gpxExplainImage(null, id, imgs[id], { chapter: lesson.title, text: near });
+      panel.innerHTML = `<h4>✨ شرح الصورة</h4><div dir="rtl">${esc(d.ar || "")}</div>${d.points?.length ? `<ul dir="rtl">${d.points.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}${d.fr ? `<div class="frs"><div class="ex-fr"></div></div>` : ""}<div class="note">شرح مولَّد بالذكاء الاصطناعي — راجعه مع النص.</div>`;
+      const fr = panel.querySelector(".ex-fr"); if (fr) clickable(fr, d.fr, false);
+    } catch (e) { panel.innerHTML = `<p class="danger" style="margin:0 0 6px">تعذر شرح الصورة: ${esc(aiReason(e))}</p><button class="sec" style="font-size:.8rem">إعادة المحاولة</button>`; panel.querySelector("button").onclick = () => { panel.remove(); explain(fig, id); }; }
+  };
+  const decorate = () => {
+    root.querySelectorAll(".lsec").forEach(sec => {
+      const text = [...sec.querySelectorAll(".paragraph-body")].map(b => b.dataset.french || "").join("\n"); if (text.length < 40) return;
+      const title = sec.querySelector(".lh1,.lh2")?.dataset.french || lesson.title;
+      const b = document.createElement("button"); b.type = "button"; b.className = "sec important-print-hide"; b.textContent = "🎤 اختبر نطق هذا الجزء"; b.style.cssText = "font-size:.8rem;padding:4px 10px;margin:0 0 10px"; b.onclick = () => openPronunciationTest(title, text); sec.prepend(b);
+    });
+    root.querySelectorAll("figure.limg[data-img-id]").forEach(fig => { const id = fig.dataset.imgId, b = document.createElement("button"); b.type = "button"; b.className = "gpx-explain important-print-hide"; b.textContent = "✨ شرح الصورة"; b.onclick = () => explain(fig, id); fig.appendChild(b); });
+  };
+  const renderView = () => {
+    stopLessonSpeech();
+    gpxRenderBody(root, mode === "bi" ? blocks : blocks.map(b => gpxIsText(b) && b.ar ? { ...b, ar: undefined, pairs: undefined } : b), imgs); decorate();
+    const miss = missing().length; trBtn.disabled = false;
+    trBtn.textContent = hasAr() ? (mode === "bi" ? "↩ عرض الفرنسي فقط" : "🌐 عرض الترجمة") : "🌐 ترجمة كل الفقرات";
+    let more = $("#mlTrMore");
+    if (hasAr() && miss) { if (!more) { more = document.createElement("button"); more.id = "mlTrMore"; more.className = "sec"; trBtn.after(more); more.onclick = () => translateMissing(more); } more.disabled = false; more.textContent = `🌐 ترجمة الباقي (${miss})`; } else if (more) more.remove();
+  };
+  const translateMissing = async btn => {
+    const todo = missing(); if (!todo.length) return; btn.disabled = true; let done = 0; const q = [...todo];
+    const worker = async () => { while (q.length) { const b = q.shift(); try { await gpxFixAlign(b); } catch (e) { console.warn(e); } done++; btn.textContent = `⏳ ${done} / ${todo.length}`; } };
+    await Promise.all([worker(), worker(), worker()]); mode = "bi"; renderView();
+  };
+  trBtn.onclick = async () => { if (hasAr()) { mode = mode === "bi" ? "fr" : "bi"; renderView(); } else await translateMissing(trBtn); };
+  renderView();
+  if (!editor) return;
+  const sw = async (a, b) => { await updateDoc(doc(db, "midterms", sub.id, "lessons", a.id), { order: b.order || 0 }); await updateDoc(doc(db, "midterms", sub.id, "lessons", b.id), { order: a.order || 0 }); };
+  const reopen = async i => { const ls = await midLessons(sub.id); midLessonView(sub, ls, Math.max(0, Math.min(i, ls.length - 1))); };
+  $("#mlUp").onclick = async () => { try { await sw(lesson, lessons[idx - 1]); reopen(idx - 1); } catch (e) { alert("تعذر النقل: " + (e.code || e.message)); } };
+  $("#mlDown").onclick = async () => { try { await sw(lesson, lessons[idx + 1]); reopen(idx + 1); } catch (e) { alert("تعذر النقل: " + (e.code || e.message)); } };
+  $("#mlRen").onclick = () => { const d = dmDialog(`<h3 class="fr">✏️ اسم الدرس</h3><input id="mrT" value="${esc(lesson.title)}" style="width:100%"><div class="row"><button type="button" id="mrS">حفظ</button><button type="button" class="sec" id="mrX">إلغاء</button></div>`); d.querySelector("#mrX").onclick = () => d.close(); d.querySelector("#mrS").onclick = async () => { const t = d.querySelector("#mrT").value.trim(); if (!t) return; try { await updateDoc(doc(db, "midterms", sub.id, "lessons", lesson.id), { title: t.slice(0, 200) }); d.close(); reopen(idx); } catch (e) { alert("تعذر الحفظ: " + (e.code || e.message)); } }; };
+  $("#mlDel").onclick = async () => {
+    if (!confirm(`تحذف درس «${lesson.title}» نهائيًا؟`)) return;
+    try {
+      const s = await getDocs(query(collection(db, "midterms", sub.id, "content"), where("lid", "==", lesson.id))); for (const d of s.docs) await deleteDoc(d.ref);
+      await deleteDoc(doc(db, "midterms", sub.id, "lessons", lesson.id)); await midSyncCounts(sub.id); midtermSubject(sub);
+    } catch (e) { alert("تعذر الحذف: " + (e.code || e.message)); }
+  };
+  $("#mlSaveTr").onclick = async () => {
+    const btn = $("#mlSaveTr"), todo = missing(); if (!todo.length) return alert("كل الفقرات متترجمة بالفعل.");
+    if (!confirm(`هيتم ترجمة ${todo.length} بلوك بالذكاء الاصطناعي وحفظها لكل الطلاب. تكمل؟`)) return;
+    btn.disabled = true; let done = 0; const q = [...todo];
+    const worker = async () => { while (q.length) { const b = q.shift(); try { await gpxFixAlign(b); } catch (e) { console.warn(e); } done++; btn.textContent = `⏳ ${done} / ${todo.length}`; } };
+    await Promise.all([worker(), worker(), worker()]);
+    try { btn.textContent = "💾 جاري الحفظ…"; await midSaveContent(sub.id, lesson.id, blocks, imgs); midLessonView(sub, lessons, idx); } catch (e) { alert("تعذر الحفظ: " + (e.message || e.code)); btn.disabled = false; btn.textContent = "💾 ترجمة وحفظ للجميع"; }
+  };
+}
+/* ---------- توليد أسئلة الاختبار من كل الدروس ---------- */
+function midAllocate(total, weights) {
+  const sum = weights.reduce((a, b) => a + b, 0) || 1, raw = weights.map(w => total * w / sum), base = raw.map(Math.floor);
+  let rem = total - base.reduce((a, b) => a + b, 0);
+  raw.map((r, i) => ({ i, f: r - base[i] })).sort((a, b) => b.f - a.f).slice(0, rem).forEach(x => base[x.i]++);
+  return base;
+}
+function midNormalize(j, lesson) {
+  const str = x => String(x ?? "").trim(), out = { mcq: [], tf: [], essay: [] }, tag = { lessonId: lesson.id, lessonTitle: lesson.title };
+  (Array.isArray(j?.mcq) ? j.mcq : []).forEach(x => {
+    const opts = (Array.isArray(x.options) ? x.options : []).map(str).filter(Boolean), a = Number(x.answer);
+    if (!str(x.q) || opts.length < 3 || !Number.isInteger(a) || a < 0 || a >= opts.length || new Set(opts).size !== opts.length) return;
+    const shuffled = midShuffle(opts.map((t, i) => ({ t, c: i === a })));
+    out.mcq.push({ t: "mcq", q: str(x.q), options: shuffled.map(o => o.t), a: shuffled.findIndex(o => o.c), exp: str(x.exp), ...tag });
+  });
+  (Array.isArray(j?.tf) ? j.tf : []).forEach(x => { const a = x.answer === true || x.answer === "true" ? true : x.answer === false || x.answer === "false" ? false : null; if (str(x.q) && a !== null) out.tf.push({ t: "tf", q: str(x.q), a, exp: str(x.exp), ...tag }); });
+  (Array.isArray(j?.essay) ? j.essay : []).forEach(x => { if (str(x.q) && str(x.model)) out.essay.push({ t: "essay", q: str(x.q), a: str(x.model), keywords: (Array.isArray(x.keywords) ? x.keywords : []).map(str).filter(Boolean).slice(0, 8), exp: "", ...tag }); });
+  return out;
+}
+async function midGenLesson(lesson, m, t, e) {
+  const txt = String(lesson.txt || ""), n = txt.length, src = n > 12000 ? txt.slice(0, 4000) + "\n…\n" + txt.slice(Math.floor(n / 2) - 2000, Math.floor(n / 2) + 2000) + "\n…\n" + txt.slice(-4000) : txt;
+  const prompt = `أنت مدرّس يضع أسئلة ميد ترم جامعي. الدرس: "${lesson.title}". اكتب بالضبط: ${m} أسئلة اختيار من متعدد (4 اختيارات، واحد صحيح فقط)، و${t} أسئلة صح/غلط، و${e} أسئلة مقالية قصيرة. الشروط: الأسئلة تغطي نقاطًا مختلفة من نص الدرس بمستوى طالب جامعي، وتعتمد على النص فقط بدون اختراع معلومات. اكتب نص السؤال والاختيارات والإجابة النموذجية بنفس لغة نص الدرس. اكتب الشرح "exp" بالعربية في جملة أو جملتين. في الأسئلة المقالية ضع "model" إجابة نموذجية من جملتين إلى 4 جمل و"keywords" من 3 إلى 6 كلمات مفتاحية. أعد JSON فقط بالشكل: {"mcq":[{"q":"","options":["","","",""],"answer":0,"exp":""}],"tf":[{"q":"","answer":true,"exp":""}],"essay":[{"q":"","model":"","keywords":[""]}]}\n\nنص الدرس:\n${src}`;
+  let out = null, last;
+  for (let a = 0; a < 3 && !out; a++) {
+    try { const r = midNormalize(await askJSON(prompt), lesson); if (r.mcq.length + r.tf.length + r.essay.length) out = r; else throw new Error("لم يتم توليد أسئلة"); }
+    catch (err) { last = err; await sleep(/429|quota|exceeded|resource|503|overload|unavailable/i.test(String(err?.message || err)) ? 6000 * (a + 1) : 1500 * (a + 1)); }
+  }
+  if (!out) throw last || new Error("فشل التوليد");
+  return out;
+}
+async function midGenerateQuestions(lessons, counts, progress) {
+  const w = lessons.map(l => Math.max(300, l.chars || 1000)), qm = midAllocate(counts.mcq, w), qt = midAllocate(counts.tf, w), qe = midAllocate(counts.essay, w);
+  const jobs = lessons.map((l, i) => ({ l, m: qm[i], t: qt[i], e: qe[i] })).filter(j => j.m + j.t + j.e > 0);
+  const all = { mcq: [], tf: [], essay: [] }; let done = 0, failed = 0; const queue = [...jobs];
+  const worker = async () => {
+    while (queue.length) {
+      const j = queue.shift();
+      try { const r = await midGenLesson(j.l, j.m, j.t, j.e); all.mcq.push(...r.mcq.slice(0, j.m)); all.tf.push(...r.tf.slice(0, j.t)); all.essay.push(...r.essay.slice(0, j.e)); } catch (e) { failed++; console.warn("gen", j.l.title, e); }
+      done++; progress?.(`درس ${done} من ${jobs.length}`);
+    }
+  };
+  await Promise.all([worker(), worker()]);
+  const qs = [...midShuffle(all.mcq), ...midShuffle(all.tf), ...midShuffle(all.essay)].map((q, i) => ({ id: "q" + (i + 1) + "_" + Math.random().toString(36).slice(2, 5), ...q }));
+  return { questions: qs, failed, jobs: jobs.length };
+}
+/* ---------- إنشاء اختبار جديد (على كل الدروس) ---------- */
+function midExamCreate(sub, lessons) {
+  const d = dmDialog(`<h3 class="fr">➕ اختبار جديد — ${esc(sub.name)}</h3><p class="mut" style="margin:2px 0 8px">الاختبار بيتولّد بالذكاء الاصطناعي من الدروس المعلّمة كلها مرة واحدة، والأسئلة موزّعة عليها حسب حجم كل درس.</p>
+    <label>عنوان الاختبار<input id="mxT" value="اختبار ${new Date().toLocaleDateString("ar-EG")}" style="width:100%"></label>
+    <div class="row" style="gap:10px"><label style="flex:1;min-width:110px">اختيار من متعدد<input id="mxM" type="number" min="0" max="60" value="10"></label><label style="flex:1;min-width:110px">صح / غلط<input id="mxF" type="number" min="0" max="60" value="5"></label><label style="flex:1;min-width:110px">مقالي قصير<input id="mxE" type="number" min="0" max="20" value="2"></label></div>
+    <div class="row" style="gap:10px"><label style="flex:1;min-width:110px">عدد المحاولات (0 = مفتوح)<input id="mxA" type="number" min="0" max="20" value="1"></label><label style="flex:1;min-width:110px">نسبة النجاح %<input id="mxP" type="number" min="0" max="100" value="50"></label><label style="flex:1;min-width:110px">الوقت بالدقايق (0 = بدون)<input id="mxD" type="number" min="0" max="300" value="0"></label></div>
+    <label style="display:block;margin:8px 0"><input type="checkbox" id="mxS" checked style="width:auto;margin-left:8px">إظهار الإجابات الصحيحة بعد التسليم</label>
+    <div class="row" style="justify-content:space-between;margin-top:6px"><b>الدروس المشمولة</b><span><button type="button" class="sec" id="mxAll" style="font-size:.78rem;padding:3px 10px">الكل</button> <button type="button" class="sec" id="mxNone" style="font-size:.78rem;padding:3px 10px">لا شيء</button></span></div>
+    <div class="ge-list" style="max-height:26vh">${lessons.map(l => `<label class="ge-row" style="cursor:pointer"><input type="checkbox" class="mxl" value="${esc(l.id)}" checked><span class="ge-tx" style="direction:rtl;text-align:right">${esc(l.title)}</span></label>`).join("")}</div>
+    <div class="row" style="margin-top:10px"><button type="button" id="mxGo">🧠 توليد الاختبار</button><button type="button" class="sec" id="mxX">إلغاء</button></div><p id="mxMsg" class="danger"></p>`);
+  d.style.width = "min(96vw,720px)";
+  const num = id => Math.max(0, Math.floor(+d.querySelector(id).value || 0)), boxes = () => [...d.querySelectorAll(".mxl")];
+  d.querySelector("#mxX").onclick = () => d.close();
+  d.querySelector("#mxAll").onclick = () => boxes().forEach(b => b.checked = true); d.querySelector("#mxNone").onclick = () => boxes().forEach(b => b.checked = false);
+  d.querySelector("#mxGo").onclick = async () => {
+    const msg = d.querySelector("#mxMsg"); msg.textContent = "";
+    const counts = { mcq: num("#mxM"), tf: num("#mxF"), essay: num("#mxE") }, sel = lessons.filter(l => boxes().some(b => b.checked && b.value === l.id));
+    if (counts.mcq + counts.tf + counts.essay < 1) return msg.textContent = "اكتب عدد الأسئلة.";
+    if (!sel.length) return msg.textContent = "علّم درس واحد على الأقل.";
+    const btn = d.querySelector("#mxGo"); btn.disabled = true; btn.textContent = "⏳ جاري التوليد…";
+    try {
+      const res = await midGenerateQuestions(sel, counts, p => { btn.textContent = "⏳ " + p; });
+      if (!res.questions.length) throw new Error("الذكاء الاصطناعي ما رجّعش أسئلة. جرّب تاني.");
+      const exam = { title: d.querySelector("#mxT").value.trim() || "اختبار", published: false, count: res.questions.length, mcq: res.questions.filter(q => q.t === "mcq").length, tf: res.questions.filter(q => q.t === "tf").length, essay: res.questions.filter(q => q.t === "essay").length, attempts: num("#mxA"), passPct: Math.min(100, num("#mxP")), minutes: num("#mxD"), showAnswers: d.querySelector("#mxS").checked, lessonIds: sel.map(l => l.id), questions: res.questions, createdAtMs: Date.now(), createdAt: serverTimestamp() };
+      const ref = await addDoc(collection(db, "midterms", sub.id, "exams"), exam); d.close();
+      if (res.failed) alert(`اتولّد ${res.questions.length} سؤال، وتعذر التوليد لـ ${res.failed} درس. تقدر تضيف أسئلة تانية من صفحة الاختبار.`);
+      midExamAdmin(sub, { id: ref.id, ...exam }, lessons);
+    } catch (e) { console.error(e); msg.textContent = "تعذر التوليد: " + aiReason(e); btn.disabled = false; btn.textContent = "🧠 توليد الاختبار"; }
+  };
+}
+/* ---------- إدارة اختبار (للمدرس) ---------- */
+function midExamAdmin(sub, exam, lessons) {
+  midEnsureStyle();
+  const qs = exam.questions || [], typeName = { mcq: "اختيار", tf: "صح/غلط", essay: "مقالي" };
+  const qHtml = qs.map((q, i) => `<div class="mid-q"><div class="qh"><b>${i + 1}</b><span class="mid-tag">${typeName[q.t] || q.t}</span><span class="mid-tag">${esc((q.lessonTitle || "").slice(0, 40))}</span><button class="del" data-dq="${i}" style="margin-inline-start:auto;font-size:.75rem;padding:2px 10px">🗑</button></div><div class="qt" dir="auto">${esc(q.q)}</div>
+    ${q.t === "mcq" ? q.options.map((o, k) => `<div class="mid-opt ${k === q.a ? "ok" : ""}" dir="auto"><span>${k === q.a ? "✓" : "○"}</span><span>${esc(o)}</span></div>`).join("") : q.t === "tf" ? `<div class="mid-opt ok"><span>✓</span><span>${q.a ? "صح" : "غلط"}</span></div>` : `<div class="mid-fb" dir="auto"><b>الإجابة النموذجية:</b> ${esc(q.a)}</div>`}${q.exp ? `<div class="mid-fb" dir="rtl">${esc(q.exp)}</div>` : ""}</div>`).join("");
+  app.innerHTML = `<div class="gpx-wrap"><div class="gpx-hero"><div style="flex:1;min-width:0"><small>${esc(sub.name)} · ميد ترم</small><h2>${esc(exam.title)}</h2>
+      <div class="gpx-meta"><span>${qs.length} سؤال (${exam.mcq || 0} اختيار · ${exam.tf || 0} صح/غلط · ${exam.essay || 0} مقالي)</span><span>نجاح ${exam.passPct ?? 50}%</span><span>محاولات: ${exam.attempts ? exam.attempts : "مفتوحة"}</span>${exam.minutes ? `<span>⏱ ${exam.minutes} د</span>` : ""}<span>${exam.published ? "🟢 منشور للطلاب" : "⚪ مسودة (مش ظاهر للطلاب)"}</span></div></div>
+      <div class="gpx-hero-actions"><button class="${exam.published ? "sec" : ""}" id="meTog">${exam.published ? "⏸ إلغاء النشر" : "🚀 نشر للطلاب"}</button><button class="sec" id="meBack">← الميد ترم</button></div></div>
+    <div class="gpx-tb"><button class="sec" id="meSet">⚙️ الإعدادات</button><button class="sec" id="meMore">➕ أسئلة إضافية</button><button class="sec" id="meRes">📊 النتائج</button><button class="del" id="meDel">🗑 حذف الاختبار</button></div>
+    ${qHtml || `<p class="mut">مفيش أسئلة.</p>`}</div>`;
+  const reload = async () => { const s = await getDoc(doc(db, "midterms", sub.id, "exams", exam.id)); s.exists() ? midExamAdmin(sub, { id: s.id, ...s.data() }, lessons) : midtermSubject(sub); };
+  $("#meBack").onclick = () => midtermSubject(sub);
+  $("#meTog").onclick = async () => { try { await updateDoc(doc(db, "midterms", sub.id, "exams", exam.id), { published: !exam.published }); await midSyncCounts(sub.id); reload(); } catch (e) { alert("تعذر التنفيذ: " + (e.code || e.message)); } };
+  $("#meDel").onclick = async () => { if (!confirm("تحذف الاختبار؟ (نتائج الطلاب المحفوظة هتفضل)")) return; try { await deleteDoc(doc(db, "midterms", sub.id, "exams", exam.id)); await midSyncCounts(sub.id); midtermSubject(sub); } catch (e) { alert("تعذر الحذف: " + (e.code || e.message)); } };
+  $("#meRes").onclick = () => midResults(sub, exam, lessons);
+  app.querySelectorAll("[data-dq]").forEach(b => b.onclick = async () => {
+    if (!confirm("تحذف السؤال ده؟")) return; const k = +b.dataset.dq, next = qs.filter((_, i) => i !== k);
+    try { await updateDoc(doc(db, "midterms", sub.id, "exams", exam.id), { questions: next, count: next.length, mcq: next.filter(q => q.t === "mcq").length, tf: next.filter(q => q.t === "tf").length, essay: next.filter(q => q.t === "essay").length }); reload(); } catch (e) { alert("تعذر الحذف: " + (e.code || e.message)); }
+  });
+  $("#meSet").onclick = () => {
+    const d = dmDialog(`<h3 class="fr">⚙️ إعدادات الاختبار</h3><label>العنوان<input id="msT" value="${esc(exam.title)}" style="width:100%"></label>
+      <div class="row" style="gap:10px"><label style="flex:1;min-width:110px">المحاولات (0 = مفتوح)<input id="msA" type="number" min="0" max="20" value="${exam.attempts || 0}"></label><label style="flex:1;min-width:110px">نسبة النجاح %<input id="msP" type="number" min="0" max="100" value="${exam.passPct ?? 50}"></label><label style="flex:1;min-width:110px">الوقت (د)<input id="msD" type="number" min="0" max="300" value="${exam.minutes || 0}"></label></div>
+      <label style="display:block;margin:8px 0"><input type="checkbox" id="msS" ${exam.showAnswers !== false ? "checked" : ""} style="width:auto;margin-left:8px">إظهار الإجابات الصحيحة بعد التسليم</label><div class="row"><button type="button" id="msGo">حفظ</button><button type="button" class="sec" id="msX">إلغاء</button></div>`);
+    d.querySelector("#msX").onclick = () => d.close();
+    d.querySelector("#msGo").onclick = async () => { const n = id => Math.max(0, Math.floor(+d.querySelector(id).value || 0)); try { await updateDoc(doc(db, "midterms", sub.id, "exams", exam.id), { title: d.querySelector("#msT").value.trim() || exam.title, attempts: n("#msA"), passPct: Math.min(100, n("#msP")), minutes: n("#msD"), showAnswers: d.querySelector("#msS").checked }); d.close(); reload(); } catch (e) { alert("تعذر الحفظ: " + (e.code || e.message)); } };
+  };
+  $("#meMore").onclick = () => {
+    const d = dmDialog(`<h3 class="fr">➕ أسئلة إضافية</h3><p class="mut">هتتولّد من كل الدروس المشمولة في الاختبار وتتضاف للأسئلة الحالية.</p><div class="row" style="gap:10px"><label style="flex:1;min-width:110px">اختيار<input id="mmM" type="number" min="0" max="60" value="5"></label><label style="flex:1;min-width:110px">صح/غلط<input id="mmF" type="number" min="0" max="60" value="3"></label><label style="flex:1;min-width:110px">مقالي<input id="mmE" type="number" min="0" max="20" value="1"></label></div><div class="row"><button type="button" id="mmGo">🧠 توليد</button><button type="button" class="sec" id="mmX">إلغاء</button></div><p id="mmMsg" class="danger"></p>`);
+    d.querySelector("#mmX").onclick = () => d.close();
+    d.querySelector("#mmGo").onclick = async () => {
+      const n = id => Math.max(0, Math.floor(+d.querySelector(id).value || 0)), counts = { mcq: n("#mmM"), tf: n("#mmF"), essay: n("#mmE") }, btn = d.querySelector("#mmGo");
+      if (counts.mcq + counts.tf + counts.essay < 1) return; btn.disabled = true;
+      try {
+        const ls = lessons.filter(l => (exam.lessonIds || []).includes(l.id)), res = await midGenerateQuestions(ls.length ? ls : lessons, counts, p => { btn.textContent = "⏳ " + p; });
+        if (!res.questions.length) throw new Error("ما رجعش أسئلة");
+        const next = [...(exam.questions || []).filter(q => q.t === "mcq"), ...res.questions.filter(q => q.t === "mcq"), ...(exam.questions || []).filter(q => q.t === "tf"), ...res.questions.filter(q => q.t === "tf"), ...(exam.questions || []).filter(q => q.t === "essay"), ...res.questions.filter(q => q.t === "essay")];
+        await updateDoc(doc(db, "midterms", sub.id, "exams", exam.id), { questions: next, count: next.length, mcq: next.filter(q => q.t === "mcq").length, tf: next.filter(q => q.t === "tf").length, essay: next.filter(q => q.t === "essay").length });
+        d.close(); reload();
+      } catch (e) { d.querySelector("#mmMsg").textContent = "تعذر التوليد: " + aiReason(e); btn.disabled = false; btn.textContent = "🧠 توليد"; }
+    };
+  };
+}
+/* ---------- نتائج الطلاب (للمدرس) ---------- */
+async function midResults(sub, exam, lessons) {
+  app.innerHTML = `<p class="mut" style="text-align:center;margin:40px">⏳ جاري تحميل النتائج…</p>`;
+  let atts = [];
+  try { atts = (await getDocs(query(collection(db, "midtermAttempts"), where("examId", "==", exam.id)))).docs.map(d => d.data()); } catch (e) { alert("تعذر تحميل النتائج: " + (e.code || e.message)); return midExamAdmin(sub, exam, lessons); }
+  const by = new Map(); atts.forEach(a => { const r = by.get(a.uid) || { name: a.name || "طالب", n: 0, best: 0, last: 0, passed: false }; r.n++; r.best = Math.max(r.best, a.percent || 0); r.passed = r.passed || !!a.passed; r.last = Math.max(r.last, a.createdAt?.toMillis?.() || 0); by.set(a.uid, r); });
+  const rows = [...by.values()].sort((a, b) => b.best - a.best);
+  const avg = rows.length ? Math.round(rows.reduce((s, r) => s + r.best, 0) / rows.length) : 0;
+  app.innerHTML = `<div class="gpx-wrap"><div class="gpx-hero"><div style="flex:1"><small>${esc(sub.name)} · ${esc(exam.title)}</small><h2>📊 النتائج</h2><div class="gpx-meta"><span>${rows.length} طالب دخلوا الاختبار</span><span>ناجحين: ${rows.filter(r => r.passed).length}</span><span>متوسط أعلى نتيجة: ${avg}%</span></div></div><div class="gpx-hero-actions"><button class="sec" id="mrBack">← الاختبار</button></div></div>
+    <div class="gpx-paper text">${rows.length ? `<table class="mid-tbl"><thead><tr><th>#</th><th>الطالب</th><th>المحاولات</th><th>أعلى نتيجة</th><th>الحالة</th><th>آخر محاولة</th></tr></thead><tbody>${rows.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.name)}</td><td>${r.n}</td><td><b>${r.best}%</b></td><td>${r.passed ? "✅ ناجح" : "❌"}</td><td>${r.last ? new Date(r.last).toLocaleString("ar-EG", { dateStyle: "short", timeStyle: "short" }) : ""}</td></tr>`).join("")}</tbody></table>` : `<p class="mut">لسه محدش حلّ الاختبار.</p>`}</div></div>`;
+  $("#mrBack").onclick = () => midExamAdmin(sub, exam, lessons);
+}
+/* ---------- حل الاختبار (للطالب) ---------- */
+async function midExamIntro(sub, exam) {
+  midEnsureStyle();
+  app.innerHTML = `<p class="mut" style="text-align:center;margin:40px">⏳ جاري التحميل…</p>`;
+  let atts = [];
+  try { atts = (await getDocs(query(collection(db, "midtermAttempts"), where("examId", "==", exam.id), where("uid", "==", user.uid)))).docs.map(d => d.data()).sort((a, b) => a.n - b.n); } catch (e) { alert("تعذر التحميل: " + (e.code || e.message)); return midtermSubject(sub); }
+  const used = atts.length, limit = exam.attempts || 0, left = limit === 0 ? Infinity : Math.max(0, limit - used), best = used ? Math.max(...atts.map(a => a.percent || 0)) : null;
+  app.innerHTML = `<div class="gpx-wrap"><div class="gpx-hero"><div style="flex:1;min-width:0"><small>${esc(sub.name)} · ميد ترم</small><h2>${esc(exam.title)}</h2><div class="gpx-meta"><span>${exam.count || (exam.questions || []).length} سؤال</span><span>نجاح ${exam.passPct ?? 50}%</span>${exam.minutes ? `<span>⏱ ${exam.minutes} دقيقة</span>` : "<span>بدون وقت محدد</span>"}<span>المحاولات المتبقية: ${left === Infinity ? "مفتوحة" : left}</span>${best != null ? `<span>أعلى نتيجة: ${best}%</span>` : ""}</div></div><div class="gpx-hero-actions"><button class="sec" id="miBack">← الميد ترم</button></div></div>
+    <div class="gpx-paper text"><p>الاختبار بيغطي <b>كل دروس الميد ترم</b> في المادة، وفيه أسئلة اختيار من متعدد وصح/غلط ومقالي قصير. ${exam.minutes ? `هيتقفل تلقائيًا بعد ${exam.minutes} دقيقة.` : ""}</p>
+      ${left > 0 ? `<div class="row"><button id="miStart">${used ? "🔁 محاولة جديدة" : "▶ ابدأ الاختبار"}</button></div>` : `<p class="danger"><b>خلصت كل محاولاتك في الاختبار ده.</b></p>`}
+      ${atts.length ? `<h4>محاولاتك السابقة</h4>${atts.map(a => `<div class="mid-exam" data-a="${a.n}" style="cursor:${exam.showAnswers !== false ? "pointer" : "default"}"><span class="no" style="background:${a.passed ? "linear-gradient(135deg,#00a884,#2fd3a5)" : "linear-gradient(135deg,#c62828,#ef5350)"}">${a.percent}%</span><div class="tx"><b>المحاولة ${a.n}</b><small>${a.score} من ${a.total} · ${a.passed ? "ناجح ✅" : "لسه ❌"}</small></div>${exam.showAnswers !== false ? `<span class="st">مراجعة ▶</span>` : ""}</div>`).join("")}` : ""}</div></div>`;
+  $("#miBack").onclick = () => midtermSubject(sub);
+  const st = $("#miStart"); if (st) st.onclick = () => midRunExam(sub, exam, used + 1);
+  if (exam.showAnswers !== false) app.querySelectorAll("[data-a]").forEach(b => b.onclick = () => midShowResult(sub, exam, atts.find(a => a.n === +b.dataset.a), left));
+}
+async function midGrade(exam, answers) {
+  const qs = exam.questions || [], results = []; let score = 0;
+  const essays = [];
+  qs.forEach((q, i) => {
+    const given = answers[i];
+    if (q.t === "mcq") { const g = given === "" || given == null ? -1 : +given, ok = g === q.a; results.push({ id: q.id, pts: ok ? 1 : 0, given: g, fb: "" }); score += ok ? 1 : 0; }
+    else if (q.t === "tf") { const g = given === "true" ? true : given === "false" ? false : null, ok = g === q.a; results.push({ id: q.id, pts: ok ? 1 : 0, given: g === null ? "" : String(g), fb: "" }); score += ok ? 1 : 0; }
+    else { results.push({ id: q.id, pts: 0, given: String(given || "").slice(0, 3000), fb: "" }); essays.push(i); }
+  });
+  let aiGraded = true;
+  const answered = essays.filter(i => results[i].given.trim());
+  if (answered.length) {
+    try {
+      const items = answered.map(i => ({ i, q: qs[i].q, model: qs[i].a, student: results[i].given.slice(0, 1500) }));
+      const j = await askJSON(`أنت مصحّح امتحان جامعي. لكل سؤال مقالي أدناه: السؤال، الإجابة النموذجية، وإجابة الطالب. أعطِ درجة من 0 إلى 1 (0 خاطئة، 0.5 صحيحة جزئيًا، 1 صحيحة) وتعليقًا قصيرًا بالعربية يوضح ما ينقص الإجابة إن وُجد. تقبّل اختلاف الصياغة والأخطاء الإملائية البسيطة إذا كان المعنى صحيحًا. أعد JSON فقط: {"grades":[{"i":0,"score":1,"fb":""}]}\n\n${JSON.stringify(items)}`);
+      const gr = Array.isArray(j) ? j : j?.grades;
+      answered.forEach(i => { const g = (gr || []).find(x => +x.i === i); if (!g) throw new Error("grade missing"); const s = [0, .5, 1].reduce((a, b) => Math.abs(b - +g.score) < Math.abs(a - +g.score) ? b : a, 0); results[i].pts = s; results[i].fb = String(g.fb || "").slice(0, 400); score += s; });
+    } catch (e) {
+      console.warn("AI grading failed, keyword fallback", e); aiGraded = false;
+      answered.forEach(i => {
+        const kws = (qs[i].keywords && qs[i].keywords.length ? qs[i].keywords : String(qs[i].a).split(/[\s,.;:!?()«»"']+/).filter(w => w.length >= 5)).map(w => w.toLowerCase()), txt = results[i].given.toLowerCase(), hit = kws.filter(k => txt.includes(k)).length, r = kws.length ? hit / kws.length : 0, s = r >= .6 ? 1 : r >= .3 ? .5 : 0;
+        results[i].pts = s; results[i].fb = "تم التصحيح تلقائيًا بالكلمات المفتاحية."; score += s;
+      });
+    }
+  }
+  const total = qs.length || 1;
+  return { score: Math.round(score * 10) / 10, total: qs.length, percent: Math.round(score / total * 100), results, aiGraded };
+}
+function midRunExam(sub, exam, n) {
+  midEnsureStyle(); const qs = exam.questions || [];
+  app.innerHTML = `<div class="gpx-wrap"><div class="gpx-hero"><div style="flex:1"><small>${esc(sub.name)} · المحاولة ${n}</small><h2>${esc(exam.title)}</h2></div></div>
+    ${exam.minutes ? `<div class="mid-timer" id="miTimer">⏱ --:--</div>` : ""}
+    <div id="miQs">${qs.map((q, i) => `<div class="mid-q"><div class="qh"><b>${i + 1} / ${qs.length}</b><span class="mid-tag">${{ mcq: "اختيار من متعدد", tf: "صح / غلط", essay: "مقالي قصير" }[q.t]}</span></div><div class="qt" dir="auto">${esc(q.q)}</div>
+      ${q.t === "mcq" ? q.options.map((o, k) => `<label class="mid-opt" dir="auto"><input type="radio" name="q${i}" value="${k}"><span>${esc(o)}</span></label>`).join("") : q.t === "tf" ? `<label class="mid-opt"><input type="radio" name="q${i}" value="true"><span>صح</span></label><label class="mid-opt"><input type="radio" name="q${i}" value="false"><span>غلط</span></label>` : `<textarea name="q${i}" dir="auto" placeholder="اكتب إجابتك هنا…"></textarea>`}</div>`).join("")}</div>
+    <div class="row" style="margin:16px 0"><button id="miSubmit">✅ تسليم الاختبار</button></div></div>`;
+  let submitted = false, timer = null;
+  const collect = () => qs.map((q, i) => q.t === "essay" ? (document.querySelector(`textarea[name="q${i}"]`)?.value || "") : (document.querySelector(`input[name="q${i}"]:checked`)?.value ?? ""));
+  const submit = async auto => {
+    if (submitted) return; const answers = collect(), blank = answers.filter(a => a === "" || a == null || !String(a).trim()).length;
+    if (!auto && blank && !confirm(`لسه ${blank} سؤال من غير إجابة. تسلّم كده؟`)) return;
+    submitted = true; clearInterval(timer); const btn = $("#miSubmit"); btn.disabled = true; btn.textContent = "⏳ جاري التصحيح…";
+    const g = await midGrade(exam, answers), passed = g.percent >= (exam.passPct ?? 50);
+    const att = { uid: user.uid, name: midName().slice(0, 100), subjectId: sub.id, examId: exam.id, n, score: g.score, total: g.total, percent: g.percent, passed, results: g.results, aiGraded: g.aiGraded, createdAt: serverTimestamp() };
+    let saved = true;
+    try { await setDoc(doc(db, "midtermAttempts", `${exam.id}_${user.uid}_${n}`), att); } catch (e) { saved = false; console.error("save attempt", e); alert("تعذر حفظ المحاولة: " + (e.code || e.message) + "\nنتيجتك هتظهر لك لكن مش هتتسجل."); }
+    midShowResult(sub, exam, { ...att, createdAt: null }, null, saved);
+  };
+  $("#miSubmit").onclick = () => submit(false);
+  if (exam.minutes) {
+    const end = Date.now() + exam.minutes * 60000, tick = () => { const left = Math.max(0, end - Date.now()), el = $("#miTimer"); if (!el) { clearInterval(timer); return; } el.textContent = `⏱ ${String(Math.floor(left / 60000)).padStart(2, "0")}:${String(Math.floor(left / 1000) % 60).padStart(2, "0")}`; if (left <= 0) { clearInterval(timer); submit(true); } };
+    tick(); timer = setInterval(tick, 1000);
+  }
+  window.scrollTo({ top: 0 });
+}
+function midShowResult(sub, exam, att, left, saved = true) {
+  midEnsureStyle(); const qs = exam.questions || [], byId = new Map((att.results || []).map(r => [r.id, r])), show = exam.showAnswers !== false;
+  const tf = v => v === "true" || v === true ? "صح" : v === "false" || v === false ? "غلط" : "—";
+  app.innerHTML = `<div class="gpx-wrap"><div class="gpx-hero"><div style="flex:1;min-width:0"><small>${esc(sub.name)} · المحاولة ${att.n}</small><h2>${esc(exam.title)}</h2></div><div class="gpx-hero-actions"><button class="sec" id="mrBack">← الميد ترم</button></div></div>
+    <div class="gpx-paper text" style="text-align:center"><div class="mid-score ${att.passed ? "pass" : "fail"}">${att.percent}%</div><h3 style="margin:4px 0">${att.passed ? "🎉 مبروك، ناجح!" : "لسه محتاج مجهود 💪"}</h3><p class="mut">${att.score} من ${att.total} · حد النجاح ${exam.passPct ?? 50}%${att.aiGraded === false ? " · الأسئلة المقالية اتصحّحت بالكلمات المفتاحية" : ""}${saved ? "" : " · ⚠️ المحاولة ما اتسجلتش"}</p>${left === null || left === undefined ? "" : ""}</div>
+    ${show ? qs.map((q, i) => { const r = byId.get(q.id) || {}; const ok = q.t === "essay" ? r.pts >= 1 : r.pts === 1;
+      return `<div class="mid-q"><div class="qh"><b>${i + 1}</b><span class="mid-tag">${ok ? "✅ صح" : q.t === "essay" && r.pts > 0 ? "🟡 جزئي" : "❌ غلط"}</span><span class="mid-tag">${esc((q.lessonTitle || "").slice(0, 40))}</span></div><div class="qt" dir="auto">${esc(q.q)}</div>
+      ${q.t === "mcq" ? q.options.map((o, k) => `<div class="mid-opt ${k === q.a ? "ok" : k === r.given ? "bad" : ""}" dir="auto"><span>${k === q.a ? "✓" : k === r.given ? "✗" : "○"}</span><span>${esc(o)}</span></div>`).join("") : q.t === "tf" ? `<div class="mid-opt ${r.pts === 1 ? "ok" : "bad"}"><span>إجابتك: ${tf(r.given)}</span></div><div class="mid-opt ok"><span>الصحيح: ${q.a ? "صح" : "غلط"}</span></div>` : `<div class="mid-fb" dir="auto"><b>إجابتك:</b> ${esc(r.given || "—")}</div><div class="mid-fb" dir="auto"><b>الإجابة النموذجية:</b> ${esc(q.a)}</div>${r.fb ? `<div class="mid-fb" dir="rtl">${esc(r.fb)}</div>` : ""}`}${q.exp ? `<div class="mid-fb" dir="rtl">💡 ${esc(q.exp)}</div>` : ""}</div>`; }).join("") : `<p class="mut" style="text-align:center">المدرس مخلّي الإجابات الصحيحة مخفية.</p>`}</div>`;
+  $("#mrBack").onclick = () => midtermSubject(sub);
+  window.scrollTo({ top: 0 });
 }
 
 async function graduationProjectsPage(){
