@@ -547,7 +547,7 @@ body.night #app #gpPronunciationResult p,body.night #app #gpPronunciationResult 
 <div id="aiPanel"><div id="aiHead"><span>🎓 مدرس الفرنسي</span><button id="aiClose" aria-label="إغلاق">✕</button></div><div id="aiMsgs"></div><div id="aiBar"><textarea id="aiIn" placeholder="اسأل عن كلمة، قاعدة، أو اكتب جملة تتصحح..."></textarea><button id="aiSend">إرسال</button></div></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider, linkWithCredential } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider, linkWithCredential, signInWithRedirect, reauthenticateWithPopup } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, query, where, serverTimestamp, deleteField, arrayUnion, arrayRemove, onSnapshot, runTransaction, writeBatch } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app-check.js";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-ai.js";
@@ -614,7 +614,7 @@ function canonicalStudentName(profile={}, authUser=null) {
 }
 
 /* ---------- Auth ---------- */
-const needsEmailVerification = u => !!u && u.providerData.some(x => x.providerId === "password") && !u.emailVerified;
+const needsEmailVerification = () => false;   // الدخول بجوجل فقط: مفيش تفعيل بريد ولا كلمة مرور
 function showVerifyScreen(u) {
   document.body.classList.remove("login-screen");
   app.innerHTML = `<div class="q" style="max-width:560px;margin:24px auto;text-align:center"><h2 class="sh">📧 فعّل بريدك الإلكتروني</h2><p>بعتنا رابط التفعيل على <b dir="ltr">${esc(maskEmail(u.email))}</b>. افتح الرسالة واضغط على الرابط (راجع Spam لو ما لقيتهاش).</p><p>بعد التفعيل اضغط «✓ فعّلت البريد» وكمّل بكلمة السر اللي اخترتها.<br><small class="mut">وتقدر تغيّرها بعد كده من أيقونة ⚙️ في «لوحتي».</small></p><div class="row" style="justify-content:center"><button id="vDone">✓ فعّلت البريد</button><button class="sec" id="vResend">إعادة إرسال الرابط</button><button class="sec" id="vOut">خروج</button></div><p id="vMsg" class="mut"></p></div>`;
@@ -627,10 +627,25 @@ function showVerifyScreen(u) {
   $("#vResend").onclick = async () => { try { await sendEmailVerification(u); msg.textContent = "تم إرسال رابط جديد. راجع بريدك."; } catch (e) { msg.textContent = e.code === "auth/too-many-requests" ? "استنى شوية وبعدين جرّب تاني." : "تعذر الإرسال: " + (e.code || e.message); } };
   $("#vOut").onclick = () => signOut(auth);
 }
-async function enableDefaultPasswordViaGoogle() {
-  // للحسابات القديمة اللي كانت بتدخل بجوجل: بعد الدخول بيتفرض عليها تعيين كلمة مرور (onAuthStateChanged)
+async function signInWithGoogle() {
   const provider = new GoogleAuthProvider(); provider.setCustomParameters({ prompt: "select_account" });
-  await signInWithPopup(auth, provider);
+  try { return await signInWithPopup(auth, provider); }
+  catch (e) {
+    if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/web-storage-unsupported"].includes(e.code)) { await signInWithRedirect(auth, provider); return null; }
+    throw e;
+  }
+}
+async function enableDefaultPasswordViaGoogle() { await signInWithGoogle(); }
+async function googleSignIn(btn, errEl) {
+  if (errEl) errEl.textContent = "";
+  const label = btn.querySelector("span"), old = label ? label.textContent : ""; btn.disabled = true; if (label) label.textContent = "جاري تسجيل الدخول…";
+  try { const cred = await signInWithGoogle(); if (cred?.user) { try { await ensureFullName(cred.user); } catch (e) { console.warn("ensureFullName", e); } } }
+  catch (e) {
+    console.warn("google sign-in", e);
+    const m = { "auth/popup-closed-by-user": "اتقفلت نافذة جوجل قبل ما تكمل. جرّب تاني.", "auth/cancelled-popup-request": "اتقفلت نافذة جوجل قبل ما تكمل. جرّب تاني.", "auth/network-request-failed": "تأكد من اتصال النت وجرّب تاني.", "auth/unauthorized-domain": "الدومين ده مش مضاف في Firebase (Authentication ← Settings ← Authorized domains).", "auth/operation-not-allowed": "تسجيل الدخول بجوجل مش مفعّل في Firebase (Authentication ← Sign-in method).", "auth/account-exists-with-different-credential": "الإيميل ده مسجّل بطريقة دخول تانية. كلّم الإدارة.", "auth/too-many-requests": "محاولات كتير، استنى شوية وجرّب تاني." }[e.code];
+    if (errEl) errEl.textContent = m || ("تعذر تسجيل الدخول: " + (e.code || e.message));
+    btn.disabled = false; if (label) label.textContent = old;
+  }
 }
 /* أيقونة إظهار/إخفاء كلمة المرور */
 const EYE_ON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -700,33 +715,12 @@ function authDialog(mode = "existing") {
     }
   };
 }
-function passwordSettingsDialog(onDone, opts = {}) {
+function passwordSettingsDialog(onDone) {
   const cu = auth.currentUser; if (!cu) return;
-  const force = !!opts.force;
-  const hasPw = cu.providerData.some(x => x.providerId === "password"), d = document.createElement("dialog");
-  d.innerHTML = `<form><h3>${force ? "🔐 اعمل كلمة مرور لحسابك" : "⚙️ الإعدادات"}</h3>${force ? `<p><b>لازم تحط كلمة مرور خاصة بيك قبل ما تكمل.</b></p>` : ""}<p class="mut"><b>${esc(cu.displayName || "")}</b></p><h4 style="margin:8px 0">${hasPw ? "تغيير كلمة المرور" : "إنشاء كلمة مرور"}</h4>${hasPw ? `<label>كلمة المرور الحالية<input name="cur" type="password" required autocomplete="current-password"></label>` : ""}<label>كلمة المرور الجديدة (6 خانات على الأقل)<input name="np" type="password" minlength="6" required autocomplete="new-password"></label><label>تأكيد كلمة المرور الجديدة<input name="np2" type="password" minlength="6" required autocomplete="new-password"></label><p class="mut" style="font-size:.85rem">🔑 ${PIN_HINT}</p><div class="row"><button type="submit">حفظ كلمة المرور</button><button type="button" class="sec" id="spClose">${force ? "خروج" : "إغلاق"}</button></div><p id="spMsg" class="danger"></p></form>`;
+  const d = document.createElement("dialog");
+  d.innerHTML = `<form><h3>⚙️ حسابي</h3><p class="mut">بتدخل بحساب جوجل المسجّل على جهازك، ومفيش كلمة مرور في الموقع.</p><p><b>${esc(currentStudentName || cu.displayName || "")}</b><br><small dir="ltr" class="mut">${esc(cu.email || "")}</small></p><div class="row"><button type="button" class="sec" id="spClose">إغلاق</button></div></form>`;
   document.body.appendChild(d); d.showModal();
-  pinFields(d); addPasswordToggles(d);
-  d.querySelector("#spClose").onclick = () => { d.close(); d.remove(); if (force) signOut(auth); };
-  if (force) d.addEventListener("cancel", e => e.preventDefault());
-  const msg = d.querySelector("#spMsg");
-  d.querySelector("form").onsubmit = async e => {
-    e.preventDefault(); msg.textContent = "";
-    const fd = new FormData(e.target), cur = String(fd.get("cur") || ""), np = String(fd.get("np")), np2 = String(fd.get("np2"));
-    if (np.length < 6) return msg.textContent = PIN_HINT;
-    if (np !== np2) return msg.textContent = "تأكيد كلمة المرور مش مطابق.";
-    if (hasPw && np === cur) return msg.textContent = "اختار كلمة مرور مختلفة عن الحالية.";
-    const btn = d.querySelector('button[type="submit"]'); btn.disabled = true;
-    try {
-      if (hasPw) { await reauthenticateWithCredential(cu, EmailAuthProvider.credential(cu.email, cur)); await updatePassword(cu, np); }
-      else await linkWithCredential(cu, EmailAuthProvider.credential(cu.email, np));
-      await setDoc(doc(db, "users", cu.uid), { pwDefault: false, pwChangedAt: serverTimestamp() }, { merge: true }).catch(() => {});
-      d.close(); d.remove(); alert("تم حفظ كلمة المرور ✅"); if (onDone) onDone();
-    } catch (err) {
-      btn.disabled = false;
-      msg.textContent = (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password") ? "كلمة المرور الحالية غير صحيحة." : err.code === "auth/weak-password" ? PIN_HINT : err.code === "auth/requires-recent-login" ? "اخرج وادخل تاني وبعدين جرّب." : err.code === "auth/provider-already-linked" || err.code === "auth/credential-already-in-use" ? "الحساب ده عنده كلمة مرور بالفعل. اخرج وادخل بيها." : err.code === "auth/too-many-requests" ? "محاولات كتير، استنى شوية وجرّب تاني." : "تعذر الحفظ: " + (err.code || err.message);
-    }
-  };
+  d.querySelector("#spClose").onclick = () => { d.close(); d.remove(); if (onDone) onDone(); };
 }
 async function ensureFullName(u){ const snap=await getDoc(doc(db,"users",u.uid)); const old=snap.data()?.name||u.displayName||""; if(old.trim().split(/\s+/).length>=2)return; await new Promise(resolve=>form("أكمل بياناتك",[{n:"name",l:"الاسم الكامل",v:old}],async v=>{const name=v.name.trim(); if(name.split(/\s+/).length<2)return alert("اكتب الاسم الأول واسم العائلة"); await updateProfile(u,{displayName:name}); await setDoc(doc(db,"users",u.uid),{name,email:u.email,last:serverTimestamp()},{merge:true}); resolve();})); }
 $("#auth").onclick = () => signOut(auth);
@@ -756,21 +750,6 @@ onAuthStateChanged(auth, async u => {
   if (!u) return needLogin();
   userRoleUnsub=onSnapshot(doc(db,"users",u.uid),snap=>{const profile=snap.data()||{};isAssistantUser=profile.role==="assistant";editor=admin||isAssistantUser;groupAdmin=admin||profile.groupsAdmin===true;$("#n5").style.display=admin||isAssistantUser?"":"none";$("#n5").textContent=admin?"المستخدمين":"إحصائيات المستخدمين";});
   startAppCheck();
-  // حساب مالوش كلمة مرور (كان بجوجل): إجبار تعيين كلمة مرور أول ما يدخل
-  if (!u.providerData.some(x => x.providerId === "password")) {
-    app.innerHTML = `<p class="mut" style="text-align:center;margin:40px 0">لازم تعمل كلمة مرور لحسابك قبل ما تكمل.</p>`;
-    passwordSettingsDialog(() => location.reload(), { force: true });
-    return;
-  }
-  // حسابات قديمة لسه على الكلمة الافتراضية القديمة: إجبار تغييرها
-  try {
-    const us = await withTimeout(getDoc(doc(db, "users", u.uid)));
-    if (us.data()?.pwDefault === true && u.providerData.some(x => x.providerId === "password")) {
-      app.innerHTML = `<p class="mut" style="text-align:center;margin:40px 0">لازم تغيّر كلمة السر الافتراضية قبل ما تكمل.</p>`;
-      passwordSettingsDialog(() => location.reload(), { force: true });
-      return;
-    }
-  } catch (e) { console.warn("default password check skipped", e.message); }
   // اعرض الصفحة فورًا، ولا تجعل مزامنة Firestore تمنع تسجيل الدخول
   subjects(); startDmWatch(u);
   (async()=>{ try {
@@ -833,7 +812,7 @@ function form(title, fields, cb) {
   d.querySelector("form").onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target),v=Object.fromEntries(fd);fields.filter(f=>f.t==="chk"||f.t==="chkSearch").forEach(f=>v[f.n]=fd.getAll(f.n));d.close();d.remove();await cb(v);};
 }
 const ytId = u => (u || "").match(/(?:v=|youtu\.be\/|embed\/)([\w-]{11})/)?.[1];
-const needLogin = () => { if (pendingVerifyUser) return showVerifyScreen(pendingVerifyUser); document.body.classList.add("login-screen"); app.innerHTML = `<section class="login-shell"><div class="flag-bars"></div><div class="flag-orbit"></div><div class="floating-chip one">✦ Français au quotidien</div><div class="floating-chip two">✓ تعلّم بذكاء</div><div class="floating-chip three">● منصة قسمك</div><div class="login-copy"><div class="login-eyebrow"><i></i> منصة تعليمية حصرية لقسم الفرنسي</div><h1 class="fr">Bonjour,<br><span>commençons.</span></h1><p>كل دروسك، اختباراتك، وكلماتك الفرنسية في مكان واحد — بتجربة بسيطة، ذكية، وممتعة.</p><div class="login-features"><div class="mini-stat"><b>01</b><small>دروس منظمة</small></div><div class="mini-stat"><b>AI</b><small>تصحيح ذكي</small></div><div class="mini-stat"><b>24/7</b><small>تعلّم مستمر</small></div></div></div><div class="login-card"><div class="login-logo-ring">🇫🇷</div><h2 class="fr">Bienvenue</h2><p>جاهز تبدأ رحلتك؟</p><div class="row" style="justify-content:center"><button id="goFirst" class="login-btn">تسجيل دخول للمرة الأولى</button></div><div class="row" style="justify-content:center;margin-top:10px"><button id="goExisting" class="login-btn">تسجيل دخول بحساب موجود</button></div><small class="mut">دخول آمن ومخصص لطلاب القسم</small></div></section>`; $("#goFirst").onclick = () => authDialog("first"); $("#goExisting").onclick = () => authDialog("existing"); };
+const needLogin = () => { if (pendingVerifyUser) return showVerifyScreen(pendingVerifyUser); document.body.classList.add("login-screen"); app.innerHTML = `<section class="login-shell"><div class="flag-bars"></div><div class="flag-orbit"></div><div class="floating-chip one">✦ Français au quotidien</div><div class="floating-chip two">✓ تعلّم بذكاء</div><div class="floating-chip three">● منصة قسمك</div><div class="login-copy"><div class="login-eyebrow"><i></i> منصة تعليمية حصرية لقسم الفرنسي</div><h1 class="fr">Bonjour,<br><span>commençons.</span></h1><p>كل دروسك، اختباراتك، وكلماتك الفرنسية في مكان واحد — بتجربة بسيطة، ذكية، وممتعة.</p><div class="login-features"><div class="mini-stat"><b>01</b><small>دروس منظمة</small></div><div class="mini-stat"><b>AI</b><small>تصحيح ذكي</small></div><div class="mini-stat"><b>24/7</b><small>تعلّم مستمر</small></div></div></div><div class="login-card"><div class="login-logo-ring">🇫🇷</div><h2 class="fr">Bienvenue</h2><p>جاهز تبدأ رحلتك؟</p><div class="row" style="justify-content:center"><button id="goGoogle" class="login-btn" style="display:inline-flex;align-items:center;gap:10px;background:#fff!important;color:#202124!important;border:1px solid #dadce0!important"><svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg><span>تسجيل الدخول بحساب جوجل</span></button></div><small class="mut">اختار حسابك من الحسابات المسجّلة على جهازك. مفيش كلمة مرور.</small><p id="gErr" class="danger" style="margin-top:8px"></p></div></section>`; $("#goGoogle").onclick = () => googleSignIn($("#goGoogle"), $("#gErr")); };
 
 /* ---------- المواد ---------- */
 async function subjects() {
@@ -2621,7 +2600,7 @@ async function usersPage() {
   };
   const renderUsers=()=>{
     const queryText=normalizeSearchText(searchText),filtered=us.filter(matchesFilter).filter(u=>!queryText||normalizeSearchText(`${canonicalStudentName(u)} ${u.id}`).includes(queryText));
-    $("#userList").innerHTML=filtered.map(u=>`<div class="item"><span>${esc(canonicalStudentName(u))} <button type="button" class="sec" data-show-email="${esc(u.email||"")}" title="عرض الإيميل" aria-label="عرض الإيميل" style="padding:0 9px;border-radius:999px;font-weight:700">!</button></span>${u.email===ADMIN_EMAIL?"<b>أدمن</b>":`<button class="sec" data-setname="${esc(u.id)}">تصحيح الاسم</button><button class="sec" data-reset-pw="${esc(u.id)}" title="إرسال رابط إعادة تعيين كلمة السر لإيميل المستخدم">🔑 كلمة السر</button><button class="del" data-del-user="${esc(u.id)}" title="حذف المستخدم وبياناته من الموقع">🗑 حذف</button><button data-u="${esc(u.id)}" class="${u.role==="assistant"?"del":""}">${u.role==="assistant"?"إلغاء المساعد":"اجعله مساعد"}</button><button class="sec" data-group-role="${esc(u.id)}" title="تعيين مدير للجروب ومنحه حق إنشاء جروب واحد فقط">تعيين مدير + جروب واحد</button><button class="sec" data-ban="${esc(u.id)}">${u.disabled?"تفعيل":"تعطيل"}</button>`}</div>`).join("")||`<p class="mut">لا يوجد مستخدمون مطابقون للبحث أو التصفية.</p>`;
+    $("#userList").innerHTML=filtered.map(u=>`<div class="item"><span>${esc(canonicalStudentName(u))} <button type="button" class="sec" data-show-email="${esc(u.email||"")}" title="عرض الإيميل" aria-label="عرض الإيميل" style="padding:0 9px;border-radius:999px;font-weight:700">!</button></span>${u.email===ADMIN_EMAIL?"<b>أدمن</b>":`<button class="sec" data-setname="${esc(u.id)}">تصحيح الاسم</button><button class="del" data-del-user="${esc(u.id)}" title="حذف المستخدم وبياناته من الموقع">🗑 حذف</button><button data-u="${esc(u.id)}" class="${u.role==="assistant"?"del":""}">${u.role==="assistant"?"إلغاء المساعد":"اجعله مساعد"}</button><button class="sec" data-group-role="${esc(u.id)}" title="تعيين مدير للجروب ومنحه حق إنشاء جروب واحد فقط">تعيين مدير + جروب واحد</button><button class="sec" data-ban="${esc(u.id)}">${u.disabled?"تفعيل":"تعطيل"}</button>`}</div>`).join("")||`<p class="mut">لا يوجد مستخدمون مطابقون للبحث أو التصفية.</p>`;
     $("#userFilterInfo").textContent=`المعروض ${filtered.length} من ${us.length} مستخدم — ${stats.find(x=>x[0]===selectedFilter)?.[1]||"كل المستخدمين"}`;
     app.querySelectorAll("[data-user-filter]").forEach(card=>{card.setAttribute("aria-pressed",String(card.dataset.userFilter===selectedFilter));card.onclick=()=>{selectedFilter=card.dataset.userFilter;renderUsers();};});
     bindUserActions();
@@ -3065,21 +3044,18 @@ function dmAdminUnlock(th) {
   $("#dmUBack").onclick = dmPage;
   $("#dmUForgot").onclick = () => {
     const d = dmDialog(`<h3 class="fr">استرجاع الوصول للمحادثة</h3>
-      <p class="mut">اكتب كلمة مرور حسابك إنت (الأدمن) عشان نشيل باسورد المحادثة دي. الرسايل مش هتتمسح، وتقدر تحط باسورد جديد بعد ما تفتحها.</p>
-      <label>كلمة مرور حسابك<input id="dmAcc" type="password" autocomplete="current-password"></label>
+      <p class="mut">هتأكد إنك الأدمن بحساب جوجل بتاعك (هتظهر لك نافذة جوجل)، وبعدها نشيل باسورد المحادثة دي. الرسايل مش هتتمسح، وتقدر تحط باسورد جديد بعد ما تفتحها.</p>
       <div class="row"><button type="submit" id="dmAccGo">تأكيد</button><button type="button" class="sec" id="dmAccX">إلغاء</button></div><p id="dmAccMsg" class="danger"></p>`);
-    addPasswordToggles(d);
     const msg = d.querySelector("#dmAccMsg"), go = d.querySelector("#dmAccGo");
     d.querySelector("#dmAccX").onclick = () => d.close();
     go.onclick = async () => {
-      const pw = d.querySelector("#dmAcc").value; if (!pw) return msg.textContent = "اكتب كلمة مرور حسابك";
       msg.textContent = ""; go.disabled = true;
       try {
-        await reauthenticateWithCredential(auth.currentUser, EmailAuthProvider.credential(auth.currentUser.email, pw));
+        const gp = new GoogleAuthProvider(); gp.setCustomParameters({ prompt: "select_account" }); await reauthenticateWithPopup(auth.currentUser, gp); if (auth.currentUser.email !== ADMIN_EMAIL) throw new Error("لازم تأكد بحساب الأدمن");
         const b = writeBatch(db); b.delete(doc(db, "dmSecrets", th.id)); b.update(doc(db, "dmThreads", th.id), { locked: false }); await b.commit();
         d.close(); dmThreadView({ ...th, locked: false });
       } catch (e) {
-        msg.textContent = (e.code === "auth/invalid-credential" || e.code === "auth/wrong-password") ? "كلمة مرور حسابك غلط." : "تعذر التنفيذ: " + (e.code || e.message);
+        msg.textContent = e.code === "auth/popup-closed-by-user" ? "اتقفلت نافذة جوجل قبل ما تكمل." : "تعذر التنفيذ: " + (e.message || e.code);
         go.disabled = false;
       }
     };
