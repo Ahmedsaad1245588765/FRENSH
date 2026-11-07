@@ -854,9 +854,9 @@ async function hostBasicLesson(sub, targetSection) {
 async function readReferenceFile(file) {
   if (/\.pdf$/i.test(file.name) || file.type === "application/pdf") {
     const data = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
-    return { text: "", inlineData: { mimeType: "application/pdf", data } };
+    return { text: "", part: { inlineData: { mimeType: "application/pdf", data } } };
   }
-  return { text: (await file.text()).slice(0, 50000), inlineData: null };
+  return { text: (await file.text()).slice(0, 50000), part: null };
 }
 async function extractNoLessonQuestions(file) {
   const raw = await readReferenceFile(file);
@@ -866,7 +866,7 @@ async function extractNoLessonQuestions(file) {
     return normalizeImportedQuestions(rows.map(r => Object.fromEntries(keys.map((k, i) => [k, r[i] || ""]))));
   }
   const prompt = `استخرج أسئلة الملف كما هي حرفيًا بدون إعادة صياغة أو تصحيح أو تغيير ترتيب أو تغيير الاختيارات. لا تحل الأسئلة ولا تضف أسئلة. أعد JSON فقط بالشكل {"questions":[{"type":"mcq|tf|essay|match|fill","q":"النص الحرفي للسؤال","options":["الاختيارات حرفيًا"],"pairs":[{"l":"","r":""}],"blanks":[""],"points":1}]}. إذا كان السؤال مقاليًا اترك answer فارغًا. حافظ على كل علامات الترقيم والنص كما هو قدر الإمكان.`;
-  const j = await askJSON(prompt + (raw.text ? `\nمحتوى الملف:\n${raw.text}` : "\nاقرأ ملف الأسئلة المرفق."), 2, raw.inlineData ? [raw.inlineData] : null);
+  const j = await askJSON(prompt + (raw.text ? `\nمحتوى الملف:\n${raw.text}` : "\nاقرأ ملف الأسئلة المرفق."), 2, raw.part ? [raw.part] : null);
   return normalizeImportedQuestions(j);
 }
 async function createNoLessonAssessment(sub, section) {
@@ -879,7 +879,7 @@ async function createNoLessonAssessment(sub, section) {
     status.textContent = "⏳ جاري استخراج الأسئلة بدون تغيير نصها..."; const shells = await extractNoLessonQuestions(questionFile); if (!shells.length) throw new Error("لم يتم العثور على أسئلة صالحة في الملف");
     status.textContent = `⏳ تم العثور على ${shells.length} سؤال — جاري حلها من كتاب المادة...`; const ref = await readReferenceFile(book), payload = shells.map((q, i) => ({ i, type: q.type, q: q.q, options: q.options, pairs: q.pairs, blanks: q.blanks }));
     const prompt = `حل الأسئلة التالية اعتمادًا على كتاب المادة فقط. لا تغيّر نص أي سؤال أو اختيار أو ترتيب، ولا تعيد إرسالها. أعد JSON فقط بالشكل {"solutions":[{"i":0,"answer":1,"model":"","explanation":"شرح مختصر يوضح لماذا الإجابة صحيحة ولماذا البدائل خاطئة عند الحاجة"}]}. في mcq answer رقم الاختيار الصحيح يبدأ من 0، وفي tf answer 0 للصحيح و1 للغلط، وفي fill أعد blanks بنفس عدد الفراغات، وفي essay اكتب model فقط. إذا لم تجد الإجابة في الكتاب اكتب explanation يوضح أنها غير موجودة ولا تخترعها.\nالأسئلة الثابتة (لا تعدّلها):\n${JSON.stringify(payload)}\n${ref.text ? `كتاب المادة:\n${ref.text}` : "كتاب المادة موجود في الملف المرفق."}`;
-    const attachments = ref.inlineData ? [ref.inlineData] : null, solved = await askJSON(prompt, 2, attachments), solutions = Array.isArray(solved) ? solved : (solved.solutions || []), by = new Map(solutions.map(x => [Number(x.i), x]));
+    const attachments = ref.part ? [ref.part] : null, solved = await askJSON(prompt, 2, attachments), solutions = Array.isArray(solved) ? solved : (solved.solutions || []), by = new Map(solutions.map(x => [Number(x.i), x]));
     const finalQs = shells.map((q, i) => { const a = by.get(i) || {}; return { ...q, answer: q.type === "essay" ? 0 : Number(a.answer ?? q.answer) || 0, blanks: q.type === "fill" && Array.isArray(a.blanks) && a.blanks.length === (q.q.match(/_{2,}/g) || []).length ? a.blanks.map(String) : q.blanks, model: String(a.model || q.model || ""), explanation: String(a.explanation || q.explanation || "") }; });
     const preview = finalQs.slice(0, 8).map((q, i) => `${i + 1}. ${q.q}`).join("\n"); if (!confirm(`تم تجهيز ${finalQs.length} سؤالًا. تم تعديل الإجابات والتفسير فقط، أما نصوص الأسئلة والاختيارات فمأخوذة من الملف كما هي.\n\n${preview}\n\nهل تريد الحفظ؟`)) return;
     const refLesson = doc(collection(db, "lessons")); await setDoc(refLesson, { subjectId: sub.id, title, section, sectionOrder: Date.now(), sourceLessonId: "", shareMode: "independent", sourceRevision: 0, noLesson: true, referenceBookName: book.name, v2: true, examCount: finalQs.length, examPass: 50, examMinutes: 0, created: serverTimestamp() });
