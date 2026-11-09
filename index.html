@@ -819,12 +819,21 @@ async function subjects() {
   if (!user) return needLogin();
   if (admin) migrateLessons();
   const [subs, allLessons] = await Promise.all([list("subjects"), list("lessons")]);
-  const lessonCounts = allLessons.reduce((m, l) => { m[l.subjectId] = (m[l.subjectId] || 0) + 1; return m; }, {});
-  app.innerHTML = `<section class="hero welcome-bar"><span>أهلاً ${esc((user.displayName || "").split(" ")[0])}</span><h2 class="fr" id="hero">Bonjour, bienvenue !</h2></section><div class="row home-actions">${admin ? `<button id="add" class="add-subject" title="إضافة مادة" aria-label="إضافة مادة">+</button>` : ""}</div><h3 class="sh">المواد</h3><div class="grid">
+  const oldSectionLessons = allLessons.filter(l => (l.section || "basic") !== "basic");
+  const lessonCounts = allLessons.filter(l => (l.section || "basic") === "basic").reduce((m, l) => { m[l.subjectId] = (m[l.subjectId] || 0) + 1; return m; }, {});
+  app.innerHTML = `<section class="hero welcome-bar"><span>أهلاً ${esc((user.displayName || "").split(" ")[0])}</span><h2 class="fr" id="hero">Bonjour, bienvenue !</h2></section><div class="row home-actions">${admin ? `<button id="add" class="add-subject" title="إضافة مادة" aria-label="إضافة مادة">+</button>` : ""}${admin && oldSectionLessons.length ? `<button id="purgeOldSections" class="del" type="button">🧹 مسح ${oldSectionLessons.length} درس قديم (ميد ترم / شفوي / فاينل) نهائيًا</button>` : ""}</div><h3 class="sh">المواد</h3><div class="grid">
     ${subs.map((s, i) => `<div class="item tile subject-only" data-id="${s.id}"><div class="subject-name">${esc(s.name)}</div><div class="subject-footer"><span class="lesson-count">${lessonCounts[s.id] || 0} درس</span>${admin ? `<span class="subject-admin"><button class="sec" data-edit-sub="${s.id}">تعديل</button><button class="del" data-del="${s.id}">حذف</button></span>` : ""}</div></div>`).join("") || `<p class="mut">مفيش مواد لسه.</p>`}</div>`;
   clickable($("#hero"), "Bonjour, on apprend ?");
   const welcome = app.querySelector(".hero");
   if (welcome) { welcome.classList.add("welcome-intro"); setTimeout(() => welcome.classList.add("welcome-hide"), 3000); }
+  const purgeBtn = $("#purgeOldSections");
+  if (purgeBtn) purgeBtn.onclick = async () => {
+    if (!confirm(`هيتم مسح ${oldSectionLessons.length} درس من أقسام الميد ترم والشفوي والفاينل نهائيًا، مع أسئلتهم وصورهم ونتائج الطلاب فيهم. الدروس الأساسية مش هتتأثر. المسح مش بيتراجع عنه، متأكد؟`)) return;
+    purgeBtn.disabled = true; let done = 0;
+    try { for (const l of oldSectionLessons) { purgeBtn.textContent = `جاري المسح ${++done} / ${oldSectionLessons.length}...`; await delLesson(l.id, true); } }
+    catch (e) { alert("تعذر إكمال المسح: " + (e.code || e.message)); }
+    subjects();
+  };
   if (admin) $("#add").onclick = () => form("مادة جديدة", [{ n: "name", l: "اسم المادة" }], async v => { await addDoc(collection(db, "subjects"), { name: v.name, created: serverTimestamp() }); subjects(); });
   app.querySelectorAll(".item").forEach(el => el.onclick = e => {
     if (e.target.dataset.editSub) return editSubject(subs.find(s => s.id === e.target.dataset.editSub));
